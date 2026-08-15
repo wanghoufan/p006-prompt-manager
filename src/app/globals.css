@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink-950: #0a0d13;
+  --color-ink-900: #10141d;
+  --color-ink-850: #151b27;
+  --color-ink-800: #1b2333;
+  --color-ink-700: #27324a;
+  --color-line: #222b3d;
+  --color-paper: #e8e4da;
+  --color-paper-dim: #a7adba;
+  --color-muted: #6d7688;
+  --color-gold: #d9a25b;
+  --color-gold-bright: #f0bf77;
+  --color-gold-deep: #8a6a3f;
+  --color-rust: #c96a5a;
+  --font-sans: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", system-ui,
+    sans-serif;
+  --font-serif: "Songti SC", "STSong", "Noto Serif SC", "SimSun", serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-ink-950);
+  color: var(--color-paper);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgba(217, 162, 91, 0.3);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2a3448 transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2a3448;
+  border-radius: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@utility field {
+  @apply w-full rounded-md border border-line bg-ink-900 px-3 py-2 text-sm text-paper placeholder:text-muted transition-colors focus:border-gold focus:outline-none;
+}
+
+@utility btn {
+  @apply inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-line bg-ink-850 px-3 py-1.5 text-sm text-paper-dim transition-colors hover:border-ink-700 hover:bg-ink-800 hover:text-paper;
+}
+
+@utility btn-gold {
+  @apply inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-gold/50 bg-gold/10 px-3 py-1.5 text-sm text-gold-bright transition-colors hover:border-gold/70 hover:bg-gold/20;
+}
+
+@utility btn-ghost {
+  @apply inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted transition-colors hover:bg-ink-800 hover:text-paper;
+}
