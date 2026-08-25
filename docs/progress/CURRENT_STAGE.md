@@ -71,3 +71,12 @@
 - 提交并推送本轮（实现 7 改 + 1 新 + 3 文档 + 工作区已有 `docs/DEV_EXPERIENCE.md` 未提交改动一并提交推送）——需用户明确授权。
 - 处理遗留：停服清理 `data/store.json` 中的 XSS 测试卡（1 张）——需用户授权。
 - 进入视觉验收 / 产品验收（Visual / Product Acceptance）→ neat-freak 里程碑收尾（Full Milestone Closeout）。
+
+---
+
+## 已收口，待 QA 验收（2026-08-26）
+
+- 本阶段（搜索 + 健壮性批次 A+B）已交付：实现 100%、Builder 自测 100%（tsc/lint 0 错误 + 10 项浏览器手测通过），commit `bef563f` 已推送，git 干净。
+- 遗留说明：`data/store.json` 的 XSS 测试卡已按授权清理（29→28 张）；「手测7-新标题」卡 title 为「版本测试失焦复验」（AI 重新生成残留，body/code 已恢复），多余 1 条版本按指令保留。
+- 待 QA 验收核验项与回归基线见 `docs/handoff/HANDOFF.md`「下一步」；新候选 P2-8~P2-11 见 `docs/review/PRODUCT_BACKLOG.md`。
+- 等待用户【节奏】触发 QA Acceptance。
