@@ -51,7 +51,7 @@ export function Composer({ existingTags, onCreate, notify }: ComposerProps) {
   }
 
   return (
-    <section className="rounded-xl border border-line bg-ink-900/40 p-4">
+    <section className="rounded-xl border border-line bg-ink-900/40 p-3">
       <div className="relative">
         <Corner position="-left-1.5 -top-1.5 border-l-2 border-t-2" />
         <Corner position="-right-1.5 -top-1.5 border-r-2 border-t-2" />
@@ -61,7 +61,7 @@ export function Composer({ existingTags, onCreate, notify }: ComposerProps) {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onPaste={handlePaste}
-          rows={4}
+          rows={1}
           placeholder="在这里粘贴提示词正文，将自动生成标签与标题…"
           className="field resize-y font-mono text-[13px] leading-relaxed"
         />

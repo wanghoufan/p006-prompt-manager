@@ -397,6 +397,7 @@ export default function Home() {
             onUpdateCode={handleUpdateCode}
             onResetCopies={handleResetCopies}
             onRollback={handleRollback}
+            defaultWidth={420}
             onSetSummary={handleSetSummary}
             onDelete={isDemoView ? undefined : handleDeleteCard}
             notify={notify}

@@ -5,8 +5,8 @@
 ## 当前状态
 
 - 项目：提示词管理工具（Prompt Manager），Next.js 16（App Router）+ React 19 + TypeScript 5 + Tailwind v4。
-- 阶段：功能开发期。已完成主体：跨设备实时同步、UI 优化、调取码字段、MCP 集成、MCP 调用计数。
-- **工作区有未提交改动**（UI 优化 + 调取码 + MCP 集成 + 计数，涉及 `src/lib/*`、`src/components/*`、`src/app/page.tsx`、`src/app/api/sync/increment-copy/`、`mcp/`）；上一版（同步功能）已推送 `88843dd`。
+- 阶段：功能开发期。已完成主体：跨设备实时同步、UI 优化（含正文优先布局重构）、调取码字段、MCP 集成、MCP 调用计数、回滚 bug 修复。
+- **工作区有未提交改动**（正文优先布局重构 + 回滚 bug 修复 + Composer 单行化 + SortBar 排序方式标签 + 调取码 + MCP 集成 + 计数，涉及 `src/lib/cards.ts`、`src/components/*`、`src/app/page.tsx`、`mcp/`）；上一版（同步功能）已推送 `88843dd`。
 - 远程仓库：https://github.com/wanghoufan/prompt-manager.git（master，已配置）。
 - dev 服务：`./dev-server.sh` watchdog 管理（start/stop/restart/status/logs），监听 `*:3000`。
 

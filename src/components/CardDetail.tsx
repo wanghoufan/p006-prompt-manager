@@ -195,7 +195,7 @@ export function CardDetail(props: CardDetailProps) {
           </button>
         </header>
 
-        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+        <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
           {readonly ? (
             <>
               <div className="space-y-1.5">
@@ -222,7 +222,7 @@ export function CardDetail(props: CardDetailProps) {
               </div>
               <div className="space-y-1.5">
                 <p className="text-xs text-muted">正文</p>
-                <div className="rounded-md border border-line bg-ink-850 px-3 py-2.5 text-[13px] leading-relaxed whitespace-pre-wrap text-paper-dim">
+                <div className="rounded-md border border-line bg-ink-850 px-3 py-2.5 text-sm leading-relaxed whitespace-pre-wrap text-paper-dim">
                   {card.body}
                 </div>
               </div>
@@ -292,7 +292,7 @@ export function CardDetail(props: CardDetailProps) {
                 </label>
                 <textarea
                   id="detail-body"
-                  className="field min-h-56 resize-y font-mono text-[13px] leading-relaxed"
+                  className="field min-h-72 resize-y font-mono text-sm leading-relaxed"
                   value={draft.body}
                   onChange={(e) => setDraft((d) => ({ ...d, body: e.target.value }))}
                   onKeyDown={(e) => {

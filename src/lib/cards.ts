@@ -44,8 +44,9 @@ export function saveBodyWithVersion(card: Card, newBody: string): Card {
 export function rollbackToVersion(card: Card, versionId: string): Card {
   const version = card.versions.find((v) => v.id === versionId)
   if (!version) return card
-  const withSnapshot = withVersion(card, card.body)
-  return { ...withSnapshot, body: version.body, updatedAt: nowIso() }
+  // 回滚是导航操作，不在历史里追加新条目；
+  // 想保留「回滚前的当前正文」应在回滚前点保存
+  return { ...card, body: version.body, updatedAt: nowIso() }
 }
 
 export function parseTags(text: string): string[] {
