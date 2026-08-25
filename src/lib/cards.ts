@@ -19,6 +19,7 @@ export function createCard(body: string, title: string, tags: string[], code?: s
     rating: 0,
     copyCount: 0,
     thinkingSummary: null,
+    notes: '',
     versions: [],
     createdAt: now,
     updatedAt: now,
@@ -59,6 +60,7 @@ export interface CardDraft {
   body: string
   rating: number
   code: string
+  notes: string
 }
 
 export function cardDraftFrom(card: Card): CardDraft {
@@ -68,6 +70,7 @@ export function cardDraftFrom(card: Card): CardDraft {
     body: card.body,
     rating: card.rating,
     code: card.code ?? '',
+    notes: card.notes ?? '',
   }
 }
 
@@ -77,6 +80,7 @@ export interface CardDraftChanges {
   tagsChanged: boolean
   ratingChanged: boolean
   codeChanged: boolean
+  notesChanged: boolean
   anyChanged: boolean
 }
 
@@ -86,12 +90,14 @@ export function cardDraftChanges(draft: CardDraft, card: Card): CardDraftChanges
   const tagsChanged = parseTags(draft.tagsText).join('|') !== card.tags.join('|')
   const ratingChanged = draft.rating !== card.rating
   const codeChanged = normalizeCode(draft.code) !== (card.code ?? '')
+  const notesChanged = draft.notes !== (card.notes ?? '')
   return {
     bodyChanged,
     titleChanged,
     tagsChanged,
     ratingChanged,
     codeChanged,
-    anyChanged: bodyChanged || titleChanged || tagsChanged || ratingChanged || codeChanged,
+    notesChanged,
+    anyChanged: bodyChanged || titleChanged || tagsChanged || ratingChanged || codeChanged || notesChanged,
   }
 }

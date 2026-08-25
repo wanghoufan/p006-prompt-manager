@@ -14,6 +14,8 @@ export interface Card {
   rating: number
   copyCount: number
   thinkingSummary: string | null
+  /** 用户自填的备注：何时用、注意事项等。空串视为未填写。 */
+  notes: string
   versions: Version[]
   createdAt: string
   updatedAt: string

@@ -21,6 +21,7 @@ interface PreviewPanelProps {
   onSaveBody: (id: string, body: string) => void
   onUpdateMeta: (id: string, title: string, tags: string[]) => void
   onUpdateCode: (id: string, code: string | null) => void
+  onUpdateNotes: (id: string, notes: string) => void
   onResetCopies: (id: string) => void
   onRollback: (id: string, versionId: string) => void
   onSetSummary: (id: string, summary: string) => void
@@ -59,6 +60,7 @@ export function PreviewPanel({
   onSaveBody,
   onUpdateMeta,
   onUpdateCode,
+  onUpdateNotes,
   onResetCopies,
   onRollback,
   onSetSummary,
@@ -66,8 +68,12 @@ export function PreviewPanel({
   notify,
 }: PreviewPanelProps) {
   const [draft, setDraft] = useState<CardDraft>(() =>
-    card ? cardDraftFrom(card) : { title: '', tagsText: '', body: '', rating: 0, code: '' },
+    card ? cardDraftFrom(card) : { title: '', tagsText: '', body: '', rating: 0, code: '', notes: '' },
   )
+  const draftRef = useRef(draft)
+  draftRef.current = draft
+  const [savedAt, setSavedAt] = useState<number | null>(null)
+  const notesTimer = useRef<number | null>(null)
   const [summaryLoading, setSummaryLoading] = useState(false)
   const [metaLoading, setMetaLoading] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
@@ -129,24 +135,43 @@ export function PreviewPanel({
     return () => window.clearTimeout(timer)
   }, [card])
 
-  function handleSave() {
+  // silent=true 用于失焦/防抖自动保存：静默落地，不弹 toast，仅更新「已自动保存」角标
+  function commitSave(silent: boolean) {
     if (!card) return
-    if (codeConflict) {
-      notify('调取码与其他卡片冲突，请更换后再保存')
-      return
-    }
-    const changes = cardDraftChanges(draft, card)
+    const d = draftRef.current
+    const changes = cardDraftChanges(d, card)
+    const nonCodeChanged =
+      changes.bodyChanged ||
+      changes.titleChanged ||
+      changes.tagsChanged ||
+      changes.notesChanged ||
+      changes.ratingChanged
     if (!changes.anyChanged) {
-      notify('没有需要保存的修改')
+      if (!silent) notify('没有需要保存的修改')
       return
     }
-    if (changes.bodyChanged) onSaveBody(card.id, draft.body)
+    if (changes.bodyChanged) onSaveBody(card.id, d.body)
     if (changes.titleChanged || changes.tagsChanged) {
-      onUpdateMeta(card.id, draft.title.trim() || card.title, parseTags(draft.tagsText))
+      onUpdateMeta(card.id, d.title.trim() || card.title, parseTags(d.tagsText))
     }
-    if (changes.codeChanged) onUpdateCode(card.id, normalizeCode(draft.code) || null)
-    if (changes.ratingChanged) onRate(draft.rating)
-    notify('已保存')
+    // 调取码冲突时跳过该字段，其余字段照常保存
+    if (changes.codeChanged && !codeConflict) onUpdateCode(card.id, normalizeCode(d.code) || null)
+    if (changes.notesChanged) onUpdateNotes(card.id, d.notes)
+    if (changes.ratingChanged) onRate(d.rating)
+    setSavedAt(Date.now())
+    if (!silent) {
+      notify(codeConflict && !nonCodeChanged ? '调取码与其他卡片冲突，请更换后再保存' : '已保存')
+    }
+  }
+
+  function handleSave() {
+    commitSave(false)
+  }
+
+  // 备注边输入边存：停手 700ms 后自动落库
+  function scheduleNotesSave() {
+    if (notesTimer.current) window.clearTimeout(notesTimer.current)
+    notesTimer.current = window.setTimeout(() => commitSave(true), 700)
   }
 
   async function regenMeta() {
@@ -242,6 +267,14 @@ export function PreviewPanel({
               <span className="text-[11px] text-muted">未打标签</span>
             )}
           </div>
+          {card.notes && (
+            <div className="border-b border-line px-3 py-1.5">
+              <p className="text-[10px] uppercase tracking-wider text-muted">备注</p>
+              <p className="mt-0.5 whitespace-pre-wrap text-[12px] leading-relaxed text-paper-dim">
+                {card.notes}
+              </p>
+            </div>
+          )}
           <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap px-3 py-2 font-mono text-[15px] leading-relaxed text-paper-dim">
             {card.body}
           </div>
@@ -306,6 +339,7 @@ export function PreviewPanel({
                 value={draft.title}
                 maxLength={20}
                 onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
+                onBlur={() => commitSave(true)}
                 placeholder="一句话总结"
               />
               <button
@@ -323,6 +357,7 @@ export function PreviewPanel({
                 className="field min-w-0 flex-1 text-[12px]"
                 value={draft.tagsText}
                 onChange={(e) => setDraft((d) => ({ ...d, tagsText: e.target.value }))}
+                onBlur={() => commitSave(true)}
                 placeholder="标签（逗号分隔，1~3 个）"
               />
               <div className="flex shrink-0 items-center gap-1">
@@ -333,6 +368,7 @@ export function PreviewPanel({
                   value={draft.code}
                   maxLength={12}
                   onChange={(e) => setDraft((d) => ({ ...d, code: e.target.value }))}
+                  onBlur={() => commitSave(true)}
                   placeholder="调取码"
                 />
               </div>
@@ -340,6 +376,18 @@ export function PreviewPanel({
             {codeConflict && (
               <p className="pt-1 text-[10px] text-rust">该调取码已被其他卡片使用，请更换</p>
             )}
+            <textarea
+              id="preview-notes"
+              rows={2}
+              placeholder="备注（自填 · 何时用/注意事项，失焦自动保存）"
+              className="field mt-1.5 resize-y text-[12px] leading-relaxed"
+              value={draft.notes}
+              onChange={(e) => {
+                setDraft((d) => ({ ...d, notes: e.target.value }))
+                scheduleNotesSave()
+              }}
+              onBlur={() => commitSave(true)}
+            />
           </header>
           <div className="flex min-h-0 flex-1 flex-col border-t border-line px-3 py-2">
             <textarea
@@ -347,6 +395,7 @@ export function PreviewPanel({
               className="field mt-0 min-h-0 flex-1 resize-none font-mono text-[15px] leading-relaxed"
               value={draft.body}
               onChange={(e) => setDraft((d) => ({ ...d, body: e.target.value }))}
+              onBlur={() => commitSave(true)}
               onKeyDown={(e) => {
                 if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
                   e.preventDefault()
@@ -407,7 +456,7 @@ export function PreviewPanel({
           {showVersions &&
             (card.versions.length === 0 ? (
               <p className="border-t border-line px-3 py-2 text-xs leading-relaxed text-muted">
-                暂无版本记录。修改正文后点「保存」，会自动生成正文快照。
+                暂无版本记录。修改正文后失焦或点「保存」，会自动生成快照。
               </p>
             ) : (
               <ul className="max-h-44 space-y-1.5 overflow-y-auto border-t border-line px-3 py-2">
@@ -435,9 +484,13 @@ export function PreviewPanel({
             <div className="flex min-w-0 items-center gap-2">
               <Stars
                 rating={draft.rating}
-                onChange={(r) => setDraft((d) => ({ ...d, rating: r }))}
+                onChange={(r) => {
+                  setDraft((d) => ({ ...d, rating: r }))
+                  onRate(r)
+                }}
               />
               <span className="font-mono text-[11px] text-muted">{card.copyCount} 次</span>
+              {savedAt && <span className="text-[10px] text-muted">· 已自动保存</span>}
               {onDelete && (
                 <button
                   type="button"

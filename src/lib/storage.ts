@@ -30,6 +30,7 @@ export function isCard(v: unknown): v is Card {
     typeof x.rating === 'number' &&
     typeof x.copyCount === 'number' &&
     (x.thinkingSummary === null || isString(x.thinkingSummary)) &&
+    (x.notes === undefined || isString(x.notes)) &&
     Array.isArray(x.versions) &&
     x.versions.every(isVersion) &&
     isString(x.createdAt) &&
@@ -37,9 +38,9 @@ export function isCard(v: unknown): v is Card {
   )
 }
 
-/** 归一化卡片：老数据缺 code 字段时补 null（isCard 已放行 undefined code） */
+/** 归一化卡片：老数据缺 code/notes 字段时补默认值 */
 function normalizeCard(c: Card): Card {
-  return { ...c, code: c.code ?? null }
+  return { ...c, code: c.code ?? null, notes: typeof c.notes === 'string' ? c.notes : '' }
 }
 
 export function loadCards(): Card[] {
@@ -104,12 +105,13 @@ function parseMarkdownImport(raw: string): ImportResult | null {
     createdAt: string
     updatedAt: string
     summary: string | null
+    notes: string
     body: string[]
   }
 
   const cards: Card[] = []
   let current: DraftCard | null = null
-  let section: 'meta' | 'body' | 'summary' | 'versions' | null = null
+  let section: 'meta' | 'body' | 'summary' | 'notes' | 'versions' | null = null
 
   function flush() {
     if (!current) return
@@ -124,6 +126,7 @@ function parseMarkdownImport(raw: string): ImportResult | null {
       rating: Math.max(0, Math.min(5, current.rating)),
       copyCount: Math.max(0, current.copyCount),
       thinkingSummary: current.summary ? current.summary.trim() : null,
+      notes: current.notes,
       versions: [],
       createdAt: current.createdAt,
       updatedAt: current.updatedAt,
@@ -145,6 +148,7 @@ function parseMarkdownImport(raw: string): ImportResult | null {
         createdAt: '',
         updatedAt: '',
         summary: null,
+        notes: '',
         body: [],
       }
       section = 'meta'
@@ -154,7 +158,11 @@ function parseMarkdownImport(raw: string): ImportResult | null {
     const h3 = /^###\s+(.+)$/.exec(line)
     if (h3) {
       const name = h3[1].trim()
-      section = name === '正文' ? 'body' : name === '思维总结' ? 'summary' : name === '版本历史' ? 'versions' : null
+      section =
+        name === '正文' ? 'body' :
+        name === '思维总结' ? 'summary' :
+        name === '备注' ? 'notes' :
+        name === '版本历史' ? 'versions' : null
       continue
     }
     if (section === 'body') {
@@ -163,6 +171,10 @@ function parseMarkdownImport(raw: string): ImportResult | null {
     }
     if (section === 'summary') {
       current.summary = (current.summary ?? '') + (current.summary ? '\n' : '') + line
+      continue
+    }
+    if (section === 'notes') {
+      current.notes = current.notes + (current.notes ? '\n' : '') + line
       continue
     }
     if (section === 'meta') {
@@ -203,6 +215,9 @@ export function buildMarkdownExport(cards: Card[]): string {
     lines.push(`- 创建时间：${c.createdAt}`)
     lines.push(`- 更新时间：${c.updatedAt}`, '')
     lines.push('### 正文', '', c.body, '')
+    if (c.notes) {
+      lines.push('### 备注', '', c.notes, '')
+    }
     if (c.thinkingSummary) {
       lines.push('### 思维总结', '', c.thinkingSummary, '')
     }

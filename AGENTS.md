@@ -47,7 +47,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ### 当前进展与产物索引
 
-- 当前状态：实时同步、UI 优化、调取码、MCP 集成已完成主体；工作区有未提交改动
+- 当前状态：实时同步、UI 优化、调取码、MCP 集成、调用计数、文档对齐、失焦自动保存均已完成；最近新增「失焦自动保存（腾讯文档式）」待提交
 - 需求文档：`docs/pm/提示词管理工具-需求文档.md`
 - 产品报告：`docs/pm/产品报告.md`
 - 实施计划：`docs/pm/PLAN.md`
@@ -55,6 +55,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - 产品优化候选：`docs/review/PRODUCT_BACKLOG.md`
 - 交接上下文：`docs/handoff/HANDOFF.md`
 - MCP 接入说明：`mcp/prompt-server/README.md`
+- 治理文档（工作流 / 角色 / 门控 / 阶段 / 经验）：见 `AGENTS.md` §四
 - 远程仓库：https://github.com/wanghoufan/prompt-manager.git（master）
 
 ---
@@ -107,6 +108,21 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - 主要职责：从产品经理、UX 和真实用户角度审查、发现功能完整性 / 易用性 / 效率 / 一致性问题、提出优化方向、维护 `docs/review/PRODUCT_BACKLOG.md`。
 - 不负责传统代码审查。
 
+### 6. 开发节奏与上下文管理（Stage Manager）
+- 角色规范：`docs/roles/stage-manager.md`
+- 主要职责：唯一的流程判断器；读取 Builder 技术交接 + PLAN + Git + QA / Review / Product 状态后，生成「当前唯一执行 Prompt」。
+- 严格限制：本轮不得修改任何项目文件，只生成给 Builder 的执行 Prompt。
+
+### 7. 开发经验记录（Experience Recorder）
+- 角色规范：`docs/roles/experience-recorder.md`
+- 主要职责：把开发经验、踩坑、协作改进沉淀到 `docs/DEV_EXPERIENCE.md`；相同经验合并、补充、升级成熟度。
+- 不得自行升级正式规范（需用户授权）。
+
+### 8. 工程 / 治理洁癖收尾（neat-freak）
+- 角色规范：`docs/roles/neat-freak.md`
+- 主要职责：Engineering Closeout；检查代码与文档是否一致、各权威文件是否过期、是否存在重复 / 过时 Markdown。
+- 适用节点：大阶段完成 / 发布前 / 长会话交接 / 最终交付 / 文档失配时。
+
 > 注：broader 方法论中另有 `【修复】`（Builder 复用 + 多报告综合）与 `【收尾】neat-freak` 两种运行模式，见第十节。
 
 ---
@@ -123,6 +139,10 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 | 当前代码审查结果 | `docs/review/CODE_REVIEW.md` |
 | 产品优化候选 | `docs/review/PRODUCT_BACKLOG.md` |
 | 当前交接上下文 | `docs/handoff/HANDOFF.md` |
+| 人工编排流程 / 质量 / 收尾门控 | `docs/workflow/` |
+| 当前开发阶段 / Builder 技术交接 | `docs/progress/CURRENT_STAGE.md` |
+| 开发经验 | `docs/DEV_EXPERIENCE.md` |
+| 可选模板（架构 / 决策 / 模型指南）| `docs/optional/` |
 | 临时资料 | `scratch/` |
 
 同一事实不要在多个位置重复维护。

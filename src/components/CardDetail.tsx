@@ -17,6 +17,7 @@ interface CardDetailProps {
   onSaveBody: (id: string, body: string) => void
   onUpdateMeta: (id: string, title: string, tags: string[]) => void
   onUpdateCode: (id: string, code: string | null) => void
+  onUpdateNotes: (id: string, notes: string) => void
   onRate: (id: string, rating: number) => void
   onCopy: (id: string) => void
   onResetCopies: (id: string) => void
@@ -62,6 +63,10 @@ function useModalFocus(panelRef: React.RefObject<HTMLElement | null>, open: bool
 export function CardDetail(props: CardDetailProps) {
   const { card, readonly = false, onClose } = props
   const [draft, setDraft] = useState(cardDraftFrom(card))
+  const draftRef = useRef(draft)
+  draftRef.current = draft
+  const [savedAt, setSavedAt] = useState<number | null>(null)
+  const notesTimer = useRef<number | null>(null)
   const [summaryLoading, setSummaryLoading] = useState(false)
   const [metaLoading, setMetaLoading] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -92,23 +97,44 @@ export function CardDetail(props: CardDetailProps) {
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  function handleSave() {
+  // silent=true 用于失焦/防抖自动保存：静默落地，不弹 toast，仅更新「已自动保存」角标
+  function commitSave(silent: boolean) {
     if (codeConflict) {
-      props.notify('调取码与其他卡片冲突，请更换后再保存')
+      if (!silent) props.notify('调取码与其他卡片冲突，请更换后再保存')
       return
     }
-    const changes = cardDraftChanges(draft, card)
+    const d = draftRef.current
+    const changes = cardDraftChanges(d, card)
+    const nonCodeChanged =
+      changes.bodyChanged ||
+      changes.titleChanged ||
+      changes.tagsChanged ||
+      changes.notesChanged ||
+      changes.ratingChanged
     if (!changes.anyChanged) {
-      props.notify('没有需要保存的修改')
+      if (!silent) props.notify('没有需要保存的修改')
       return
     }
-    if (changes.bodyChanged) props.onSaveBody(card.id, draft.body)
+    if (changes.bodyChanged) props.onSaveBody(card.id, d.body)
     if (changes.titleChanged || changes.tagsChanged) {
-      props.onUpdateMeta(card.id, draft.title.trim() || card.title, parseTags(draft.tagsText))
+      props.onUpdateMeta(card.id, d.title.trim() || card.title, parseTags(d.tagsText))
     }
-    if (changes.codeChanged) props.onUpdateCode(card.id, normalizeCode(draft.code) || null)
-    if (changes.ratingChanged) props.onRate(card.id, draft.rating)
-    props.notify('已保存')
+    if (changes.codeChanged && !codeConflict) props.onUpdateCode(card.id, normalizeCode(d.code) || null)
+    if (changes.notesChanged) props.onUpdateNotes(card.id, d.notes)
+    if (changes.ratingChanged) props.onRate(card.id, d.rating)
+    setSavedAt(Date.now())
+    if (!silent) {
+      props.notify(codeConflict && !nonCodeChanged ? '调取码与其他卡片冲突，请更换后再保存' : '已保存')
+    }
+  }
+
+  function handleSave() {
+    commitSave(false)
+  }
+
+  function scheduleNotesSave() {
+    if (notesTimer.current) window.clearTimeout(notesTimer.current)
+    notesTimer.current = window.setTimeout(() => commitSave(true), 700)
   }
 
   async function regenMeta() {
@@ -220,6 +246,14 @@ export function CardDetail(props: CardDetailProps) {
                 <p className="text-xs text-muted">调取码</p>
                 <p className="font-mono text-sm text-gold-bright">{card.code ? `@${card.code}` : '未设置'}</p>
               </div>
+              {card.notes && (
+                <div className="space-y-1.5">
+                  <p className="text-xs text-muted">备注</p>
+                  <p className="rounded-md border border-line bg-ink-850 px-3 py-2.5 text-sm leading-relaxed whitespace-pre-wrap text-paper-dim">
+                    {card.notes}
+                  </p>
+                </div>
+              )}
               <div className="space-y-1.5">
                 <p className="text-xs text-muted">正文</p>
                 <div className="rounded-md border border-line bg-ink-850 px-3 py-2.5 text-sm leading-relaxed whitespace-pre-wrap text-paper-dim">
@@ -252,6 +286,7 @@ export function CardDetail(props: CardDetailProps) {
                   value={draft.title}
                   maxLength={20}
                   onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
+                  onBlur={() => commitSave(true)}
                   placeholder="一句话总结"
                 />
               </div>
@@ -264,6 +299,7 @@ export function CardDetail(props: CardDetailProps) {
                   className="field"
                   value={draft.tagsText}
                   onChange={(e) => setDraft((d) => ({ ...d, tagsText: e.target.value }))}
+                  onBlur={() => commitSave(true)}
                   placeholder="如：角色扮演、任务拆解"
                 />
               </div>
@@ -279,6 +315,7 @@ export function CardDetail(props: CardDetailProps) {
                     value={draft.code}
                     maxLength={12}
                     onChange={(e) => setDraft((d) => ({ ...d, code: e.target.value }))}
+                    onBlur={() => commitSave(true)}
                     placeholder="如：dee"
                   />
                 </div>
@@ -287,14 +324,32 @@ export function CardDetail(props: CardDetailProps) {
                 )}
               </div>
               <div className="space-y-1.5">
+                <label htmlFor="detail-notes" className="text-xs text-muted">
+                  备注（自填 · 何时用 / 注意事项，不超过 6 行高度；可拖动加高）
+                </label>
+                <textarea
+                  id="detail-notes"
+                  rows={2}
+                  placeholder="例如：适用于 X 场景；输入前请先 Y（失焦自动保存）"
+                  className="field resize-y text-xs leading-relaxed"
+                  value={draft.notes}
+                  onChange={(e) => {
+                    setDraft((d) => ({ ...d, notes: e.target.value }))
+                    scheduleNotesSave()
+                  }}
+                  onBlur={() => commitSave(true)}
+                />
+              </div>
+              <div className="space-y-1.5">
                 <label htmlFor="detail-body" className="text-xs text-muted">
-                  正文（修改后按「保存」或 Ctrl/⌘ + Enter 生成版本）
+                  正文（失焦或按「保存」/ Ctrl⌘+Enter 自动保存并生成版本）
                 </label>
                 <textarea
                   id="detail-body"
                   className="field min-h-72 resize-y font-mono text-sm leading-relaxed"
                   value={draft.body}
                   onChange={(e) => setDraft((d) => ({ ...d, body: e.target.value }))}
+                  onBlur={() => commitSave(true)}
                   onKeyDown={(e) => {
                     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
                       e.preventDefault()
@@ -308,7 +363,10 @@ export function CardDetail(props: CardDetailProps) {
                   <span className="text-xs text-muted">评分</span>
                   <Stars
                     rating={draft.rating}
-                    onChange={(r) => setDraft((d) => ({ ...d, rating: r }))}
+                    onChange={(r) => {
+                      setDraft((d) => ({ ...d, rating: r }))
+                      props.onRate(card.id, r)
+                    }}
                     size="md"
                   />
                 </div>
@@ -378,7 +436,7 @@ export function CardDetail(props: CardDetailProps) {
               <p className="mt-3 text-sm leading-relaxed text-muted">
                 {readonly
                   ? '该示例卡片暂无版本记录。'
-                  : '暂无版本记录。修改正文后点「保存」，会自动生成正文快照，最多保留 10 条。'}
+                  : '暂无版本记录。修改正文后失焦或点「保存」会自动生成快照，最多保留 10 条。'}
               </p>
             ) : (
               <ul className="mt-3 space-y-2">
@@ -418,6 +476,7 @@ export function CardDetail(props: CardDetailProps) {
                 删除卡片
               </button>
             )}
+            {savedAt && <span className="ml-3 align-middle text-[11px] text-muted">· 已自动保存</span>}
           </div>
           <div className="flex items-center gap-2">
             {!readonly && (
