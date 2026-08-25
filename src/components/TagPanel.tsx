@@ -5,6 +5,8 @@ interface TagPanelProps {
   total: number
   selected: string | null
   onSelect: (tag: string | null) => void
+  /** 是否处于离线态（未连接同步服务）；undefined 表示尚未完成连接检查 */
+  offline?: boolean
 }
 
 function TagRow({
@@ -33,7 +35,7 @@ function TagRow({
   )
 }
 
-export function TagPanel({ entries, total, selected, onSelect }: TagPanelProps) {
+export function TagPanel({ entries, total, selected, onSelect, offline }: TagPanelProps) {
   return (
     <aside className="flex w-48 shrink-0 flex-col border-r border-line bg-ink-900/60">
       <div className="px-4 pb-1 pt-5 font-serif text-xs tracking-[0.2em] text-muted">标签索引</div>
@@ -53,7 +55,9 @@ export function TagPanel({ entries, total, selected, onSelect }: TagPanelProps) 
         )}
       </nav>
       <div className="border-t border-line px-4 py-3 text-[11px] leading-relaxed text-muted">
-        数据仅存于本机浏览器（localStorage）
+        {offline
+          ? '未连接同步服务，已使用本机缓存数据（不同步）'
+          : '局域网实时同步（服务端共享存储），离线回退本机缓存'}
       </div>
     </aside>
   )

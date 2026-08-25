@@ -274,7 +274,8 @@ let serverMode = false
 let lastPushedVersion: number | null = null
 let cacheCards: Card[] = []
 let cacheSettings: Settings = { thinkingSummaryPrompt: '' }
-let pushScheduled = false
+let pushInFlight = false
+let pushPending = false
 
 function trySave(key: string, value: unknown): boolean {
   try {
@@ -285,14 +286,29 @@ function trySave(key: string, value: unknown): boolean {
   }
 }
 
-// 合并推送：把最近一次的 cards/settings 在下一个微任务里推到服务端（去抖）。
+// 合并推送：把最近一次的 cards/settings 推到服务端。
+// 串行化：上一次推送尚未完成时，新变更只标记 pending，完成后立即补推一次最新状态，
+// 保证高频改动最终一致、不丢中间态（原实现用 pushScheduled 防重入，异步期间新变更会被吞掉）。
 function schedulePush() {
-  if (!serverMode || pushScheduled) return
-  pushScheduled = true
-  Promise.resolve().then(() => {
-    pushScheduled = false
-    void pushToServer(cacheCards, cacheSettings)
-  })
+  if (!serverMode) return
+  if (pushInFlight) {
+    pushPending = true
+    return
+  }
+  pushInFlight = true
+  void doPush()
+}
+
+async function doPush() {
+  try {
+    await pushToServer(cacheCards, cacheSettings)
+  } finally {
+    pushInFlight = false
+    if (pushPending) {
+      pushPending = false
+      schedulePush()
+    }
+  }
 }
 
 export async function isServerAvailable(): Promise<boolean> {

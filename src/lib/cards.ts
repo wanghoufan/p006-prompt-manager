@@ -36,8 +36,16 @@ function withVersion(card: Card, snapshotBody: string): Card {
   return { ...card, versions }
 }
 
-export function saveBodyWithVersion(card: Card, newBody: string): Card {
+/** 仅保存正文，不生成版本快照（失焦自动保存路径） */
+export function saveBodyOnly(card: Card, newBody: string): Card {
   if (newBody === card.body) return card
+  return { ...card, body: newBody, updatedAt: nowIso() }
+}
+
+/** 保存正文并生成版本快照（手动保存 / Ctrl+Enter 路径）
+ *  注意：允许 newBody === card.body（正文刚被失焦自动保存过、用户又主动点保存的场景），
+ *  此时快照当前正文作为里程碑版本；是否建版由调用方依据「正文脏标记」决策。 */
+export function saveBodyWithVersion(card: Card, newBody: string): Card {
   const withSnapshot = withVersion(card, card.body)
   return { ...withSnapshot, body: newBody, updatedAt: nowIso() }
 }

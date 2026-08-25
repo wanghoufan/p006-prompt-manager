@@ -18,7 +18,7 @@ interface PreviewPanelProps {
   defaultWidth?: number
   onCopy: () => void
   onRate: (rating: number) => void
-  onSaveBody: (id: string, body: string) => void
+  onSaveBody: (id: string, body: string, createVersion: boolean) => void
   onUpdateMeta: (id: string, title: string, tags: string[]) => void
   onUpdateCode: (id: string, code: string | null) => void
   onUpdateNotes: (id: string, notes: string) => void
@@ -71,9 +71,18 @@ export function PreviewPanel({
     card ? cardDraftFrom(card) : { title: '', tagsText: '', body: '', rating: 0, code: '', notes: '' },
   )
   const draftRef = useRef(draft)
-  draftRef.current = draft
+  const cardRef = useRef(card)
+  useEffect(() => {
+    draftRef.current = draft
+  }, [draft])
+  useEffect(() => {
+    cardRef.current = card
+  }, [card])
   const [savedAt, setSavedAt] = useState<number | null>(null)
   const notesTimer = useRef<number | null>(null)
+  // 正文脏标记：正文修改后置 true；失焦自动保存不清除，手动保存建版后清除。
+  // 用于解决「点击保存按钮时 textarea 先 blur 自动保存正文，导致手动保存无 body 变更而不建版」的问题。
+  const bodyDirtyRef = useRef(false)
   const [summaryLoading, setSummaryLoading] = useState(false)
   const [metaLoading, setMetaLoading] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
@@ -136,33 +145,64 @@ export function PreviewPanel({
   }, [card])
 
   // silent=true 用于失焦/防抖自动保存：静默落地，不弹 toast，仅更新「已自动保存」角标
-  function commitSave(silent: boolean) {
-    if (!card) return
+  // flushOnly=true 用于卸载前兜底：只调用保存回调，不 setState、不弹 toast
+  function saveThrough(silent: boolean, flushOnly: boolean) {
+    const c = cardRef.current
+    if (!c) return
     const d = draftRef.current
-    const changes = cardDraftChanges(d, card)
+    const changes = cardDraftChanges(d, c)
     const nonCodeChanged =
       changes.bodyChanged ||
       changes.titleChanged ||
       changes.tagsChanged ||
       changes.notesChanged ||
       changes.ratingChanged
-    if (!changes.anyChanged) {
-      if (!silent) notify('没有需要保存的修改')
+    const code = normalizeCode(d.code)
+    const conflict = code !== '' && allCodes.includes(code) && c.code !== code
+    // 手动保存补建版：正文刚被失焦自动保存过（anyChanged 已为 false），
+    // 但用户主动点「保存」，仍应为当前正文生成版本快照
+    const needManualVersion = !silent && !flushOnly && bodyDirtyRef.current && !changes.bodyChanged && d.body === c.body
+    if (!changes.anyChanged && !needManualVersion) {
+      if (!silent && !flushOnly) notify('没有需要保存的修改')
       return
     }
-    if (changes.bodyChanged) onSaveBody(card.id, d.body)
+    // 失焦自动保存仅存正文不建版；版本仅由手动保存 / Ctrl(⌘)+Enter 触发
+    if (changes.bodyChanged) {
+      onSaveBody(c.id, d.body, !silent)
+      if (!silent) bodyDirtyRef.current = false
+    } else if (needManualVersion) {
+      onSaveBody(c.id, d.body, true)
+      bodyDirtyRef.current = false
+    }
     if (changes.titleChanged || changes.tagsChanged) {
-      onUpdateMeta(card.id, d.title.trim() || card.title, parseTags(d.tagsText))
+      onUpdateMeta(c.id, d.title.trim() || c.title, parseTags(d.tagsText))
     }
     // 调取码冲突时跳过该字段，其余字段照常保存
-    if (changes.codeChanged && !codeConflict) onUpdateCode(card.id, normalizeCode(d.code) || null)
-    if (changes.notesChanged) onUpdateNotes(card.id, d.notes)
+    if (changes.codeChanged && !conflict) onUpdateCode(c.id, code || null)
+    if (changes.notesChanged) onUpdateNotes(c.id, d.notes)
     if (changes.ratingChanged) onRate(d.rating)
+    if (flushOnly) return
     setSavedAt(Date.now())
-    if (!silent) {
-      notify(codeConflict && !nonCodeChanged ? '调取码与其他卡片冲突，请更换后再保存' : '已保存')
+    // 静默保存遇冲突也要给出可见提示（code 字段被跳过，其余字段已保存）
+    if (conflict && changes.codeChanged) {
+      notify('调取码与其他卡片冲突，其余修改已保存，请更换调取码后重试')
+    } else if (!silent) {
+      notify(conflict && !nonCodeChanged ? '调取码与其他卡片冲突，请更换后再保存' : '已保存')
     }
   }
+
+  function commitSave(silent: boolean) {
+    saveThrough(silent, false)
+  }
+
+  // 卸载前兜底：切换选中卡片 / 组件卸载时 flush 未保存草稿并清理备注定时器
+  useEffect(() => {
+    return () => {
+      if (notesTimer.current) window.clearTimeout(notesTimer.current)
+      saveThrough(true, true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function handleSave() {
     commitSave(false)
@@ -394,7 +434,10 @@ export function PreviewPanel({
               id="preview-body"
               className="field mt-0 min-h-0 flex-1 resize-none font-mono text-[15px] leading-relaxed"
               value={draft.body}
-              onChange={(e) => setDraft((d) => ({ ...d, body: e.target.value }))}
+              onChange={(e) => {
+                setDraft((d) => ({ ...d, body: e.target.value }))
+                bodyDirtyRef.current = true
+              }}
               onBlur={() => commitSave(true)}
               onKeyDown={(e) => {
                 if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
@@ -456,7 +499,7 @@ export function PreviewPanel({
           {showVersions &&
             (card.versions.length === 0 ? (
               <p className="border-t border-line px-3 py-2 text-xs leading-relaxed text-muted">
-                暂无版本记录。修改正文后失焦或点「保存」，会自动生成快照。
+                暂无版本记录。修改正文后点「保存」或 Ctrl/⌘+Enter 会生成快照。
               </p>
             ) : (
               <ul className="max-h-44 space-y-1.5 overflow-y-auto border-t border-line px-3 py-2">

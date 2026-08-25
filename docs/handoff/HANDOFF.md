@@ -5,8 +5,8 @@
 ## 当前状态
 
 - 项目：提示词管理工具（Prompt Manager），Next.js 16（App Router）+ React 19 + TypeScript 5 + Tailwind v4。
-- 阶段：功能开发期。已完成主体：跨设备实时同步、UI 优化（含正文优先布局重构）、调取码字段、MCP 集成、MCP 调用计数、回滚 bug 修复。
-- **工作区有未提交改动**（正文优先布局重构 + 回滚 bug 修复 + Composer 单行化 + SortBar 排序方式标签 + 调取码 + MCP 集成 + 计数，涉及 `src/lib/cards.ts`、`src/components/*`、`src/app/page.tsx`、`mcp/`）；上一版（同步功能）已推送 `88843dd`。
+- 阶段：功能开发期。已完成主体：跨设备实时同步、UI 优化（含正文优先布局重构）、调取码字段、MCP 集成、MCP 调用计数、备注字段、失焦自动保存、回滚 bug 修复。
+- **本轮 P0/P1 修复（8 项）已完成**：渲染期 ref 赋值（lint 0 error）、正文失焦不建版、同步推送串行化、评分快捷键守卫、TagPanel 同步态文案、关闭/切卡丢稿 + 备注定时器清理、导入选择器支持 Markdown、调取码冲突语义统一。已提交并推送（commit 见 git log 最新条目）。
 - 远程仓库：https://github.com/wanghoufan/prompt-manager.git（master，已配置）。
 - dev 服务：`./dev-server.sh` watchdog 管理（start/stop/restart/status/logs），监听 `*:3000`。
 
@@ -54,6 +54,7 @@
 
 ## 下一步
 
-- 提交并推送工作区未提交改动（UI + 调取码 + MCP + 计数）——需用户确认后执行。
-- 待办候选见 `docs/review/PRODUCT_BACKLOG.md`（MCP 写操作、调取码自动建议、拖拽排序等）。
+- 进入视觉验收 / 产品验收（Visual / Product Acceptance）→ neat-freak 里程碑收尾（Full Milestone Closeout）。
+- 剩余风险（不阻断，建议单独排期）：MCP 直读 `store.json` 陈旧数据（RISK-1）、MCP 计数失败静默（RISK-2）、AI 请求缺 AbortController（RISK-3），详见 `docs/review/CODE_REVIEW.md`。
+- 待办候选见 `docs/review/PRODUCT_BACKLOG.md`（P2：全局搜索、预览面板 `<md` 适配、危险操作撤销、空态/离线态区分；P3：输入计数反馈、版本 diff、快捷键可发现性）。
 - 若 WorkBuddy 调取仍不自动按角色执行，用户可在 WorkBuddy 全局系统提示词加入工具触发说明。

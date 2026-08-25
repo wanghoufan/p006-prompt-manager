@@ -14,7 +14,7 @@ interface CardDetailProps {
   allCodes: string[]
   customThinkingPrompt: string
   onClose: () => void
-  onSaveBody: (id: string, body: string) => void
+  onSaveBody: (id: string, body: string, createVersion: boolean) => void
   onUpdateMeta: (id: string, title: string, tags: string[]) => void
   onUpdateCode: (id: string, code: string | null) => void
   onUpdateNotes: (id: string, notes: string) => void
@@ -61,12 +61,21 @@ function useModalFocus(panelRef: React.RefObject<HTMLElement | null>, open: bool
 }
 
 export function CardDetail(props: CardDetailProps) {
-  const { card, readonly = false, onClose } = props
+  const { card, readonly = false } = props
   const [draft, setDraft] = useState(cardDraftFrom(card))
   const draftRef = useRef(draft)
-  draftRef.current = draft
+  const cardRef = useRef(card)
+  useEffect(() => {
+    draftRef.current = draft
+  }, [draft])
+  useEffect(() => {
+    cardRef.current = card
+  }, [card])
   const [savedAt, setSavedAt] = useState<number | null>(null)
   const notesTimer = useRef<number | null>(null)
+  // 正文脏标记：正文修改后置 true；失焦自动保存不清除，手动保存建版后清除。
+  // 用于解决「点击保存按钮时 textarea 先 blur 自动保存正文，导致手动保存无 body 变更而不建版」的问题。
+  const bodyDirtyRef = useRef(false)
   const [summaryLoading, setSummaryLoading] = useState(false)
   const [metaLoading, setMetaLoading] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -91,41 +100,77 @@ export function CardDetail(props: CardDetailProps) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') handleClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // silent=true 用于失焦/防抖自动保存：静默落地，不弹 toast，仅更新「已自动保存」角标
-  function commitSave(silent: boolean) {
-    if (codeConflict) {
-      if (!silent) props.notify('调取码与其他卡片冲突，请更换后再保存')
-      return
-    }
+  // flushOnly=true 用于卸载前兜底：只调用保存回调，不 setState、不弹 toast
+  function saveThrough(silent: boolean, flushOnly: boolean) {
+    const c = cardRef.current
     const d = draftRef.current
-    const changes = cardDraftChanges(d, card)
+    const changes = cardDraftChanges(d, c)
     const nonCodeChanged =
       changes.bodyChanged ||
       changes.titleChanged ||
       changes.tagsChanged ||
       changes.notesChanged ||
       changes.ratingChanged
-    if (!changes.anyChanged) {
-      if (!silent) props.notify('没有需要保存的修改')
+    const code = normalizeCode(d.code)
+    const conflict = code !== '' && props.allCodes.includes(code) && c.code !== code
+    // 手动保存补建版：正文刚被失焦自动保存过（anyChanged 已为 false），
+    // 但用户主动点「保存」，仍应为当前正文生成版本快照
+    const needManualVersion = !silent && !flushOnly && bodyDirtyRef.current && !changes.bodyChanged && d.body === c.body
+    if (!changes.anyChanged && !needManualVersion) {
+      if (!silent && !flushOnly) props.notify('没有需要保存的修改')
       return
     }
-    if (changes.bodyChanged) props.onSaveBody(card.id, d.body)
+    // 失焦自动保存仅存正文不建版；版本仅由手动保存 / Ctrl(⌘)+Enter 触发
+    if (changes.bodyChanged) {
+      props.onSaveBody(c.id, d.body, !silent)
+      if (!silent) bodyDirtyRef.current = false
+    } else if (needManualVersion) {
+      props.onSaveBody(c.id, d.body, true)
+      bodyDirtyRef.current = false
+    }
     if (changes.titleChanged || changes.tagsChanged) {
-      props.onUpdateMeta(card.id, d.title.trim() || card.title, parseTags(d.tagsText))
+      props.onUpdateMeta(c.id, d.title.trim() || c.title, parseTags(d.tagsText))
     }
-    if (changes.codeChanged && !codeConflict) props.onUpdateCode(card.id, normalizeCode(d.code) || null)
-    if (changes.notesChanged) props.onUpdateNotes(card.id, d.notes)
-    if (changes.ratingChanged) props.onRate(card.id, d.rating)
+    // 调取码冲突时跳过该字段，其余字段照常保存（与 PreviewPanel 语义对齐）
+    if (changes.codeChanged && !conflict) props.onUpdateCode(c.id, code || null)
+    if (changes.notesChanged) props.onUpdateNotes(c.id, d.notes)
+    if (changes.ratingChanged) props.onRate(c.id, d.rating)
+    if (flushOnly) return
     setSavedAt(Date.now())
-    if (!silent) {
-      props.notify(codeConflict && !nonCodeChanged ? '调取码与其他卡片冲突，请更换后再保存' : '已保存')
+    // 静默保存遇冲突也要给出可见提示（code 字段被跳过，其余字段已保存）
+    if (conflict && changes.codeChanged) {
+      props.notify('调取码与其他卡片冲突，其余修改已保存，请更换调取码后重试')
+    } else if (!silent) {
+      props.notify(conflict && !nonCodeChanged ? '调取码与其他卡片冲突，请更换后再保存' : '已保存')
     }
+  }
+
+  function commitSave(silent: boolean) {
+    saveThrough(silent, false)
+  }
+
+  // 卸载前兜底：清理备注定时器并 flush 未保存草稿（覆盖关闭按钮之外的外部卸载路径）
+  useEffect(() => {
+    return () => {
+      if (notesTimer.current) window.clearTimeout(notesTimer.current)
+      saveThrough(true, true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // 关闭弹窗前 flush 未保存草稿，避免 Esc / 蒙层 / 关闭按钮直接丢弃输入
+  function handleClose() {
+    if (notesTimer.current) window.clearTimeout(notesTimer.current)
+    commitSave(true)
+    props.onClose()
   }
 
   function handleSave() {
@@ -187,7 +232,7 @@ export function CardDetail(props: CardDetailProps) {
   return (
     <div
       className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-      onClick={onClose}
+      onClick={handleClose}
     >
       <div
         ref={panelRef}
@@ -216,7 +261,7 @@ export function CardDetail(props: CardDetailProps) {
               </button>
             )}
           </div>
-          <button type="button" className="btn-ghost" onClick={onClose}>
+          <button type="button" className="btn-ghost" onClick={handleClose}>
             关闭
           </button>
         </header>
@@ -342,13 +387,16 @@ export function CardDetail(props: CardDetailProps) {
               </div>
               <div className="space-y-1.5">
                 <label htmlFor="detail-body" className="text-xs text-muted">
-                  正文（失焦或按「保存」/ Ctrl⌘+Enter 自动保存并生成版本）
+                  正文（失焦自动保存；按「保存」/ Ctrl⌘+Enter 保存并生成版本）
                 </label>
                 <textarea
                   id="detail-body"
                   className="field min-h-72 resize-y font-mono text-sm leading-relaxed"
                   value={draft.body}
-                  onChange={(e) => setDraft((d) => ({ ...d, body: e.target.value }))}
+                  onChange={(e) => {
+                    setDraft((d) => ({ ...d, body: e.target.value }))
+                    bodyDirtyRef.current = true
+                  }}
                   onBlur={() => commitSave(true)}
                   onKeyDown={(e) => {
                     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
@@ -436,7 +484,7 @@ export function CardDetail(props: CardDetailProps) {
               <p className="mt-3 text-sm leading-relaxed text-muted">
                 {readonly
                   ? '该示例卡片暂无版本记录。'
-                  : '暂无版本记录。修改正文后失焦或点「保存」会自动生成快照，最多保留 10 条。'}
+                  : '暂无版本记录。修改正文后点「保存」或 Ctrl/⌘+Enter 会生成快照，最多保留 10 条。'}
               </p>
             ) : (
               <ul className="mt-3 space-y-2">
@@ -481,7 +529,7 @@ export function CardDetail(props: CardDetailProps) {
           <div className="flex items-center gap-2">
             {!readonly && (
               <>
-                <button type="button" className="btn" onClick={onClose}>
+                <button type="button" className="btn" onClick={handleClose}>
                   取消
                 </button>
                 <button type="button" className="btn-gold" onClick={handleSave}>
@@ -490,7 +538,7 @@ export function CardDetail(props: CardDetailProps) {
               </>
             )}
             {readonly && (
-              <button type="button" className="btn-gold" onClick={onClose}>
+              <button type="button" className="btn-gold" onClick={handleClose}>
                 关闭
               </button>
             )}

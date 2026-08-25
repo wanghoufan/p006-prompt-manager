@@ -60,14 +60,14 @@ export function TopBar({
           className="btn disabled:cursor-not-allowed disabled:opacity-40"
           onClick={() => inputRef.current?.click()}
           disabled={readOnly}
-          title={readOnly ? '示例知识库为只读' : '导入备份'}
+          title={readOnly ? '示例知识库为只读' : '导入备份（支持 JSON 与 Markdown）'}
         >
           导入
         </button>
         <input
           ref={inputRef}
           type="file"
-          accept=".json,application/json"
+          accept=".json,.md,application/json,text/markdown"
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0]

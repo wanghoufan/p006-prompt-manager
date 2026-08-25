@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Card, Settings, SortMode } from '@/lib/types'
 import { loadCards, loadSettings, parseImport, saveCards, saveSettings, buildMarkdownExport, isServerAvailable, loadFromServer, pushToServer, subscribeSync } from '@/lib/storage'
-import { createCard, rollbackToVersion, saveBodyWithVersion } from '@/lib/cards'
+import { createCard, rollbackToVersion, saveBodyOnly, saveBodyWithVersion } from '@/lib/cards'
 import { DEMO_CARDS } from '@/lib/demo'
 import { nowIso } from '@/lib/util'
 import { TopBar } from '@/components/TopBar'
@@ -28,6 +28,7 @@ export default function Home() {
   const [detailId, setDetailId] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [serverOnline, setServerOnline] = useState<boolean | null>(null)
 
   const notify = useCallback((msg: string) => {
     setToast(msg)
@@ -50,6 +51,7 @@ export default function Home() {
       if (!serverOk) {
         // 离线兜底：使用本机 localStorage 数据
         if (cancelled) return
+        setServerOnline(false)
         setCards(loadCards())
         setSettings(loadSettings())
         setHydrated(true)
@@ -57,7 +59,12 @@ export default function Home() {
         return
       }
       const remote = await loadFromServer()
-      if (cancelled || !remote) return
+      if (cancelled) return
+      if (!remote) {
+        setServerOnline(false)
+        return
+      }
+      setServerOnline(true)
       // 服务端为空但本机有数据：首次迁移上传，避免两边永远为空
       if (remote.cards.length === 0) {
         const local = loadCards()
@@ -213,8 +220,8 @@ export default function Home() {
     }
   }
 
-  function handleSaveBody(id: string, body: string) {
-    updateCard(id, (c) => saveBodyWithVersion(c, body))
+  function handleSaveBody(id: string, body: string, createVersion: boolean) {
+    updateCard(id, (c) => (createVersion ? saveBodyWithVersion(c, body) : saveBodyOnly(c, body)))
   }
 
   function handleUpdateMeta(id: string, title: string, tags: string[]) {
@@ -289,6 +296,8 @@ export default function Home() {
   useEffect(() => {
     if (view === 'demo') return
     const onKey = (e: KeyboardEvent) => {
+      // 详情弹窗 / 设置弹窗打开时屏蔽全局评分快捷键，避免误触背景卡片评分
+      if (detailId || showSettings) return
       const target = e.target as HTMLElement | null
       if (
         target &&
@@ -308,7 +317,7 @@ export default function Home() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [view, detailCard, selectedId, cards, handleRate])
+  }, [view, detailCard, selectedId, cards, handleRate, detailId, showSettings])
 
   return (
     <div className="flex h-dvh flex-col">
@@ -329,6 +338,7 @@ export default function Home() {
           total={sourceCards.length}
           selected={selectedTag}
           onSelect={handleSelectTag}
+          offline={serverOnline === false}
         />
         <main className="flex min-w-0 flex-1 gap-4 overflow-hidden px-5 py-4">
           <div className="min-w-0 flex-1 space-y-4 overflow-y-auto">
