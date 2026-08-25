@@ -1,8 +1,25 @@
 # 提示词管理工具（Prompt Manager）
 
-本地网页端的提示词库：粘贴正文 → AI 自动生成标题与标签；复制即统计次数（手动复制 / MCP 调取共用）；打星评分、排序、版本回滚、思维方式总结；支持**局域网跨设备实时同步**，并可通过 **MCP** 让 WorkBuddy 等 Agent 用「调取码」一键激活卡片为系统提示词。
+> 一个本地网页端的**提示词知识库 + Agent 接口**：把常用提示词沉淀成可检索的卡片，复制即统计，支持跨设备实时同步，并可通过 **MCP** 让 WorkBuddy 等 AI Agent 用「调取码」一键把任意卡片注入为系统提示词直接执行。
 
 ![首页截图](docs/screenshots/home.png)
+
+## 🤔 为什么需要它
+
+- **提示词散落各处**：聊天记录、备忘录、Notion、本地 txt……想复用时找不到，复制粘贴易出错。
+- **切换 AI 角色麻烦**：每次想让 Agent 扮演「代码审查员 / 翻译 / 提示词优化师」，都要重新粘贴一大段系统提示词。
+- **多设备不同步**：电脑 A 整理的提示词，电脑 B 看不到。
+- **用了就忘**：哪个提示词最常用、效果最好，没有数据支撑。
+
+**本工具**把这些问题一次性解决：粘贴正文 → AI 自动提炼标题/标签 → 一键复制（统计次数）→ 局域网多端实时同步 → 给常用提示词设「调取码」→ 在 WorkBuddy 里说一句「调取 xxx」就让它以该角色直接开工。
+
+## ✨ 核心亮点
+
+- **AI 自动整理**：粘贴即生成标题与标签，零手工维护。
+- **复制即统计**：手动复制与 MCP 调取共用计数，常用提示词一目了然。
+- **调取码 → 一键激活**：给卡片设短码，在 Agent 里「调取 <码>」即把正文作为系统提示词注入执行。
+- **局域网实时同步**：多台电脑共用一份数据，增删改秒级互推。
+- **版本可追溯**：每次编辑自动存档（最多 10 版），随时回滚。
 
 ## 功能概览
 
@@ -23,42 +40,78 @@
 
 ## 快速开始
 
+### 先决条件
+
+- **Node.js** ≥ 18（推荐 20+）
+- **DeepSeek API Key**（https://platform.deepseek.com）
+
+### 安装与运行
+
 ```bash
+# 1. 安装依赖
 npm install
-cp .env.local.example .env.local   # 填入 DEEPSEEK_API_KEY
-npm run dev                        # 打开 http://localhost:3000
-# 或带 watchdog 自愈地启动：
-./dev-server.sh start              # 服务挂了 3 秒自动重启
+
+# 2. 配置密钥
+cp .env.local.example .env.local
+#   编辑 .env.local，填入 DEEPSEEK_API_KEY=sk-xxx
+
+# 3. 启动开发服务
+npm run dev
+#   打开 http://localhost:3000
+
+# （可选）带 watchdog 自愈地启动，服务挂了 3 秒自动拉起：
+./dev-server.sh start        # 启动
+./dev-server.sh status       # 查看状态
+./dev-server.sh logs         # 查看日志
+./dev-server.sh stop         # 停止
 ```
 
-### 局域网实时同步
+> 首次打开时若本机已有旧数据（localStorage），会自动迁移上传到服务端。
+
+### 生产部署（可选）
+
+```bash
+npm run build
+npm run start        # 默认 3000 端口
+```
+
+## 局域网实时同步
 
 - 服务监听所有网卡（`*:3000`）。同局域网内其他设备访问 `http://<本机IP>:3000` 即可共用同一份数据（数据存在运行 dev 服务的那台机器上，`data/store.json`）。
 - 任意一端增删改，另一端几秒内自动刷新（SSE 推送）。
-- `next.config.ts` 的 `allowedDevOrigins` 已放行 `.local` 主机名与常用 IP；IP 变化时需同步更新。
-- 本机也可用 `.local` 地址：`http://<Mac主机名>.local:3000`。
+- `next.config.ts` 的 `allowedDevOrigins` 已放行 `.local` 主机名与常用 IP；**IP 变化时需同步更新并重启**。
+- 本机也可用 `.local` 地址：`http://<Mac主机名>.local:3000`（不随 DHCP 变化，比 IP 更稳定）。
 
-### MCP 接入（WorkBuddy / 其他支持 MCP 的 Agent）
+## MCP 接入（WorkBuddy / 其他支持 MCP 的 Agent）
 
-1. 构建并验证：`cd mcp/prompt-server && npm install && npm run build`
+1. 构建 MCP server：
+
+   ```bash
+   cd mcp/prompt-server && npm install && npm run build
+   ```
+
 2. 把 `prompt-manager` 注册到 `~/.workbuddy/mcp.json`（**不带点**；注意 `.mcp.json` 带点的是 connector-proxy 专用，别写错）：
+
    ```json
    {
      "mcpServers": {
        "prompt-manager": {
-         "command": "<node绝对路径>",
+         "command": "node",
          "args": ["<项目根>/mcp/prompt-server/dist/index.js"],
          "description": "本地提示词管理库：通过调取码（code）返回卡片正文"
        }
      }
    }
    ```
+
+   > `command` 也可写成 Node 绝对路径（运行 `which node` 查看），确保 WorkBuddy 进程能找到 Node。
+
 3. 在 WorkBuddy「连接器」→「配置 MCP」里保存并**信任**该 server；之后**新开会话**生效。
 4. 使用：输入「**调取 <调取码>**」（如 `调取 jbyj`），WorkBuddy 会调用 `prompt_manager_activate_prompt`，把卡片正文作为新的系统提示词直接执行，并给该卡片复制次数 +1。
 
 > 详细接入说明见 `mcp/prompt-server/README.md`。
 
-## 使用
+## 使用指南
 
 - **示例知识库**：顶栏「示例」菜单切换浏览内置 12 张示例卡片（只读）；「载入示例到我的仓库」一键装入本地仓库；「清空我的仓库」一键清除。
 - **新建**：在顶部输入框粘贴提示词正文，自动调用 AI 生成标题与标签（失败时可「重试」或「直接创建」）。
@@ -130,12 +183,32 @@ dev-server.sh                                # dev 服务 watchdog 管理脚本
 | `DEEPSEEK_BASE_URL` | 否 | 默认 `https://api.deepseek.com`（兼容 `/v1` 前缀） |
 | `PROMPT_MANAGER_API_URL` | 否 | MCP server 计数 API 地址，默认 `http://localhost:3000` |
 
-## 存储
+## 存储与备份
 
 - **同步源**：服务端 `data/store.json`（`serverStore` 落盘，含用户提示词，已被 `.gitignore` 忽略）。
 - **离线兜底**：localStorage（键 `prompt-manager:cards` / `prompt-manager:settings`）。
 - 首次打开时若服务端为空且本机 localStorage 有数据，会自动迁移上传。
 - 请定期「导出」备份。
+
+## 常见问题（FAQ）
+
+**Q：另一台电脑打不开 / 无法同步？**
+A：确认运行 dev 服务的那台电脑 `npm run dev` 仍在运行；对方用 `http://<本机IP或.local>:3000` 访问。若提示跨域拦截，把该 IP/主机名加入 `next.config.ts` 的 `allowedDevOrigins` 并重启。
+
+**Q：IP 变了之后同步失效？**
+A：路由器重分配 IP 后，旧 IP 失效。改用 `.local` 主机名访问，或更新 `allowedDevOrigins` 里的 IP 并重启服务。
+
+**Q：MCP 调取没反应 / 工具调不起来？**
+A：① 确认已在 WorkBuddy「连接器」里**信任**该 server；② MCP 中途启用需**新开会话**才会加载工具元数据；③ 用「调取 / 激活 / 加载」+ 短码触发（如 `调取 jbyj`）。
+
+**Q：调取码冲突怎么办？**
+A：右侧面板或详情弹窗填写调取码时，若已存在会实时红字提示，换一个即可。
+
+**Q：复制次数不更新？**
+A：手动复制实时生效；MCP 调取计数需要 dev 服务运行且 `PROMPT_MANAGER_API_URL`（默认 `http://localhost:3000`）可达，计数失败不影响取卡片。
+
+**Q：AI 生成标题/标签失败？**
+A：检查 `.env.local` 中 `DEEPSEEK_API_KEY` 是否正确，以及网络能否访问 DeepSeek。失败时可手动「直接创建」。
 
 ## 许可证
 
