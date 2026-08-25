@@ -26,6 +26,7 @@ export function isCard(v: unknown): v is Card {
     isString(x.title) &&
     isString(x.body) &&
     isStringArray(x.tags) &&
+    (x.code === undefined || x.code === null || isString(x.code)) &&
     typeof x.rating === 'number' &&
     typeof x.copyCount === 'number' &&
     (x.thinkingSummary === null || isString(x.thinkingSummary)) &&
@@ -36,13 +37,18 @@ export function isCard(v: unknown): v is Card {
   )
 }
 
+/** 归一化卡片：老数据缺 code 字段时补 null（isCard 已放行 undefined code） */
+function normalizeCard(c: Card): Card {
+  return { ...c, code: c.code ?? null }
+}
+
 export function loadCards(): Card[] {
   try {
     const raw = localStorage.getItem(CARDS_KEY)
     if (!raw) return []
     const parsed: unknown = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
-    return parsed.filter(isCard)
+    return parsed.filter(isCard).map(normalizeCard)
   } catch {
     return []
   }
@@ -94,6 +100,7 @@ function parseMarkdownImport(raw: string): ImportResult | null {
     tags: string[]
     rating: number
     copyCount: number
+    code: string | null
     createdAt: string
     updatedAt: string
     summary: string | null
@@ -113,6 +120,7 @@ function parseMarkdownImport(raw: string): ImportResult | null {
       title: current.title,
       body,
       tags: current.tags,
+      code: current.code ? current.code.toLowerCase() : null,
       rating: Math.max(0, Math.min(5, current.rating)),
       copyCount: Math.max(0, current.copyCount),
       thinkingSummary: current.summary ? current.summary.trim() : null,
@@ -133,6 +141,7 @@ function parseMarkdownImport(raw: string): ImportResult | null {
         tags: [],
         rating: 0,
         copyCount: 0,
+        code: null,
         createdAt: '',
         updatedAt: '',
         summary: null,
@@ -163,6 +172,8 @@ function parseMarkdownImport(raw: string): ImportResult | null {
       const value = meta[2].trim()
       if (key === '标签') {
         current.tags = value.split(/[,，、]+/).map((s) => s.trim()).filter(Boolean).slice(0, 3)
+      } else if (key === '调取码') {
+        current.code = value && value !== '（未设置）' ? value.trim().toLowerCase() : null
       } else if (key === '评分') {
         const n = Number(value)
         if (!Number.isNaN(n)) current.rating = n
@@ -186,6 +197,7 @@ export function buildMarkdownExport(cards: Card[]): string {
   cards.forEach((c, i) => {
     lines.push(`## ${i + 1}. ${c.title}`, '')
     lines.push(`- 标签：${c.tags.join('、') || '（无）'}`)
+    lines.push(`- 调取码：${c.code ?? '（未设置）'}`)
     lines.push(`- 评分：${c.rating}`)
     lines.push(`- 复制次数：${c.copyCount}`)
     lines.push(`- 创建时间：${c.createdAt}`)
@@ -283,7 +295,9 @@ export async function loadFromServer(): Promise<{ cards: Card[]; settings: Setti
     const res = await fetch(SYNC_URL, { cache: 'no-store' })
     if (!res.ok) return null
     const data = (await res.json()) as { cards?: unknown; settings?: unknown }
-    const cards = Array.isArray(data.cards) ? (data.cards.filter(isCard) as Card[]) : []
+    const cards = Array.isArray(data.cards)
+      ? (data.cards.filter(isCard).map(normalizeCard) as Card[])
+      : []
     const settings: Settings =
       data.settings && typeof data.settings === 'object'
         ? (data.settings as Settings)

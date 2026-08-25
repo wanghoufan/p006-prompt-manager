@@ -27,6 +27,14 @@ export function CardItem({ card, selected, readonly = false, onSelect, onOpen, o
         <h3 className="min-w-0 flex-1 truncate text-sm font-medium text-paper" title={card.title}>
           {card.title}
         </h3>
+        {card.code && (
+          <span
+            className="shrink-0 font-mono text-[10px] text-gold-bright"
+            title={`调取码：${card.code}`}
+          >
+            @{card.code}
+          </span>
+        )}
         {readonly && (
           <span className="shrink-0 rounded border border-gold/30 bg-gold/10 px-1.5 py-0.5 text-[10px] text-gold-bright">
             示例
@@ -45,6 +53,14 @@ export function CardItem({ card, selected, readonly = false, onSelect, onOpen, o
           </button>
         )}
       </div>
+      {card.body && (
+        <p
+          className="line-clamp-2 min-w-0 whitespace-pre-wrap text-xs leading-relaxed text-paper-dim/80"
+          title={card.body}
+        >
+          {card.body}
+        </p>
+      )}
       <div className="flex flex-wrap items-center gap-1.5">
         {card.tags.map((t) => (
           <span

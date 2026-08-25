@@ -49,3 +49,7 @@ scratch/
 
 # ===== 服务端共享数据（运行时生成，含用户提示词） =====
 /data/
+
+# ===== MCP server 子包（依赖与构建产物） =====
+mcp/prompt-server/node_modules/
+mcp/prompt-server/dist/

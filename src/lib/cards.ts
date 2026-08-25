@@ -3,13 +3,19 @@ import { nowIso, uid } from '@/lib/util'
 
 export const MAX_VERSIONS = 10
 
-export function createCard(body: string, title: string, tags: string[]): Card {
+/** 调取码规范化：小写、去首尾空白；非法字符返回空串 */
+export function normalizeCode(raw: string): string {
+  return raw.trim().toLowerCase().replace(/[^a-z0-9-]/g, '')
+}
+
+export function createCard(body: string, title: string, tags: string[], code?: string | null): Card {
   const now = nowIso()
   return {
     id: uid(),
     title: title || '未命名提示词',
     body,
     tags,
+    code: code ? normalizeCode(code) : null,
     rating: 0,
     copyCount: 0,
     thinkingSummary: null,
@@ -51,10 +57,17 @@ export interface CardDraft {
   tagsText: string
   body: string
   rating: number
+  code: string
 }
 
 export function cardDraftFrom(card: Card): CardDraft {
-  return { title: card.title, tagsText: card.tags.join('、'), body: card.body, rating: card.rating }
+  return {
+    title: card.title,
+    tagsText: card.tags.join('、'),
+    body: card.body,
+    rating: card.rating,
+    code: card.code ?? '',
+  }
 }
 
 export interface CardDraftChanges {
@@ -62,6 +75,7 @@ export interface CardDraftChanges {
   titleChanged: boolean
   tagsChanged: boolean
   ratingChanged: boolean
+  codeChanged: boolean
   anyChanged: boolean
 }
 
@@ -70,11 +84,13 @@ export function cardDraftChanges(draft: CardDraft, card: Card): CardDraftChanges
   const titleChanged = draft.title.trim() !== card.title
   const tagsChanged = parseTags(draft.tagsText).join('|') !== card.tags.join('|')
   const ratingChanged = draft.rating !== card.rating
+  const codeChanged = normalizeCode(draft.code) !== (card.code ?? '')
   return {
     bodyChanged,
     titleChanged,
     tagsChanged,
     ratingChanged,
-    anyChanged: bodyChanged || titleChanged || tagsChanged || ratingChanged,
+    codeChanged,
+    anyChanged: bodyChanged || titleChanged || tagsChanged || ratingChanged || codeChanged,
   }
 }

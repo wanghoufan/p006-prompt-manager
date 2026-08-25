@@ -9,6 +9,8 @@ export interface Card {
   title: string
   body: string
   tags: string[]
+  /** 调取码：用户自定义短字符串，供 MCP 等外部工具按码取卡片，可选 */
+  code: string | null
   rating: number
   copyCount: number
   thinkingSummary: string | null

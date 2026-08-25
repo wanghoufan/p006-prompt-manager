@@ -8,6 +8,30 @@
 
 ---
 
+## 更新记录（2026-08-25）
+
+随「跨设备同步 + UI 优化 + 调取码 + MCP 集成」改造，复核以下项状态：
+
+| 编号 | 原状态 | 现状 |
+|---|---|---|
+| BUG-1 | 高 · 未修 | ✅ **已修复**：初始化改为空数组 + 挂载后异步加载（`page.tsx`），不再在 `useState` 初始化器读 localStorage |
+| BUG-2 | 中 · 未修 | ✅ **已修复**：`detailCard` 改用 `sourceCards.find(...)`，示例卡片可只读打开详情 |
+| BUG-3 | 低/中 · 未修 | ✅ **已修复**：复制仅成功分支计数，失败提示且不计数（`handleCopy`） |
+| OPT-1 | AI 请求缺 AbortController | ⏳ 未修（本次未涉及） |
+| OPT-2 | 模态框焦点陷阱 | ✅ **CardDetail 已修复**（`useModalFocus` + `role="dialog"` + `aria-modal`）；`SettingsModal` 未复核 |
+| OPT-3 | 标题可能变空串 | ✅ **已修复**：`regenMeta` 用 `data.title?.trim() || card.title` 兜底 |
+| OPT-4 | 模板 `{body}` 未校验 | ⏳ 未修 |
+| OPT-5 | 弹窗打开时评分快捷键误触 | ⏳ 未修 |
+| OPT-6 | 复制失败无感知 | ✅ **已修复**：失败 `notify('复制失败，请手动复制')` |
+
+### 新增已知边界（2026-08-25 起）
+
+- **MCP 计数并发**：`/api/sync/increment-copy` 由 `serverStore.incrementCopy` 原子 +1，但 MCP 读 `data/store.json` 与 serverStore 内存可能短暂不一致（低并发个人场景可接受）。
+- **MCP 计数失败静默**：MCP 命中后 fire-and-forget 调计数 API，失败不阻塞取卡片（`copyCount` 可能少计，可接受）。
+- **跨进程写冲突规避**：MCP 不直接写 `store.json`（否则会被 serverStore 内存覆盖），统一走 API。
+
+---
+
 ## 一、Bug（按严重度排序）
 
 ### BUG-1 ·【高】localStorage 在 `useState` 初始化器中读取，导致 SSR 水合不匹配

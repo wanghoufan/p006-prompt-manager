@@ -8,6 +8,7 @@ export const DEMO_CARDS: Card[] = [
   {
     id: 'demo-001',
     title: 'React 代码审查助手',
+    code: 'code-review',
     body: `你是一名资深前端工程师，负责代码审查。请审查下面这段代码：
 1. 指出潜在的性能问题与内存泄漏风险
 2. 指出可读性和维护性问题
@@ -28,6 +29,7 @@ export const DEMO_CARDS: Card[] = [
   {
     id: 'demo-002',
     title: '产品需求拆解顾问',
+    code: 'prd-split',
     body: `现在你是一名资深产品经理。我将向你描述一个产品想法，请你：
 1. 帮我梳理目标用户与核心痛点
 2. 提出 3 个可行的功能方案并对比
@@ -45,6 +47,7 @@ export const DEMO_CARDS: Card[] = [
   {
     id: 'demo-003',
     title: '文章要点总结器',
+    code: 'summary',
     body: `请用 markdown 格式总结下面这段文字：
 1. 先给出 3 句话的核心摘要
 2. 再按主题分点列出关键信息
@@ -61,6 +64,7 @@ export const DEMO_CARDS: Card[] = [
   {
     id: 'demo-004',
     title: '中英翻译润色专家',
+    code: 'translate',
     body: `你是一名专业的中英互译专家。请将下面这段中文翻译成英文，并：
 1. 先给出直译版本
 2. 再给出一版自然流畅的意译
@@ -80,6 +84,7 @@ export const DEMO_CARDS: Card[] = [
   {
     id: 'demo-005',
     title: '前端面试官模拟器',
+    code: 'interview',
     body: `你是一名技术面试官，正在面试一名中级前端工程师。请根据我的要求生成面试问题：
 1. 围绕 JavaScript 闭包与事件循环出 3 道题
 2. 每题给出考察要点和参考答案
@@ -96,6 +101,7 @@ export const DEMO_CARDS: Card[] = [
   {
     id: 'demo-006',
     title: '复杂问题拆解助手',
+    code: 'decompose',
     body: `请你帮我拆解下面这个复杂问题：
 1. 先明确问题的核心目标
 2. 把问题分解成 3~5 个可独立解决的子问题
@@ -112,6 +118,7 @@ export const DEMO_CARDS: Card[] = [
   {
     id: 'demo-007',
     title: '提示词优化师',
+    code: 'prompt-optimize',
     body: `你是一名提示词工程专家。请优化下面这条提示词：
 1. 指出它的问题：指令不明确、缺少约束、缺少输出格式
 2. 给出优化后的完整版本
@@ -131,6 +138,7 @@ export const DEMO_CARDS: Card[] = [
   {
     id: 'demo-008',
     title: '单元测试生成器',
+    code: 'unit-test',
     body: `你是一名熟悉 Vitest 的测试工程师。请为下面的函数生成单元测试：
 1. 覆盖正常输入、边界值和异常输入
 2. 使用 describe/it 组织用例
@@ -147,6 +155,7 @@ export const DEMO_CARDS: Card[] = [
   {
     id: 'demo-009',
     title: '四周 TS 学习计划',
+    code: 'ts-plan',
     body: `请帮我制定一个为期 4 周的 TypeScript 学习计划：
 1. 每周设定一个主题和产出目标
 2. 推荐学习资源和练习项目
@@ -163,6 +172,7 @@ export const DEMO_CARDS: Card[] = [
   {
     id: 'demo-010',
     title: '慢查询性能分析',
+    code: 'sql-slow',
     body: `你是一名数据库性能优化专家。请分析下面这条慢查询：
 1. 解释查询的执行过程与性能瓶颈
 2. 给出索引优化建议
@@ -179,6 +189,7 @@ export const DEMO_CARDS: Card[] = [
   {
     id: 'demo-011',
     title: '周报自动生成',
+    code: 'weekly-report',
     body: `请根据我提供的本周工作记录，生成一份周报：
 1. 按「本周完成 / 进行中 / 下周计划 / 风险与求助」分节
 2. 每节用要点式表达，语言精炼
@@ -195,6 +206,7 @@ export const DEMO_CARDS: Card[] = [
   {
     id: 'demo-012',
     title: '数据清洗方案师',
+    code: 'data-clean',
     body: `你是一名数据分析师。请为下面的数据清洗任务制定方案：
 1. 列出可能的数据质量问题
 2. 给出清洗规则和实现步骤

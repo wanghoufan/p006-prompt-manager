@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Card, Version } from '@/lib/types'
-import { cardDraftChanges, cardDraftFrom, parseTags } from '@/lib/cards'
+import { cardDraftChanges, cardDraftFrom, normalizeCode, parseTags } from '@/lib/cards'
 import { Stars } from '@/components/Stars'
 import { Spinner } from '@/components/Spinner'
 import { formatTime } from '@/lib/util'
@@ -11,10 +11,12 @@ interface CardDetailProps {
   card: Card
   readonly?: boolean
   existingTags: string[]
+  allCodes: string[]
   customThinkingPrompt: string
   onClose: () => void
   onSaveBody: (id: string, body: string) => void
   onUpdateMeta: (id: string, title: string, tags: string[]) => void
+  onUpdateCode: (id: string, code: string | null) => void
   onRate: (id: string, rating: number) => void
   onCopy: (id: string) => void
   onResetCopies: (id: string) => void
@@ -66,6 +68,12 @@ export function CardDetail(props: CardDetailProps) {
   const firstSync = useRef(true)
   useModalFocus(panelRef, true)
 
+  const codeConflict = useMemo(() => {
+    const c = normalizeCode(draft.code)
+    if (!c) return false
+    return props.allCodes.includes(c) && card.code !== c
+  }, [draft.code, props.allCodes, card.code])
+
   useEffect(() => {
     if (readonly) return
     if (firstSync.current) {
@@ -85,6 +93,10 @@ export function CardDetail(props: CardDetailProps) {
   }, [onClose])
 
   function handleSave() {
+    if (codeConflict) {
+      props.notify('调取码与其他卡片冲突，请更换后再保存')
+      return
+    }
     const changes = cardDraftChanges(draft, card)
     if (!changes.anyChanged) {
       props.notify('没有需要保存的修改')
@@ -94,6 +106,7 @@ export function CardDetail(props: CardDetailProps) {
     if (changes.titleChanged || changes.tagsChanged) {
       props.onUpdateMeta(card.id, draft.title.trim() || card.title, parseTags(draft.tagsText))
     }
+    if (changes.codeChanged) props.onUpdateCode(card.id, normalizeCode(draft.code) || null)
     if (changes.ratingChanged) props.onRate(card.id, draft.rating)
     props.notify('已保存')
   }
@@ -204,6 +217,10 @@ export function CardDetail(props: CardDetailProps) {
                 </div>
               </div>
               <div className="space-y-1.5">
+                <p className="text-xs text-muted">调取码</p>
+                <p className="font-mono text-sm text-gold-bright">{card.code ? `@${card.code}` : '未设置'}</p>
+              </div>
+              <div className="space-y-1.5">
                 <p className="text-xs text-muted">正文</p>
                 <div className="rounded-md border border-line bg-ink-850 px-3 py-2.5 text-[13px] leading-relaxed whitespace-pre-wrap text-paper-dim">
                   {card.body}
@@ -249,6 +266,25 @@ export function CardDetail(props: CardDetailProps) {
                   onChange={(e) => setDraft((d) => ({ ...d, tagsText: e.target.value }))}
                   placeholder="如：角色扮演、任务拆解"
                 />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="detail-code" className="text-xs text-muted">
+                  调取码（可选，英文/数字/短横线，最多 12 字符）
+                </label>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-mono text-sm text-gold-bright">@</span>
+                  <input
+                    id="detail-code"
+                    className={`field flex-1 font-mono ${codeConflict ? 'border-rust/60 focus:border-rust' : ''}`}
+                    value={draft.code}
+                    maxLength={12}
+                    onChange={(e) => setDraft((d) => ({ ...d, code: e.target.value }))}
+                    placeholder="如：dee"
+                  />
+                </div>
+                {codeConflict && (
+                  <p className="text-[11px] text-rust">该调取码已被其他卡片使用，请更换</p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <label htmlFor="detail-body" className="text-xs text-muted">

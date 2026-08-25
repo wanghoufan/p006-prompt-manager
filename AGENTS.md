@@ -17,16 +17,18 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 ## 一、项目档案
 
 - 项目名称：提示词管理工具（Prompt Manager）
-- 项目类型：纯前端应用（Next.js + TypeScript）
-- 当前阶段：初稿
+- 项目类型：Next.js 应用 + 服务端轻量共享存储 + MCP 子包
+- 当前阶段：功能开发期（实时同步 / UI 优化 / 调取码 / MCP 集成已完成主体）
 - 主要目标：管理、编辑与测试提示词
 - 主要用户：使用 GPT 等大模型、需要集中管理 Prompt 的个人 / 团队
 
 ### 技术栈
 
 - 前端：Next.js 16（App Router）+ React 19 + TypeScript 5
-- 后端：无（纯前端）
-- 存储：localStorage（浏览器本地）
+- 服务端：Next.js Route Handler（AI 代理、`/api/sync` 共享存储、`/api/sync/increment-copy` 计数）
+- 共享存储：服务端 `data/store.json`（进程内单例 serverStore 落盘，同步源）+ localStorage（离线兜底）
+- 实时同步：SSE（`/api/sync/stream`）跨设备推送；`next.config.ts` `allowedDevOrigins` 放行局域网来源
+- MCP：`mcp/prompt-server/`（`@modelcontextprotocol/sdk` + zod，stdio），工具 `prompt_manager_activate_prompt`（按调取码激活系统提示词并计入复制次数）
 - 样式方案：Tailwind CSS v4
 - 代码检查：ESLint 9（eslint-config-next）
 - 测试方案：暂无（待建立）
@@ -34,21 +36,26 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ### 常用命令
 
-- 安装依赖：`npm install`
-- 本地开发：`npm run dev`
+- 安装依赖：`npm install`；MCP 子包：`cd mcp/prompt-server && npm install`
+- 本地开发：`npm run dev`（或 `./dev-server.sh start` 带 watchdog 自愈）
 - 类型检查：`npx tsc --noEmit`（无独立脚本，next build 亦会检查）
 - Lint：`npm run lint`
-- 构建：`npm run build`
+- 构建：`npm run build`；MCP 子包：`cd mcp/prompt-server && npm run build`
 - 预览 / 生产启动：`npm run start`
+- 服务管理：`./dev-server.sh {start|stop|restart|status|logs}`（watchdog 自愈）
 - 测试：暂无脚本（待建立）
 
 ### 当前进展与产物索引
 
-- 当前状态：初稿
+- 当前状态：实时同步、UI 优化、调取码、MCP 集成已完成主体；工作区有未提交改动
 - 需求文档：`docs/pm/提示词管理工具-需求文档.md`
 - 产品报告：`docs/pm/产品报告.md`
-- 代码审查：`docs/review/代码审查报告.md`
+- 实施计划：`docs/pm/PLAN.md`
+- 代码审查：`docs/review/CODE_REVIEW.md`
+- 产品优化候选：`docs/review/PRODUCT_BACKLOG.md`
 - 交接上下文：`docs/handoff/HANDOFF.md`
+- MCP 接入说明：`mcp/prompt-server/README.md`
+- 远程仓库：https://github.com/wanghoufan/prompt-manager.git（master）
 
 ---
 

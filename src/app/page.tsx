@@ -119,6 +119,11 @@ export default function Home() {
 
   const existingTags = useMemo(() => tagEntries.map(([t]) => t), [tagEntries])
 
+  const allCodes = useMemo(
+    () => cards.map((c) => c.code).filter((c): c is string => Boolean(c)),
+    [cards],
+  )
+
   const visibleCards = useMemo(() => {
     const list = selectedTag ? sourceCards.filter((c) => c.tags.includes(selectedTag!)) : sourceCards
     const arr = [...list]
@@ -214,6 +219,10 @@ export default function Home() {
 
   function handleUpdateMeta(id: string, title: string, tags: string[]) {
     updateCard(id, (c) => ({ ...c, title, tags, updatedAt: nowIso() }))
+  }
+
+  function handleUpdateCode(id: string, code: string | null) {
+    updateCard(id, (c) => ({ ...c, code, updatedAt: nowIso() }))
   }
 
   function handleRollback(id: string, versionId: string) {
@@ -358,7 +367,7 @@ export default function Home() {
                 </div>
               )
             ) : (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {visibleCards.map((card) => (
                   <CardItem
                     key={card.id}
@@ -379,11 +388,13 @@ export default function Home() {
             card={previewCard}
             readonly={isDemoView}
             existingTags={existingTags}
+            allCodes={allCodes}
             customThinkingPrompt={settings.thinkingSummaryPrompt}
             onCopy={() => handleCopy(previewCard?.id ?? '')}
             onRate={(r) => handleRate(previewCard?.id ?? '', r)}
             onSaveBody={handleSaveBody}
             onUpdateMeta={handleUpdateMeta}
+            onUpdateCode={handleUpdateCode}
             onResetCopies={handleResetCopies}
             onRollback={handleRollback}
             onSetSummary={handleSetSummary}
@@ -397,10 +408,12 @@ export default function Home() {
           card={detailCard}
           readonly={isDemoView}
           existingTags={existingTags}
+          allCodes={allCodes}
           customThinkingPrompt={settings.thinkingSummaryPrompt}
           onClose={() => setDetailId(null)}
           onSaveBody={handleSaveBody}
           onUpdateMeta={handleUpdateMeta}
+          onUpdateCode={handleUpdateCode}
           onRate={handleRate}
           onCopy={handleCopy}
           onResetCopies={handleResetCopies}

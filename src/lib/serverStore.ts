@@ -71,3 +71,30 @@ export function subscribe(cb: (version: number) => void): () => void {
   emitter.on('change', cb)
   return () => emitter.off('change', cb)
 }
+
+/**
+ * 按调取码给卡片复制次数 +1（供 MCP 调用时计数，与手动复制共用 copyCount）。
+ * 找到卡片返回新的 copyCount；未找到返回 null。
+ * 会 bump 版本号并广播 SSE，其他端实时刷新。
+ */
+export async function incrementCopy(code: string): Promise<number | null> {
+  const s = await ensureLoaded()
+  const cards = s.cards as Array<Record<string, unknown>>
+  const idx = cards.findIndex((c) => String(c.code ?? '').toLowerCase() === code)
+  if (idx < 0) return null
+  const card = cards[idx]
+  const count = typeof card.copyCount === 'number' ? card.copyCount : 0
+  card.copyCount = count + 1
+  s.version += 1
+  const snapshot = JSON.stringify(s, null, 2)
+  writeChain = writeChain
+    .then(async () => {
+      await fs.mkdir(DATA_DIR, { recursive: true })
+      await fs.writeFile(DATA_FILE, snapshot, 'utf8')
+    })
+    .catch((err) => {
+      console.error('[serverStore] 写入失败:', err)
+    })
+  emitter.emit('change', s.version)
+  return count + 1
+}
