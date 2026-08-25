@@ -4,13 +4,13 @@
 
 ## 最近一次 Product 执行记录
 
-- 时间：2026-08-26
-- 模式：Product Review（非正式产品验收）
-- 结果：COMPLETED
-- 输入：`AGENTS.md` / `docs/roles/product-reviewer.md` / `docs/pm/PLAN.md` / `docs/progress/CURRENT_STAGE.md` / `docs/review/PRODUCT_BACKLOG.md` + 源码（`page.tsx` / `PreviewPanel.tsx` / `CardDetail.tsx` / `Composer.tsx` / `CardItem.tsx` / `TagPanel.tsx` / `storage.ts` / `cards.ts` / `demo.ts`）+ 线上态核验（`curl http://localhost:3000` HTTP 200 + SSR HTML + `docs/screenshots/home.png|detail.png|preview.png` 视觉复核 + `data/store.json` 同步态）
-- 体验方式：Vision（截图）+ 源码走查 + 实时服务探活（GUI Web 优先，无原生 Mac 壳）；未改业务代码/UI
-- 覆盖维度：完整性 / 易发现性 / 操作效率 / 信息架构 / 反馈 / 错误提示 / 容错恢复 / 一致性 / 高频效率 / 产品机会
-- 结论：新增 4 项 P1、7 项 P2、5 项 P3，完成分类沉淀；未调用 Builder
+- 时间：2026-08-26（视觉验收 + 产品验收）
+- 模式：Visual Acceptance + Product Acceptance
+- 结果：PASS（P1-1～P1-4 全部关闭）
+- 输入：`AGENTS.md` / `docs/roles/product-reviewer.md` / `docs/progress/CURRENT_STAGE.md` / `docs/review/PRODUCT_BACKLOG.md` + 源码走查 + `docs/screenshots/home.png|detail.png|preview.png` 视觉复核
+- 体验方式：Vision（截图）+ 源码走查 + 实时服务探活；未改业务代码/UI
+- 覆盖维度：P1-1～P1-4 逐条验证 + 正文优先布局/排序栏/卡片网格 3 列回归扫视
+- 结论：P1-1～P1-4 全部已修复并验证通过，移入「已完成」；无新增 P1
 
 ---
 
@@ -192,6 +192,10 @@
 - MCP 集成（按调取码激活系统提示词）
 - MCP 调用计入复制次数（与手动复制共用）
 - 备注字段（`Card.notes`，正文上方 2 行可拖动 textarea，只读态紧凑展示，Markdown 导入导出 `### 备注`）
-- 失焦自动保存（标题/标签/调取码/备注/星级失焦即存，备注 700ms 防抖，正文失焦或 `Ctrl/⌘+Enter` 保存并建版，底部“已自动保存”角标）
+- 失焦自动保存（标题/标签/调取码/备注/星级失焦即存，备注 700ms 防抖，正文失焦或 `Ctrl/⌘+Enter` 保存并建版，底部"已自动保存"角标）
 - 回滚不再污染历史（`rollbackToVersion` 不再先快照）
 - 单卡删除（详情/预览面板，带 `confirm`，`copyCount` 统计修正为仅成功分支计数）
+- **P1-1 TagPanel 文案与实际同步架构一致**（2026-08-26 修复：底部文案改为"局域网实时同步…离线回退"，新增 `offline` prop 区分离线态）
+- **P1-2 关闭/切卡不再静默丢稿**（2026-08-26 修复：PreviewPanel 卸载 flush + CardDetail handleClose 先 commitSave 再关闭）
+- **P1-3 导入选择器支持 .md**（2026-08-26 修复：accept 扩展为 `.json,.md`，title 注明支持 JSON 与 Markdown）
+- **P1-4 冲突语义统一**（2026-08-26 修复：CardDetail 对齐 PreviewPanel「跳过冲突字段、其余照存」+ 冲突 toast 提示）
