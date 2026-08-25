@@ -1,0 +1,73 @@
+import { promises as fs } from 'fs'
+import path from 'path'
+import { EventEmitter } from 'events'
+
+// 服务端共享存储：进程内单例 + JSON 文件持久化。
+// 两台电脑访问同一份 Next.js 服务，因此读写的是同一个文件，天然共享。
+// 变更通过 EventEmitter 广播版本号，由 SSE 推送给各客户端实现实时同步。
+
+export interface ServerState {
+  cards: unknown[]
+  settings: unknown
+  version: number
+}
+
+const DATA_DIR = path.join(process.cwd(), 'data')
+const DATA_FILE = path.join(DATA_DIR, 'store.json')
+
+const emitter = new EventEmitter()
+emitter.setMaxListeners(0)
+
+let state: ServerState | null = null
+let writeChain: Promise<void> = Promise.resolve()
+
+async function ensureLoaded(): Promise<ServerState> {
+  if (state) return state
+  try {
+    const raw = await fs.readFile(DATA_FILE, 'utf8')
+    const parsed = JSON.parse(raw) as Partial<ServerState>
+    state = {
+      cards: Array.isArray(parsed.cards) ? parsed.cards : [],
+      settings: parsed.settings ?? null,
+      version: typeof parsed.version === 'number' ? parsed.version : 1,
+    }
+  } catch {
+    state = { cards: [], settings: null, version: 1 }
+  }
+  return state
+}
+
+export async function getState(): Promise<ServerState> {
+  const s = await ensureLoaded()
+  // 返回副本，避免调用方意外修改内存中的单例
+  return { cards: s.cards, settings: s.settings, version: s.version }
+}
+
+export async function setState(next: { cards: unknown[]; settings: unknown }): Promise<number> {
+  const s = await ensureLoaded()
+  const current = JSON.stringify({ cards: s.cards, settings: s.settings })
+  const incoming = JSON.stringify({ cards: next.cards, settings: next.settings })
+  if (current === incoming) {
+    // 内容无变化：保持版本号、不落盘、不广播，避免远程回写导致的推送死循环
+    return s.version
+  }
+  s.cards = next.cards
+  s.settings = next.settings
+  s.version += 1
+  const snapshot = JSON.stringify(s, null, 2)
+  writeChain = writeChain
+    .then(async () => {
+      await fs.mkdir(DATA_DIR, { recursive: true })
+      await fs.writeFile(DATA_FILE, snapshot, 'utf8')
+    })
+    .catch((err) => {
+      console.error('[serverStore] 写入失败:', err)
+    })
+  emitter.emit('change', s.version)
+  return s.version
+}
+
+export function subscribe(cb: (version: number) => void): () => void {
+  emitter.on('change', cb)
+  return () => emitter.off('change', cb)
+}

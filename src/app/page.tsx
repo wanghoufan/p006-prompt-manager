@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Card, Settings, SortMode } from '@/lib/types'
-import { loadCards, loadSettings, parseImport, saveCards, saveSettings, buildMarkdownExport } from '@/lib/storage'
+import { loadCards, loadSettings, parseImport, saveCards, saveSettings, buildMarkdownExport, isServerAvailable, loadFromServer, pushToServer, subscribeSync } from '@/lib/storage'
 import { createCard, rollbackToVersion, saveBodyWithVersion } from '@/lib/cards'
 import { DEMO_CARDS } from '@/lib/demo'
 import { nowIso } from '@/lib/util'
@@ -43,12 +43,47 @@ export default function Home() {
   const sourceCards = isDemoView ? DEMO_CARDS : cards
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setCards(loadCards())
-      setSettings(loadSettings())
+    let unsub: (() => void) | null = null
+    let cancelled = false
+    const timer = window.setTimeout(async () => {
+      const serverOk = await isServerAvailable()
+      if (!serverOk) {
+        // 离线兜底：使用本机 localStorage 数据
+        if (cancelled) return
+        setCards(loadCards())
+        setSettings(loadSettings())
+        setHydrated(true)
+        notify('未连接同步服务，已使用本机本地数据（不同步）')
+        return
+      }
+      const remote = await loadFromServer()
+      if (cancelled || !remote) return
+      // 服务端为空但本机有数据：首次迁移上传，避免两边永远为空
+      if (remote.cards.length === 0) {
+        const local = loadCards()
+        if (local.length > 0) {
+          await pushToServer(local, loadSettings())
+          setCards(local)
+          setSettings(loadSettings())
+        }
+      } else {
+        setCards(remote.cards)
+        setSettings(remote.settings)
+      }
+      // 订阅实时同步：另一台电脑改动时自动拉取最新数据
+      unsub = subscribeSync((rc, rs) => {
+        if (cancelled) return
+        setCards(rc)
+        setSettings(rs)
+      })
       setHydrated(true)
     }, 0)
-    return () => window.clearTimeout(timer)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+      if (unsub) unsub()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {

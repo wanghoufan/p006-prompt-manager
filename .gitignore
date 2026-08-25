@@ -43,3 +43,9 @@ next-env.d.ts
 # ===== 多 Agent 协作：临时资料隔离（不进仓库） =====
 scratch/
 *.notes.md
+
+# ===== WorkBuddy 项目数据（记忆/会话，不进仓库） =====
+.workbuddy/
+
+# ===== 服务端共享数据（运行时生成，含用户提示词） =====
+/data/

@@ -49,12 +49,10 @@ export function loadCards(): Card[] {
 }
 
 export function saveCards(cards: Card[]): boolean {
-  try {
-    localStorage.setItem(CARDS_KEY, JSON.stringify(cards))
-    return true
-  } catch {
-    return false
-  }
+  cacheCards = cards
+  const ok = trySave(CARDS_KEY, cards)
+  if (ok) schedulePush()
+  return ok
 }
 
 const DEFAULT_SETTINGS: Settings = { thinkingSummaryPrompt: '' }
@@ -74,11 +72,13 @@ export function loadSettings(): Settings {
 }
 
 export function saveSettings(settings: Settings): void {
+  cacheSettings = settings
   try {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
   } catch {
     // ignore quota errors for settings
   }
+  schedulePush()
 }
 
 export type ImportResult =
@@ -233,4 +233,108 @@ export function parseImport(raw: string): ImportResult {
     }
   }
   return parseMarkdownImport(raw) ?? { ok: false, error: '既不是有效的 JSON 备份，也不是 Markdown 备份' }
+}
+
+// ===================== 服务端实时同步层 =====================
+// 服务端（同一份 Next.js 进程）持有共享数据；本层负责把本地变更合并推上去，
+// 并订阅 SSE 在另一台电脑改动时实时拉取最新数据。
+// 本地 localStorage 仍作为离线兜底。
+
+const SYNC_URL = '/api/sync'
+const STREAM_URL = '/api/sync/stream'
+
+let serverMode = false
+let lastPushedVersion: number | null = null
+let cacheCards: Card[] = []
+let cacheSettings: Settings = { thinkingSummaryPrompt: '' }
+let pushScheduled = false
+
+function trySave(key: string, value: unknown): boolean {
+  try {
+    localStorage.setItem(key, JSON.stringify(value))
+    return true
+  } catch {
+    return false
+  }
+}
+
+// 合并推送：把最近一次的 cards/settings 在下一个微任务里推到服务端（去抖）。
+function schedulePush() {
+  if (!serverMode || pushScheduled) return
+  pushScheduled = true
+  Promise.resolve().then(() => {
+    pushScheduled = false
+    void pushToServer(cacheCards, cacheSettings)
+  })
+}
+
+export async function isServerAvailable(): Promise<boolean> {
+  try {
+    const res = await fetch(SYNC_URL, { method: 'GET', cache: 'no-store' })
+    serverMode = res.ok
+  } catch {
+    serverMode = false
+  }
+  return serverMode
+}
+
+export async function loadFromServer(): Promise<{ cards: Card[]; settings: Settings } | null> {
+  try {
+    const res = await fetch(SYNC_URL, { cache: 'no-store' })
+    if (!res.ok) return null
+    const data = (await res.json()) as { cards?: unknown; settings?: unknown }
+    const cards = Array.isArray(data.cards) ? (data.cards.filter(isCard) as Card[]) : []
+    const settings: Settings =
+      data.settings && typeof data.settings === 'object'
+        ? (data.settings as Settings)
+        : { thinkingSummaryPrompt: '' }
+    serverMode = true
+    return { cards, settings }
+  } catch {
+    serverMode = false
+    return null
+  }
+}
+
+export async function pushToServer(cards: Card[], settings: Settings): Promise<boolean> {
+  if (!serverMode) return false
+  try {
+    const res = await fetch(SYNC_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cards, settings }),
+    })
+    if (!res.ok) return false
+    const data = (await res.json()) as { version?: number }
+    if (typeof data.version === 'number') lastPushedVersion = data.version
+    return true
+  } catch {
+    serverMode = false
+    return false
+  }
+}
+
+// 订阅服务端变更；远程有更新时通过 onRemote 回调把最新数据交回页面。
+// 通过 lastPushedVersion 滤掉「自己刚推送」产生的回声，避免推送死循环。
+export function subscribeSync(onRemote: (cards: Card[], settings: Settings) => void): () => void {
+  if (typeof window === 'undefined' || typeof EventSource === 'undefined') return () => {}
+  const es = new EventSource(STREAM_URL)
+  es.onmessage = (ev) => {
+    let version: number | null = null
+    try {
+      const data = JSON.parse(ev.data) as { version?: number }
+      version = typeof data.version === 'number' ? data.version : null
+    } catch {
+      return
+    }
+    if (version === null) return
+    if (lastPushedVersion !== null && version === lastPushedVersion) return // 自己的回声，忽略
+    void loadFromServer().then((r) => {
+      if (r) onRemote(r.cards, r.settings)
+    })
+  }
+  es.onerror = () => {
+    // EventSource 会自动重连，这里无需处理
+  }
+  return () => es.close()
 }
