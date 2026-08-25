@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import type { Card } from '@/lib/types'
 import { Stars } from '@/components/Stars'
 
@@ -7,13 +8,40 @@ interface CardItemProps {
   card: Card
   selected: boolean
   readonly?: boolean
+  /** 全局搜索词：命中片段用 <mark> 高亮（纯文本拆分渲染，防 XSS） */
+  query?: string
   onSelect: () => void
   onOpen: () => void
   onCopy: () => void
   onRate: (rating: number) => void
 }
 
-export function CardItem({ card, selected, readonly = false, onSelect, onOpen, onCopy, onRate }: CardItemProps) {
+/** 把文本按关键词拆分为片段数组：非命中片段为纯文本节点，命中片段包 <mark>。
+ *  全程只渲染文本节点，绝不使用 dangerouslySetInnerHTML，天然免疫 XSS。 */
+function highlightParts(text: string, query: string): ReactNode[] {
+  if (!query) return [text]
+  const q = query.toLowerCase()
+  const lower = text.toLowerCase()
+  const parts: ReactNode[] = []
+  let i = 0
+  let idx = lower.indexOf(q, i)
+  while (idx !== -1) {
+    if (idx > i) parts.push(text.slice(i, idx))
+    parts.push(
+      <mark key={idx} className="rounded-[2px] bg-gold/30 text-inherit">
+        {text.slice(idx, idx + q.length)}
+      </mark>,
+    )
+    i = idx + q.length
+    idx = lower.indexOf(q, i)
+  }
+  if (i < text.length) parts.push(text.slice(i))
+  return parts
+}
+
+export function CardItem({ card, selected, readonly = false, query = '', onSelect, onOpen, onCopy, onRate }: CardItemProps) {
+  // @code 直达模式：高亮词去掉 @ 前缀，命中片段落在调取码徽标上
+  const match = query.replace(/^@/, '').trim()
   return (
     <article
       onClick={onSelect}
@@ -25,14 +53,14 @@ export function CardItem({ card, selected, readonly = false, onSelect, onOpen, o
     >
       <div className="flex items-start justify-between gap-2">
         <h3 className="min-w-0 flex-1 truncate text-sm font-medium text-paper" title={card.title}>
-          {card.title}
+          {highlightParts(card.title, match)}
         </h3>
         {card.code && (
           <span
             className="shrink-0 font-mono text-[10px] text-gold-bright"
             title={`调取码：${card.code}`}
           >
-            @{card.code}
+            @{highlightParts(card.code, match)}
           </span>
         )}
         {readonly && (
@@ -58,7 +86,7 @@ export function CardItem({ card, selected, readonly = false, onSelect, onOpen, o
           className="line-clamp-2 min-w-0 whitespace-pre-wrap text-xs leading-relaxed text-paper-dim/80"
           title={card.body}
         >
-          {card.body}
+          {highlightParts(card.body, match)}
         </p>
       )}
       <div className="flex flex-wrap items-center gap-1.5">
@@ -67,7 +95,7 @@ export function CardItem({ card, selected, readonly = false, onSelect, onOpen, o
             key={t}
             className="rounded-full border border-gold/25 bg-gold/5 px-2 py-0.5 text-[11px] text-gold-bright"
           >
-            {t}
+            {highlightParts(t, match)}
           </span>
         ))}
         {card.tags.length === 0 && (

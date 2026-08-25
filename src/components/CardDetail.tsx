@@ -6,6 +6,7 @@ import { cardDraftChanges, cardDraftFrom, normalizeCode, parseTags } from '@/lib
 import { Stars } from '@/components/Stars'
 import { Spinner } from '@/components/Spinner'
 import { formatTime } from '@/lib/util'
+import { useModalFocus } from '@/hooks/useModalFocus'
 
 interface CardDetailProps {
   card: Card
@@ -25,39 +26,6 @@ interface CardDetailProps {
   onSetSummary: (id: string, summary: string) => void
   onDelete?: (id: string) => void
   notify: (msg: string) => void
-}
-
-const FOCUSABLE = 'button, input, textarea, [href], select, [tabindex]:not([tabindex="-1"])'
-
-function useModalFocus(panelRef: React.RefObject<HTMLElement | null>, open: boolean) {
-  useEffect(() => {
-    if (!open) return
-    const panel = panelRef.current
-    if (!panel) return
-    const previouslyFocused = document.activeElement as HTMLElement | null
-    const focusables = () => [...panel.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => !el.hasAttribute('disabled'))
-    focusables()[0]?.focus()
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab') return
-      const els = focusables()
-      if (els.length === 0) return
-      const first = els[0]
-      const last = els[els.length - 1]
-      const current = document.activeElement
-      if (e.shiftKey && (current === first || !panel.contains(current))) {
-        e.preventDefault()
-        last.focus()
-      } else if (!e.shiftKey && (current === last || !panel.contains(current))) {
-        e.preventDefault()
-        first.focus()
-      }
-    }
-    panel.addEventListener('keydown', onKey)
-    return () => {
-      panel.removeEventListener('keydown', onKey)
-      previouslyFocused?.focus()
-    }
-  }, [open, panelRef])
 }
 
 export function CardDetail(props: CardDetailProps) {
@@ -80,6 +48,12 @@ export function CardDetail(props: CardDetailProps) {
   const [metaLoading, setMetaLoading] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
   const firstSync = useRef(true)
+  // RISK-3：AI 请求取消控制器（新请求前 abort 上一个，卸载时 abort）
+  const metaAbortRef = useRef<AbortController | null>(null)
+  const summaryAbortRef = useRef<AbortController | null>(null)
+  // P3-1：调取码非法字符被自动过滤后的即时提示（2.5s 自动消失）
+  const [codeFiltered, setCodeFiltered] = useState(false)
+  const codeTipTimer = useRef<number | null>(null)
   useModalFocus(panelRef, true)
 
   const codeConflict = useMemo(() => {
@@ -157,10 +131,13 @@ export function CardDetail(props: CardDetailProps) {
     saveThrough(silent, false)
   }
 
-  // 卸载前兜底：清理备注定时器并 flush 未保存草稿（覆盖关闭按钮之外的外部卸载路径）
+  // 卸载前兜底：清理定时器 / abort 未完成请求 / flush 未保存草稿（覆盖关闭按钮之外的外部卸载路径）
   useEffect(() => {
     return () => {
       if (notesTimer.current) window.clearTimeout(notesTimer.current)
+      if (codeTipTimer.current) window.clearTimeout(codeTipTimer.current)
+      metaAbortRef.current?.abort()
+      summaryAbortRef.current?.abort()
       saveThrough(true, true)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -182,15 +159,31 @@ export function CardDetail(props: CardDetailProps) {
     notesTimer.current = window.setTimeout(() => commitSave(true), 700)
   }
 
+  // P3-1：调取码输入即时过滤非法字符（仅英文/数字/短横线），并短暂提示
+  function handleCodeInput(v: string) {
+    const filtered = v.replace(/[^a-zA-Z0-9-]/g, '')
+    setDraft((d) => ({ ...d, code: filtered }))
+    if (filtered !== v) {
+      setCodeFiltered(true)
+      if (codeTipTimer.current) window.clearTimeout(codeTipTimer.current)
+      codeTipTimer.current = window.setTimeout(() => setCodeFiltered(false), 2500)
+    }
+  }
+
   async function regenMeta() {
+    metaAbortRef.current?.abort()
+    const ac = new AbortController()
+    metaAbortRef.current = ac
     setMetaLoading(true)
     try {
       const res = await fetch('/api/ai/generate-meta', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ body: card.body, existingTags: props.existingTags }),
+        signal: ac.signal,
       })
       const data: { title?: string; tags?: string[]; error?: string } = await res.json()
+      if (ac.signal.aborted) return
       if (!res.ok) throw new Error(data.error || '重新生成失败')
       const newTitle = data.title?.trim() || card.title
       const newTags = data.tags ?? []
@@ -198,28 +191,35 @@ export function CardDetail(props: CardDetailProps) {
       setDraft((d) => ({ ...d, title: newTitle, tagsText: newTags.join('、') }))
       props.notify('已重新生成标签与标题')
     } catch (e) {
+      if (ac.signal.aborted) return
       props.notify(`重新生成失败：${e instanceof Error ? e.message : '未知错误'}`)
     } finally {
-      setMetaLoading(false)
+      if (!ac.signal.aborted && metaAbortRef.current === ac) setMetaLoading(false)
     }
   }
 
   async function runSummary() {
+    summaryAbortRef.current?.abort()
+    const ac = new AbortController()
+    summaryAbortRef.current = ac
     setSummaryLoading(true)
     try {
       const res = await fetch('/api/ai/summarize-thinking', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ body: card.body, prompt: props.customThinkingPrompt || null }),
+        signal: ac.signal,
       })
       const data: { summary?: string; error?: string } = await res.json()
+      if (ac.signal.aborted) return
       if (!res.ok) throw new Error(data.error || '总结失败')
       props.onSetSummary(card.id, data.summary ?? '')
       props.notify('思维总结已生成')
     } catch (e) {
+      if (ac.signal.aborted) return
       props.notify(`总结失败：${e instanceof Error ? e.message : '未知错误'}`)
     } finally {
-      setSummaryLoading(false)
+      if (!ac.signal.aborted && summaryAbortRef.current === ac) setSummaryLoading(false)
     }
   }
 
@@ -322,8 +322,9 @@ export function CardDetail(props: CardDetailProps) {
           ) : (
             <>
               <div className="space-y-1.5">
-                <label htmlFor="detail-title" className="text-xs text-muted">
-                  标题（AI 生成，可手动修改，不超过 20 字）
+                <label htmlFor="detail-title" className="flex items-center justify-between gap-2 text-xs text-muted">
+                  <span>标题（AI 生成，可手动修改，不超过 20 字）</span>
+                  <span className="shrink-0 font-mono text-[10px] text-muted">{draft.title.length}/20</span>
                 </label>
                 <input
                   id="detail-title"
@@ -349,8 +350,9 @@ export function CardDetail(props: CardDetailProps) {
                 />
               </div>
               <div className="space-y-1.5">
-                <label htmlFor="detail-code" className="text-xs text-muted">
-                  调取码（可选，英文/数字/短横线，最多 12 字符）
+                <label htmlFor="detail-code" className="flex items-center justify-between gap-2 text-xs text-muted">
+                  <span>调取码（可选，英文/数字/短横线，最多 12 字符）</span>
+                  <span className="shrink-0 font-mono text-[10px] text-muted">{draft.code.length}/12</span>
                 </label>
                 <div className="flex items-center gap-1.5">
                   <span className="font-mono text-sm text-gold-bright">@</span>
@@ -359,13 +361,16 @@ export function CardDetail(props: CardDetailProps) {
                     className={`field flex-1 font-mono ${codeConflict ? 'border-rust/60 focus:border-rust' : ''}`}
                     value={draft.code}
                     maxLength={12}
-                    onChange={(e) => setDraft((d) => ({ ...d, code: e.target.value }))}
+                    onChange={(e) => handleCodeInput(e.target.value)}
                     onBlur={() => commitSave(true)}
                     placeholder="如：dee"
                   />
                 </div>
                 {codeConflict && (
                   <p className="text-[11px] text-rust">该调取码已被其他卡片使用，请更换</p>
+                )}
+                {codeFiltered && (
+                  <p className="text-[11px] text-rust">仅支持英文/数字/短横线，已自动过滤</p>
                 )}
               </div>
               <div className="space-y-1.5">

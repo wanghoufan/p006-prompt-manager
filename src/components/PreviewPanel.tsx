@@ -90,6 +90,12 @@ export function PreviewPanel({
   const [width, setWidth] = useState<number>(() => readSavedWidth(defaultWidth))
   const dragState = useRef<{ startX: number; startW: number } | null>(null)
   const firstSync = useRef(true)
+  // RISK-3：AI 请求取消控制器（新请求前 abort 上一个，卸载时 abort）
+  const metaAbortRef = useRef<AbortController | null>(null)
+  const summaryAbortRef = useRef<AbortController | null>(null)
+  // P3-1：调取码非法字符被自动过滤后的即时提示（2.5s 自动消失）
+  const [codeFiltered, setCodeFiltered] = useState(false)
+  const codeTipTimer = useRef<number | null>(null)
 
   // 调取码冲突检测：与其他卡片的 code 相同（排除自己）视为冲突
   const codeConflict = useMemo(() => {
@@ -195,10 +201,13 @@ export function PreviewPanel({
     saveThrough(silent, false)
   }
 
-  // 卸载前兜底：切换选中卡片 / 组件卸载时 flush 未保存草稿并清理备注定时器
+  // 卸载前兜底：切换选中卡片 / 组件卸载时 flush 未保存草稿、清理定时器并 abort 未完成 AI 请求
   useEffect(() => {
     return () => {
       if (notesTimer.current) window.clearTimeout(notesTimer.current)
+      if (codeTipTimer.current) window.clearTimeout(codeTipTimer.current)
+      metaAbortRef.current?.abort()
+      summaryAbortRef.current?.abort()
       saveThrough(true, true)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -214,16 +223,32 @@ export function PreviewPanel({
     notesTimer.current = window.setTimeout(() => commitSave(true), 700)
   }
 
+  // P3-1：调取码输入即时过滤非法字符（仅英文/数字/短横线），并短暂提示
+  function handleCodeInput(v: string) {
+    const filtered = v.replace(/[^a-zA-Z0-9-]/g, '')
+    setDraft((d) => ({ ...d, code: filtered }))
+    if (filtered !== v) {
+      setCodeFiltered(true)
+      if (codeTipTimer.current) window.clearTimeout(codeTipTimer.current)
+      codeTipTimer.current = window.setTimeout(() => setCodeFiltered(false), 2500)
+    }
+  }
+
   async function regenMeta() {
     if (!card) return
+    metaAbortRef.current?.abort()
+    const ac = new AbortController()
+    metaAbortRef.current = ac
     setMetaLoading(true)
     try {
       const res = await fetch('/api/ai/generate-meta', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ body: card.body, existingTags }),
+        signal: ac.signal,
       })
       const data: { title?: string; tags?: string[]; error?: string } = await res.json()
+      if (ac.signal.aborted) return
       if (!res.ok) throw new Error(data.error || '重新生成失败')
       const newTitle = data.title?.trim() || card.title
       const newTags = data.tags ?? []
@@ -231,29 +256,36 @@ export function PreviewPanel({
       setDraft((d) => ({ ...d, title: newTitle, tagsText: newTags.join('、') }))
       notify('已重新生成标签与标题')
     } catch (e) {
+      if (ac.signal.aborted) return
       notify(`重新生成失败：${e instanceof Error ? e.message : '未知错误'}`)
     } finally {
-      setMetaLoading(false)
+      if (!ac.signal.aborted && metaAbortRef.current === ac) setMetaLoading(false)
     }
   }
 
   async function runSummary() {
     if (!card) return
+    summaryAbortRef.current?.abort()
+    const ac = new AbortController()
+    summaryAbortRef.current = ac
     setSummaryLoading(true)
     try {
       const res = await fetch('/api/ai/summarize-thinking', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ body: card.body, prompt: customThinkingPrompt || null }),
+        signal: ac.signal,
       })
       const data: { summary?: string; error?: string } = await res.json()
+      if (ac.signal.aborted) return
       if (!res.ok) throw new Error(data.error || '总结失败')
       onSetSummary(card.id, data.summary ?? '')
       notify('思维总结已生成')
     } catch (e) {
+      if (ac.signal.aborted) return
       notify(`总结失败：${e instanceof Error ? e.message : '未知错误'}`)
     } finally {
-      setSummaryLoading(false)
+      if (!ac.signal.aborted && summaryAbortRef.current === ac) setSummaryLoading(false)
     }
   }
 
@@ -281,6 +313,9 @@ export function PreviewPanel({
           <span className="text-2xl">⚡</span>
           <p className="text-xs leading-relaxed text-muted">
             点击左侧卡片，在此预览与编辑提示词
+          </p>
+          <p className="text-[10px] leading-relaxed text-muted/70">
+            双击卡片进入详情 · 拖动左缘调宽，双击重置 · 选中后 1-5 打星
           </p>
         </div>
       ) : readonly ? (
@@ -373,15 +408,20 @@ export function PreviewPanel({
         <>
           <header className="border-b border-line px-3 py-1">
             <div className="flex items-center gap-2">
-              <input
-                id="preview-title"
-                className="field flex-1 border-transparent bg-transparent px-0 py-0.5 font-serif text-sm text-paper focus:border-transparent"
-                value={draft.title}
-                maxLength={20}
-                onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
-                onBlur={() => commitSave(true)}
-                placeholder="一句话总结"
-              />
+              <div className="relative min-w-0 flex-1">
+                <input
+                  id="preview-title"
+                  className="field w-full border-transparent bg-transparent px-0 py-0.5 pr-8 font-serif text-sm text-paper focus:border-transparent"
+                  value={draft.title}
+                  maxLength={20}
+                  onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
+                  onBlur={() => commitSave(true)}
+                  placeholder="一句话总结"
+                />
+                <span className="pointer-events-none absolute bottom-0 right-0 font-mono text-[9px] text-muted">
+                  {draft.title.length}/20
+                </span>
+              </div>
               <button
                 type="button"
                 className="btn-ghost shrink-0 text-[10px]"
@@ -402,19 +442,27 @@ export function PreviewPanel({
               />
               <div className="flex shrink-0 items-center gap-1">
                 <span className="font-mono text-xs text-gold-bright">@</span>
-                <input
-                  id="preview-code"
-                  className={`field w-28 font-mono text-[12px] ${codeConflict ? 'border-rust/60 focus:border-rust' : ''}`}
-                  value={draft.code}
-                  maxLength={12}
-                  onChange={(e) => setDraft((d) => ({ ...d, code: e.target.value }))}
-                  onBlur={() => commitSave(true)}
-                  placeholder="调取码"
-                />
+                <div className="relative">
+                  <input
+                    id="preview-code"
+                    className={`field w-28 pr-6 font-mono text-[12px] ${codeConflict ? 'border-rust/60 focus:border-rust' : ''}`}
+                    value={draft.code}
+                    maxLength={12}
+                    onChange={(e) => handleCodeInput(e.target.value)}
+                    onBlur={() => commitSave(true)}
+                    placeholder="调取码"
+                  />
+                  <span className="pointer-events-none absolute bottom-0 right-1 font-mono text-[9px] text-muted">
+                    {draft.code.length}/12
+                  </span>
+                </div>
               </div>
             </div>
             {codeConflict && (
               <p className="pt-1 text-[10px] text-rust">该调取码已被其他卡片使用，请更换</p>
+            )}
+            {codeFiltered && (
+              <p className="pt-1 text-[10px] text-rust">仅支持英文/数字/短横线，已自动过滤</p>
             )}
             <textarea
               id="preview-notes"

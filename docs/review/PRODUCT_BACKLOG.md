@@ -199,3 +199,8 @@
 - **P1-2 关闭/切卡不再静默丢稿**（2026-08-26 修复：PreviewPanel 卸载 flush + CardDetail handleClose 先 commitSave 再关闭）
 - **P1-3 导入选择器支持 .md**（2026-08-26 修复：accept 扩展为 `.json,.md`，title 注明支持 JSON 与 Markdown）
 - **P1-4 冲突语义统一**（2026-08-26 修复：CardDetail 对齐 PreviewPanel「跳过冲突字段、其余照存」+ 冲突 toast 提示）
+- **P2-2 全局关键词搜索**（2026-08-26 完成：SortBar 旁搜索框，300ms 防抖纯前端过滤；范围 标题/正文/标签/调取码/备注，大小写不敏感；与标签/排序 AND 叠加；`@code` 直达仅按调取码匹配；命中 <mark> 高亮，纯文本拆分渲染防 XSS；SortBar 计数切换「命中 x / 共 y」；空态引导；不持久化）
+- **P3-1 标题/调取码字符计数与非法字符即时提示**（2026-08-26 完成：标题「x/20」、调取码「x/12」右下角计数；调取码 onChange 即时 `replace(/[^a-zA-Z0-9-]/g,'')` 过滤并提示「仅支持英文/数字/短横线，已自动过滤」2.5s 消失，覆盖 PreviewPanel 与 CardDetail）
+- **P3-3 关键手势与快捷键可发现性**（2026-08-26 完成：仓库空态（cards.length===0 分支）按钮下方加引导小字；PreviewPanel 未选中卡片占位（!card 分支）加同一行小字「双击卡片进入详情 · 拖动左缘调宽，双击重置 · 选中后 1-5 打星」）
+- **RISK-3 AI 请求缺 AbortController**（2026-08-26 修复：PreviewPanel / CardDetail / Composer 三个组件 5 处 AI 请求（regenMeta / runSummary / generate）全部接入 AbortController——`abortRef.current?.abort()` 新请求前取消上一个，组件卸载 `useEffect` cleanup 统一 abort；`catch`/`finally` 中 `ac.signal.aborted` 守卫跳过 toast 与 setState，杜绝卸载后 setState 与竞态闪烁）
+- **OPT-NEW-2 SettingsModal 焦点陷阱不完整**（2026-08-26 修复：`useModalFocus` 抽为共享 Hook（`src/hooks/useModalFocus.ts`，含 FOCUSABLE 选择器 / Tab 循环 / 打开聚焦首元素 / cleanup 归还 / 可选 onEscClose 经 ref 保存避免依赖抖动）；CardDetail 改 import（保留自有 window Esc 监听）；SettingsModal 移除自建 useEffect 改复用，传 onClose 处理 Esc；role="dialog" / aria-modal / aria-label 完整）

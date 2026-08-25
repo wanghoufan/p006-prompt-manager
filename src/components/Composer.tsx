@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Spinner } from '@/components/Spinner'
 
 interface ComposerProps {
@@ -19,9 +19,18 @@ export function Composer({ existingTags, onCreate, notify }: ComposerProps) {
   const [text, setText] = useState('')
   const [phase, setPhase] = useState<Phase>('idle')
   const [errorMsg, setErrorMsg] = useState('')
+  // RISK-3：AI 请求取消控制器（新请求前 abort 上一个，卸载时 abort）
+  const abortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    return () => abortRef.current?.abort()
+  }, [])
 
   async function generate(source: string) {
     if (phase === 'working') return
+    abortRef.current?.abort()
+    const ac = new AbortController()
+    abortRef.current = ac
     setPhase('working')
     setErrorMsg('')
     try {
@@ -29,14 +38,17 @@ export function Composer({ existingTags, onCreate, notify }: ComposerProps) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ body: source, existingTags }),
+        signal: ac.signal,
       })
       const data: { title?: string; tags?: string[]; error?: string } = await res.json()
+      if (ac.signal.aborted) return
       if (!res.ok) throw new Error(data.error || '生成失败，请重试')
       onCreate(source, data.title ?? '', data.tags ?? [])
       setText('')
       setPhase('idle')
       notify('已创建卡片')
     } catch (e) {
+      if (ac.signal.aborted) return
       setPhase('error')
       setErrorMsg(e instanceof Error ? e.message : '生成失败，请重试')
     }

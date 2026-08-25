@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import type { Settings } from '@/lib/types'
 import { DEFAULT_THINKING_PROMPT } from '@/lib/prompts'
+import { useModalFocus } from '@/hooks/useModalFocus'
 
 interface SettingsModalProps {
   settings: Settings
@@ -15,37 +16,8 @@ export function SettingsModal({ settings, onSave, onClose }: SettingsModalProps)
   const [error, setError] = useState<string | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    const panel = panelRef.current
-    if (!panel) return
-    const previouslyFocused = document.activeElement as HTMLElement | null
-    panel.querySelector<HTMLElement>('textarea')?.focus()
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Tab') {
-        const els = [...panel.querySelectorAll<HTMLElement>('button, input, textarea')].filter(
-          (el) => !el.hasAttribute('disabled'),
-        )
-        if (els.length === 0) return
-        const first = els[0]
-        const last = els[els.length - 1]
-        const current = document.activeElement
-        if (e.shiftKey && (current === first || !panel.contains(current))) {
-          e.preventDefault()
-          last.focus()
-        } else if (!e.shiftKey && (current === last || !panel.contains(current))) {
-          e.preventDefault()
-          first.focus()
-        }
-      } else if (e.key === 'Escape') {
-        onClose()
-      }
-    }
-    panel.addEventListener('keydown', onKey)
-    return () => {
-      panel.removeEventListener('keydown', onKey)
-      previouslyFocused?.focus()
-    }
-  }, [onClose])
+  // OPT-NEW-2：复用 CardDetail 的 useModalFocus（打开聚焦 / Tab 循环 / 关闭归还 / Esc 关闭）
+  useModalFocus(panelRef, true, onClose)
 
   function handleSave() {
     const trimmed = text.trim()

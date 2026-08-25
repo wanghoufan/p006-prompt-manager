@@ -24,6 +24,10 @@ export default function Home() {
   const [view, setView] = useState<ViewMode>('mine')
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
   const [sortMode, setSortMode] = useState<SortMode>('updated')
+  // 全局搜索（范围 A）：searchQuery 为受控输入即时值，debouncedQuery 为 300ms 防抖后的过滤依据；
+  // 搜索词不持久化（刷新即清，仅 useState）
+  const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [detailId, setDetailId] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
@@ -39,6 +43,12 @@ export default function Home() {
     const timer = window.setTimeout(() => setToast(null), 2200)
     return () => window.clearTimeout(timer)
   }, [toast])
+
+  // 全局搜索 300ms 防抖（纯前端过滤，无依赖）
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(searchQuery), 300)
+    return () => window.clearTimeout(timer)
+  }, [searchQuery])
 
   const isDemoView = view === 'demo'
   const sourceCards = isDemoView ? DEMO_CARDS : cards
@@ -131,8 +141,36 @@ export default function Home() {
     [cards],
   )
 
+  // 过滤链三段：baseCards（视图 + 标签）→ 搜索过滤（AND 叠加）→ 排序
+  const baseCards = useMemo(() => {
+    return selectedTag ? sourceCards.filter((c) => c.tags.includes(selectedTag)) : sourceCards
+  }, [sourceCards, selectedTag])
+
+  const searchActive = debouncedQuery.trim().length > 0
+  const searchTerm = debouncedQuery.trim()
+
   const visibleCards = useMemo(() => {
-    const list = selectedTag ? sourceCards.filter((c) => c.tags.includes(selectedTag!)) : sourceCards
+    let list = baseCards
+    if (searchActive) {
+      const term = searchTerm.toLowerCase()
+      if (term.startsWith('@')) {
+        // @code 直达：仅按调取码过滤（不区分大小写）
+        const codeTerm = term.slice(1)
+        list = list.filter((c) => (c.code ?? '').toLowerCase().includes(codeTerm))
+      } else {
+        // 多字段包含匹配：标题 / 正文 / 标签 / 调取码 / 备注
+        list = list.filter((c) => {
+          const code = (c.code ?? '').toLowerCase()
+          return (
+            c.title.toLowerCase().includes(term) ||
+            c.body.toLowerCase().includes(term) ||
+            c.tags.some((t) => t.toLowerCase().includes(term)) ||
+            code.includes(term) ||
+            (c.notes ?? '').toLowerCase().includes(term)
+          )
+        })
+      }
+    }
     const arr = [...list]
     if (sortMode === 'copies') {
       arr.sort((a, b) => b.copyCount - a.copyCount || b.updatedAt.localeCompare(a.updatedAt))
@@ -142,7 +180,7 @@ export default function Home() {
       arr.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
     }
     return arr
-  }, [sourceCards, selectedTag, sortMode])
+  }, [baseCards, searchActive, searchTerm, sortMode])
 
   const detailCard = detailId ? sourceCards.find((c) => c.id === detailId) ?? null : null
   const previewCard = selectedId ? sourceCards.find((c) => c.id === selectedId) ?? null : null
@@ -346,7 +384,10 @@ export default function Home() {
               mode={sortMode}
               onChange={setSortMode}
               count={visibleCards.length}
+              total={baseCards.length}
               scopeLabel={selectedTag ?? (isDemoView ? '示例知识库' : '全部')}
+              search={searchQuery}
+              onSearchChange={setSearchQuery}
             />
             {isDemoView ? (
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gold/30 bg-gold/5 px-3.5 py-2.5">
@@ -365,6 +406,14 @@ export default function Home() {
                 <div className="flex items-center justify-center rounded-xl border border-dashed border-line bg-ink-900/40 px-6 py-16 text-center text-sm text-muted">
                   该标签下暂无示例卡片
                 </div>
+              ) : searchActive ? (
+                <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-line bg-ink-900/40 px-6 py-16 text-center">
+                  <span className="font-serif text-lg tracking-widest text-paper-dim">未找到匹配的卡片</span>
+                  <p className="max-w-sm text-sm leading-relaxed text-muted">
+                    没有卡片同时满足「{debouncedQuery.trim()}」与当前标签 / 排序条件。试试其他关键词，或输入
+                    @调取码 直达；可点击搜索框右侧 × 清空搜索。
+                  </p>
+                </div>
               ) : cards.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-line bg-ink-900/40 px-6 py-16 text-center">
                   <span className="font-serif text-2xl tracking-widest text-paper-dim">提示词库还是空的</span>
@@ -374,6 +423,9 @@ export default function Home() {
                   <button type="button" className="btn-gold" onClick={handleLoadDemo}>
                     或先载入示例知识库试试
                   </button>
+                  <p className="text-[11px] leading-relaxed text-muted/70">
+                    双击卡片进入详情 · 拖动左缘调宽，双击重置 · 选中后 1-5 打星
+                  </p>
                 </div>
               ) : (
                 <div className="flex items-center justify-center rounded-xl border border-dashed border-line bg-ink-900/40 px-6 py-16 text-center text-sm text-muted">
@@ -386,6 +438,7 @@ export default function Home() {
                   <CardItem
                     key={card.id}
                     card={card}
+                    query={debouncedQuery}
                     selected={selectedId === card.id}
                     readonly={isDemoView}
                     onSelect={() => setSelectedId(card.id)}
