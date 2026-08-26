@@ -14,14 +14,45 @@
   --color-gold-bright: #f0bf77;
   --color-gold-deep: #8a6a3f;
   --color-rust: #c96a5a;
+  /* P0-5 搜索高亮（暗色默认）：amber-400 高对比琥珀 + ring，WCAG AA */
+  --color-highlight: rgba(251, 191, 36, 0.42);
+  --color-highlight-text: #fef3c7;
+  --color-highlight-ring: rgba(251, 191, 36, 0.32);
+  --scroll-thumb: #2a3448;
   --font-sans: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", system-ui,
     sans-serif;
   --font-serif: "Songti SC", "STSong", "Noto Serif SC", "SimSun", serif;
   --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
 }
 
+/* P0-5 亮色主题（暖纸墨：暗色=皮革账本，亮色=纸页，品牌 gold/rust 色系保留并加深） */
+html.light {
+  --color-ink-950: #f4f1ea;
+  --color-ink-900: #fbfaf7;
+  --color-ink-850: #efece4;
+  --color-ink-800: #e7e3d8;
+  --color-ink-700: #cfc9ba;
+  --color-line: #e2ddd0;
+  --color-paper: #23272f;
+  --color-paper-dim: #4c5464;
+  --color-muted: #6b7280;
+  --color-gold: #a8782e;
+  --color-gold-bright: #7a5218;
+  --color-gold-deep: #6e4a16;
+  --color-rust: #b04a3a;
+  /* 亮色高亮：深金棕琥珀（amber-200 底 + amber-900 文字），纸面划重点 */
+  --color-highlight: #fde68a;
+  --color-highlight-text: #78350f;
+  --color-highlight-ring: rgba(180, 131, 30, 0.4);
+  --scroll-thumb: #cfc9ba;
+}
+
 html {
   color-scheme: dark;
+}
+
+html.light {
+  color-scheme: light;
 }
 
 body {
@@ -37,7 +68,7 @@ body {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #2a3448 transparent;
+  scrollbar-color: var(--scroll-thumb) transparent;
 }
 
 ::-webkit-scrollbar {
@@ -46,7 +77,7 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2a3448;
+  background: var(--scroll-thumb);
   border-radius: 8px;
 }
 

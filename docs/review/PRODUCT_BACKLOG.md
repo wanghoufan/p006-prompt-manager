@@ -4,17 +4,17 @@
 
 ## 最近一次 Product 执行记录
 
-- 时间：2026-08-27（产品验收 + 视觉验收 — P0-1/P0-2/P0-3 用户反馈三项）
+- 时间：2026-08-27（产品验收 + 视觉验收 — P0-4/P0-5 网格直删+高亮双主题）
 - 模式：Product Reviewer · 产品验收 + 视觉验收
-- 结果：**PASS** — 无新增 P1 阻断项
-- 输入：`docs/progress/CURRENT_STAGE.md`（P0-1 DISCARD/parseTags决策 P0-2 vpn1→2强制首位 P0-3 confirm3分支+Composer小风险 7项手测） / `docs/pm/PLAN.md`（P0三项验收标准） / `docs/qa/BUGS.md`（第七次 QA PASS） / `docs/qa/QA_CHECKLIST.md`（P0 13项已勾） / `docs/review/CODE_REVIEW.md` / `docs/review/PRODUCT_BACKLOG.md:21`（P0-1~P0-5 Image1/2场景） / 源码走查 `src/lib/cards.ts:89-113`（DISCARD_TAGS/normalizeTags/parseTags） + `src/lib/ai.ts:92-114` + `src/lib/prompts.ts:1-5` + `src/app/page.tsx:211-230`（handleCreate强制首位+去重confirm） + `src/components/TagPanel.tsx` / 视觉 `docs/screenshots/home.png|detail.png|preview.png` + 实时探活 `localhost:3000 200` + `/api/sync 31张`
-- 体验方式：Vision（截图复核）+ 源码走查 + 实时服务探活；未改业务代码/UI，未提交 Git
+- 结果：**PASS** — 无新增 P1 阻断项（P0-6 已记待优化，不阻断）
+- 输入：`docs/progress/CURRENT_STAGE.md`（P0-4 confirmDelete三分支+持久化、P0-5 暗/亮高亮变量+防FOUC+10项手测、风险/交接要点） / `docs/pm/PLAN.md`（P0-4/P0-5 验收标准） / `docs/qa/BUGS.md`（第八次 QA PASS） / `docs/qa/QA_CHECKLIST.md`（P0-4/P0-5 18项已勾） / `docs/review/CODE_REVIEW.md` / `docs/review/PRODUCT_BACKLOG.md:21`（P0-4/P0-5 定义 Image1黄色不明显与 P0-6二次优化说明） / 源码走查 `src/lib/types.ts:24-30`（confirmDelete/theme） + `src/lib/storage.ts:66-78`（normalizeSettings） + `src/components/CardItem.tsx:17-44`（onDelete+mark变量） + `src/app/page.tsx:40-44,77-89,352-360`（handleDeleteCard条件+主题useEffect） + `src/app/globals.css:17-48`（highlight变量+html.light） + `src/app/layout.tsx:11,15-19`（内联脚本+suppressHydrationWarning） + `src/components/SettingsModal.tsx:53-94`（Switch+select） / 视觉 `scratch/manual-test/p04-hover-dark.png` `p05-highlight-dark.png` `p05-highlight-light.png` `p05-settings-light.png` + 实时探活 `http://localhost:3000 200` `搜 qa 亮/暗各16命中` `/api/sync 31张`
+- 体验方式：Vision（4张截图复核）+ 源码走查 + 实时服务探活；未改业务代码/UI，未提交 Git
 - 覆盖维度：
-  1. P0-1 无法分类留空：新增不再产生「无法分类」（normalizeTags过滤+提示词约束）、存量1张保留待P2-9手动清理符合预期、大小写不敏感、空数组展示
-  2. P0-2 继承标签：vpn代理筛选态新建强制首位、补充≤3去重、总数1→2计数准确、全部下不强制、demo不继承
-  3. P0-3 去重：confirm文案「检测到内容已存在（标题「X」）是否仍要添加？」清晰、取消不新增/确认新增/空内容不弹/不同内容不弹、首个命中仅一次，Composer取消后toast小风险可接受
-  4. 回归：搜索相关度/标签删除/格式左对齐等既有布局无退化（P1-1~P1-4已关闭）
-- 结论：P0-1 / P0-2 / P0-3 已验证通过，移入「已完成」；P0-4/P0-5 保留候选（不入本轮）；无新增 P1，阻断项：无
+  1. P0-4 直删：hover红色删除可发现不喧宾（group-hover/focus-visible）、默认confirm「确定删除「X」？此操作不可撤销。」清晰、关闭确认后直接删高效、demo隐藏正确、Switch即存直觉
+  2. P0-5 高亮：暗色琥珀42%+ring vs Image1旧gold/30高对比、亮色纸面荧光笔amber-200+amber-900可读、变量体系克制延续金库账本
+  3. P0-5 主题：跟随系统/暗色/亮色即时生效持久化（刷新+服务端同步）、system实时跟随、首屏无闪烁、暖纸墨协调
+  4. 回归：P2-8相关度/P2-9标签×/P3-6左对齐/P0-1~3继承去重无退化；P0-6亮色看不到/暗色不突出已记待优化不阻断
+- 结论：P0-4 / P0-5 已验证通过，移入「已完成」；P0-6 保持候选；无新增 P1，阻断项：无
 
 ---
 
@@ -22,21 +22,16 @@
 
 > 规则：此 P0 段为**最高优先级**，高于一切 P1/P2/P3；后续新增用户反馈均置顶于此，进入当前 PLAN 即时排期。
 
-### P0-4 网格卡片直删入口（编辑键下加删除，默认二次确认 + 设置可关闭）
-- 问题：`P2-10` 已列但未实现且缺确认可配置性。当前 `CardItem` 仅 hover 显示「编辑」按钮，删除需点编辑 → 进 `CardDetail` 弹窗 → 底部“删除卡片” → confirm，至少 3 步；`PreviewPanel` 需先选中卡片。用户反馈（2026-08-27）删除为高频维护操作，入口太深劝退清理意愿，且需可配置的二次确认。
-- 用户场景：用户在网格上 hover 卡片时，编辑按钮下方应直接出现删除按钮（小、红色/rust 色），点删除 → 默认二次确认「确定删除「{title}」？」→ 确认后删除；用户可在右上角「设置」中关闭二次确认，关闭后点删除即直接删（更快速）。
-- 建议方案：`CardItem.tsx` 在编辑按钮下方加删除按钮（`onDelete(card.id)`，与现有 `handleDeleteCard` 共用），`readonly` 视图（demo）不显示。`Settings` 新增 `confirmDelete: boolean`（默认 true），存于 `Settings`（`src/lib/types.ts`/`storage.ts`/`serverStore.ts` + `data/store.json` 同步）；`handleDeleteCard` 中 `if (settings.confirmDelete) confirm(...) else 直接删`。`SettingsModal.tsx` 加 Switch/Checkbox「删除前二次确认」。
-- 预期收益：删除路径 3 步→2 步（或 1 步无确认），平衡安全与效率。
-- 实现成本：低
-- 优先级：P0（用户反馈最高，源 `P2-10` 升级）
-
-### P0-5 搜索高亮配色不合理 + 缺亮色主题（需 Frontend Design 规范化）
-- 问题：当前搜索高亮 `<mark className="rounded-[2px] bg-gold/30">` 的黄色 `bg-gold/30` 在暗色背景下不明显（截图 `Image 1`：`QA` 黄色高亮与深色卡片对比弱，`gold/30` 透明度过低）。且产品仅有暗色主题，无亮色版本。
-- 用户场景：用户搜「qa」时命中词黄色高亮在暗色卡片上可辨识度差；长期使用仅暗色，亮色环境下对比与可访问性缺失。
-- 建议方案：调用 `frontend-design` Skill 按设计规范重做高亮与主题：① 暗色高亮改高对比配色（如 `bg-gold/40 + ring` 或 `bg-amber-400/40 + text-amber-100`，WCAG AA 对比），`CardItem.tsx:highlightParts` 的 `<mark>` 样式走 Tailwind 变量；② 新增亮色主题（`light` mode，CSS 变量或 `prefers-color-scheme` + 手动切换），高亮在亮色下用深色金棕/琥珀对比；③ 主题切换入口放 `TopBar`/`SettingsModal`，持久化到 `Settings` + localStorage/serverStore。
-- 预期收益：搜索体感与可访问性达标，暗/亮双主题闭环。
-- 实现成本：中（需设计 + 双主题变量体系）
-- 优先级：P0（用户反馈最高）
+### P0-6 搜索高亮双主题配色二次优化（亮色看不到关键词、暗色突出不明显，2026-08-27 二次反馈）
+- 问题：`P0-5` 已落地的高亮（暗色 `bg-amber-400/42 + #fef3c7`；亮色 `bg-amber-200 #fde68a + #78350f`）经 2026-08-27 真机对比仍不达标。截图反馈：① 亮色（Image 1）：米白纸面 `#fbfaf7` 上浅黄高亮几乎与背景同化，「qa」关键词被黄色块覆盖后文字对比消失，边框无 ring 导致无法聚焦；② 暗色（Image 2）：深灰卡片上琥珀高亮与卡片描边/标签金色同族，`QA` 关键词未提亮（仍深色文字或同色），扫视时淹没在卡片群中，突出度不足。
+- 用户场景：用户在亮色搜「qa」时 6 个命中块中关键词找不着；在暗色搜「qa」时 16 命中中首屏 6 张卡的高亮与标签/标题金色混淆。
+- 建议方案：复用 `frontend-design` Skill 二次调优（不推翻 `P0-5` 双主题变量体系，仅调 `--color-highlight*` 三变量）：
+  1. 亮色：高亮改为**深色字 + 强描边**（如 `bg-amber-300 #fcd34d + text-amber-950 #451a03 + ring-amber-600/50 ring-1 + font-medium`），或用 `bg-orange-200 + text-orange-900` 与纸面拉开；在 `CardItem.tsx` `<mark>` 上加 `px-[1px] + rounded-[3px]` 提升块面积。
+  2. 暗色：高亮改为**提亮文字 + 外发光**（如 `bg-amber-400 + text-ink-950 #111 + ring-amber-300/60 shadow-[0_0_0_2px_rgba(251,191,36,.25)]`），让关键词在深底上形成“荧光笔+黑字”最强对比；或试 `bg-yellow-300 + text-zinc-900`。
+  3. 验证：亮/暗各搜「qa」后截图对比，WCAG AA 文字对比 ≥4.5:1，色块与背景 ΔE ≥30；首屏命中块扫视 1s 内可定位。
+- 预期收益：亮色可见、暗色突出，搜索首要价值闭环。
+- 实现成本：低（仅变量调优 + `<mark>` 样式，不动布局）
+- 优先级：P0（用户反馈最高，`P0-5` 二次优化）
 
 ---
 
@@ -254,3 +249,5 @@
 - **P0-1 AI 无法分类时标签留空**（2026-08-27 完成：`cards.ts:89-109` `DISCARD_TAGS` 5脏标签+`normalizeTags` trim/去DISCARD/去空去重/截4字/≤3空则[]，`ai.ts:113` `normalizeTags(rawTags)`，`prompts.ts:5` 约束「无法判断返回[]禁止占位」，`parseTags`不过滤保存量手动清理，新增不再出现「无法分类」）
 - **P0-2 标签筛选态下新建默认携带当前选中标签**（2026-08-27 完成：`page.tsx:211-230` `handleCreate(body,title,aiTags)` `selectedTag&&!isDemoView`时 `Array.from(new Set([selectedTag,...aiTags])).slice(0,3)`强制首位去重≤3，全部/ demo不强制，vpn代理1→2验证）
 - **P0-3 重复内容去重提示**（2026-08-27 完成：`page.tsx:214-223` `normalizeBody(body.trim())`全等比对`cards.find`命中`confirm`「检测到内容已存在（标题「X」），是否仍要添加？」取消中断/确认继续，空内容不弹，首个命中仅一次，Composer小风险已记录不阻断）
+- **P0-4 网格卡片直删（可配置确认）**（2026-08-27 完成：`types.ts:27`+`storage.ts:66,70-78` `confirmDelete`默认true+normalize+`types`/`storage`/`page`三路径持久化；`CardItem.tsx:17-98` `onDelete`+编辑下垂直删除`text-rust` hover/focus-visible+demo隐藏；`page.tsx:352-360` 条件confirm+三分支+`SettingsModal.tsx:53-77` Switch即存合并保存）
+- **P0-5 搜索高亮重做+亮色主题**（2026-08-27 完成：`globals.css:17-48` 双主题变量amber高亮暗琥珀42%+亮荧光笔+`html.light`纸墨；`CardItem.tsx:34` mark走变量；`layout.tsx:11,15-19` 防FOUC内联+suppressHydrationWarning；`page.tsx:40-44,77-89` 主题state+system监听+初始一致；`SettingsModal.tsx:78-94` select即存；搜qa亮/暗16命中高对比）

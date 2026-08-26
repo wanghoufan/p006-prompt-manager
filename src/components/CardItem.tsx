@@ -14,10 +14,13 @@ interface CardItemProps {
   onOpen: () => void
   onCopy: () => void
   onRate: (rating: number) => void
+  /** P0-4 网格直删：readonly/demo 视图不传（不显示删除按钮） */
+  onDelete?: (id: string) => void
 }
 
 /** 把文本按关键词拆分为片段数组：非命中片段为纯文本节点，命中片段包 <mark>。
- *  全程只渲染文本节点，绝不使用 dangerouslySetInnerHTML，天然免疫 XSS。 */
+ *  全程只渲染文本节点，绝不使用 dangerouslySetInnerHTML，天然免疫 XSS。
+ *  高亮样式走 CSS 变量 --color-highlight / --color-highlight-text（P0-5 双主题自适应）。 */
 function highlightParts(text: string, query: string): ReactNode[] {
   if (!query) return [text]
   const q = query.toLowerCase()
@@ -28,7 +31,7 @@ function highlightParts(text: string, query: string): ReactNode[] {
   while (idx !== -1) {
     if (idx > i) parts.push(text.slice(i, idx))
     parts.push(
-      <mark key={idx} className="rounded-[2px] bg-gold/30 text-inherit">
+      <mark key={idx} className="rounded-[2px] bg-highlight text-highlight ring-1 ring-highlight-ring">
         {text.slice(idx, idx + q.length)}
       </mark>,
     )
@@ -39,7 +42,7 @@ function highlightParts(text: string, query: string): ReactNode[] {
   return parts
 }
 
-export function CardItem({ card, selected, readonly = false, query = '', onSelect, onOpen, onCopy, onRate }: CardItemProps) {
+export function CardItem({ card, selected, readonly = false, query = '', onSelect, onOpen, onCopy, onRate, onDelete }: CardItemProps) {
   // @code 直达模式：高亮词去掉 @ 前缀，命中片段落在调取码徽标上
   const match = query.replace(/^@/, '').trim()
   return (
@@ -69,16 +72,31 @@ export function CardItem({ card, selected, readonly = false, query = '', onSelec
           </span>
         )}
         {!readonly && (
-          <button
-            type="button"
-            className="btn-ghost shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-            onClick={(e) => {
-              e.stopPropagation()
-              onOpen()
-            }}
-          >
-            编辑
-          </button>
+          <div className="flex shrink-0 flex-col items-end gap-0.5">
+            <button
+              type="button"
+              className="btn-ghost opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+              onClick={(e) => {
+                e.stopPropagation()
+                onOpen()
+              }}
+            >
+              编辑
+            </button>
+            {onDelete && (
+              <button
+                type="button"
+                className="btn-ghost text-rust opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 hover:bg-rust/10"
+                title="删除卡片"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onDelete(card.id)
+                }}
+              >
+                删除
+              </button>
+            )}
+          </div>
         )}
       </div>
       {card.body && (

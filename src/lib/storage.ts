@@ -63,17 +63,25 @@ export function saveCards(cards: Card[]): boolean {
   return ok
 }
 
-const DEFAULT_SETTINGS: Settings = { thinkingSummaryPrompt: '' }
+const DEFAULT_SETTINGS: Settings = { thinkingSummaryPrompt: '', confirmDelete: true, theme: 'system' }
+
+/** 设置归一化（P0-4/P0-5）：老数据缺 confirmDelete / theme 字段时补默认值；
+ *  theme 仅接受 'dark' | 'light' | 'system'，其余（含 undefined）回退 'system'。 */
+function normalizeSettings(v: unknown): Settings {
+  const s = (v && typeof v === 'object' ? v : {}) as Partial<Settings>
+  const theme = s.theme === 'dark' || s.theme === 'light' || s.theme === 'system' ? s.theme : 'system'
+  return {
+    thinkingSummaryPrompt: typeof s.thinkingSummaryPrompt === 'string' ? s.thinkingSummaryPrompt : '',
+    confirmDelete: typeof s.confirmDelete === 'boolean' ? s.confirmDelete : true,
+    theme,
+  }
+}
 
 export function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
     if (!raw) return { ...DEFAULT_SETTINGS }
-    const parsed = JSON.parse(raw) as Partial<Settings>
-    return {
-      thinkingSummaryPrompt:
-        typeof parsed.thinkingSummaryPrompt === 'string' ? parsed.thinkingSummaryPrompt : '',
-    }
+    return normalizeSettings(JSON.parse(raw))
   } catch {
     return { ...DEFAULT_SETTINGS }
   }
@@ -250,13 +258,7 @@ export function parseImport(raw: string): ImportResult {
           return { ok: false, error: '存在结构不合法或字段类型错误的卡片' }
         }
       }
-      const settings: Settings = { ...DEFAULT_SETTINGS }
-      if (root.settings && typeof root.settings === 'object') {
-        const s = root.settings as Record<string, unknown>
-        if (typeof s.thinkingSummaryPrompt === 'string') {
-          settings.thinkingSummaryPrompt = s.thinkingSummaryPrompt
-        }
-      }
+      const settings: Settings = normalizeSettings(root.settings)
       return { ok: true, cards: root.cards.map((c) => ({ ...c, body: normalizeBody(c.body) })), settings }
     }
   }
@@ -274,7 +276,7 @@ const STREAM_URL = '/api/sync/stream'
 let serverMode = false
 let lastPushedVersion: number | null = null
 let cacheCards: Card[] = []
-let cacheSettings: Settings = { thinkingSummaryPrompt: '' }
+let cacheSettings: Settings = { ...DEFAULT_SETTINGS }
 let pushInFlight = false
 let pushPending = false
 
@@ -330,10 +332,7 @@ export async function loadFromServer(): Promise<{ cards: Card[]; settings: Setti
     const cards = Array.isArray(data.cards)
       ? (data.cards.filter(isCard).map(normalizeCard) as Card[])
       : []
-    const settings: Settings =
-      data.settings && typeof data.settings === 'object'
-        ? (data.settings as Settings)
-        : { thinkingSummaryPrompt: '' }
+    const settings: Settings = normalizeSettings(data.settings)
     serverMode = true
     return { cards, settings }
   } catch {

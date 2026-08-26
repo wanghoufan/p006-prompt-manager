@@ -23,6 +23,10 @@ export interface Card {
 
 export interface Settings {
   thinkingSummaryPrompt: string
+  /** P0-4：网格直删前是否二次确认（默认 true） */
+  confirmDelete: boolean
+  /** P0-5：外观主题；system 跟随系统偏好，dark/light 手动覆盖 */
+  theme: 'dark' | 'light' | 'system'
 }
 
 export type SortMode = 'updated' | 'copies' | 'rating'

@@ -5,12 +5,11 @@
 ## 当前状态
 
 - 项目：提示词管理工具（Prompt Manager），Next.js 16（App Router）+ React 19 + TypeScript 5 + Tailwind v4。
-- 阶段：功能开发期。已完成主体：跨设备实时同步、UI 优化（含正文优先布局重构）、调取码字段、MCP 集成、MCP 调用计数、备注字段、失焦自动保存、回滚 bug 修复、**全局搜索 + 健壮性批次（范围 A+B）+ P2-8/P2-9/P3-6 三项打包 + P0-1/P0-2/P0-3 用户反馈三项**。
-- **最新提交（待提交，P0 三项打包）**：「P0-1 无法分类留空 + P0-2 筛选态继承 + P0-3 重复去重」：
-  - P0-1 AI 无法分类留空：`src/lib/cards.ts` 新增 `DISCARD_TAGS`（`无法分类/未分类/其他/无/无标签`）与 `normalizeTags`（trim→DISCARD丢弃大小写不敏感→去空去重→截4字→≤3，空则`[]`），`src/lib/ai.ts` `generateMeta` 改走 `normalizeTags`，`src/lib/prompts.ts` META_PROMPT 追加「无法判断则返回 [] 禁止占位」；`parseTags` 保持不过滤以免存量隐性清理。
-  - P0-2 筛选态继承：`src/app/page.tsx` `handleCreate(body,title,aiTags)` 选中 `selectedTag` 时 `Array.from(new Set([selectedTag,...aiTags])).slice(0,3)` 强制首位，其余去重补充；「全部」与 demo 不强制；vpn代理 1→2 已验证。
-  - P0-3 重复去重：`src/app/page.tsx` `handleCreate` 入口 `normalizeBody(body.trim())` 全等比对 `cards.find`，命中 `confirm`「检测到内容已存在（标题「X」），是否仍要添加？」取消中断/确认继续，空内容不弹；Composer 小风险（取消仍 toast）已记录不阻断。
-- 上一提交（500b875，已推送）：P2-8/P2-9/P3-6 三项打包（QA 第六次、产品 2026-08-26 PASS）；再上一提交 a8598cf：搜索+健壮性批次收尾。
+- 阶段：功能开发期。已完成主体：跨设备实时同步、UI 优化（含正文优先布局重构）、调取码字段、MCP 集成、MCP 调用计数、备注字段、失焦自动保存、回滚 bug 修复、**全局搜索 + 健壮性批次（范围 A+B）+ P2-8/P2-9/P3-6 三项打包 + P0-1~P0-5 用户反馈五项**。
+- **最新提交（待提交，P0-4/P0-5 两项打包）**：「P0-4 网格直删（可配置确认）+ P0-5 高亮双主题」：
+  - P0-4 网格直删：`src/lib/types.ts` `Settings.confirmDelete`（默认 true）+ `src/lib/storage.ts` `DEFAULT_SETTINGS`/`normalizeSettings` 三路径持久化；`src/components/CardItem.tsx` `onDelete` prop（编辑下垂直 `text-rust` 删除，hover/focus-visible 显示，demo 隐藏）；`src/app/page.tsx` `handleDeleteCard` 按 `confirmDelete` 条件 `confirm`「确定删除「{title}」？此操作不可撤销。」三分支；`src/components/SettingsModal.tsx` Switch 即存 + `handleSave` 合并保留新字段。
+  - P0-5 高亮双主题：`src/app/globals.css` `@theme --color-highlight*` 暗色 `rgba(251,191,36,.42)/#fef3c7` + `html.light` 纸墨全量覆盖 + `color-scheme`；`src/components/CardItem.tsx` `<mark class="bg-highlight text-highlight ring-1 ring-highlight-ring">` 变量驱动；`src/app/layout.tsx` 内联脚本读 `localStorage['prompt-manager:settings']` theme 预置 `light` 防 FOUC + `suppressHydrationWarning`；`src/app/page.tsx` `theme` useEffect 系统跟随；`src/components/SettingsModal.tsx` 主题 select 即存。
+- 上一提交（08db748，已推送）：P0-1/P0-2/P0-3 三项打包（QA 第七次、产品 2026-08-27 PASS）；再上一提交 500b875：P2-8/P2-9/P3-6 三项打包（QA 第六次、产品 2026-08-26 PASS）。
 - 远程仓库：https://github.com/wanghoufan/prompt-manager.git（master，已配置）。
 - dev 服务：`./dev-server.sh` watchdog 管理（start/stop/restart/status/logs），监听 `*:3000`。
 
@@ -29,8 +28,10 @@
 11. **P0-1 留空**：`DISCARD_TAGS`+`normalizeTags` 过滤 5 脏标签（大小写不敏感），`META_PROMPT` 约束禁止占位，`parseTags` 不过滤以免存量隐性清理。
 12. **P0-2 筛选态继承**：`handleCreate` 选中标签强制首位 `Set([selectedTag,...aiTags]).slice(0,3)`，全部/demo 不强制。
 13. **P0-3 去重**：`handleCreate` 入口 `normalizeBody` 全等比对 + `confirm` 二次确认，空内容不触发；Composer 取消仍 toast 小风险已记录。
-14. 清理工具（neat-freak）只在整体完成 / 交付 / 文档明显失配时跑完整收尾。
-15. 阶段性 `commit` / `push` 需用户明确授权；`.gitignore` 隔离 `scratch/`、`node_modules/`、`.next/`、`.env*`、`data/`、`.workbuddy/`、`mcp/prompt-server/{node_modules,dist}/`。
+14. **P0-4 网格直删**：`CardItem` `onDelete` prop + `page.tsx` 条件 `confirm` + `Settings.confirmDelete` 持久化（`storage.ts` 归一化三路径）；demo 隐藏，预览/详情共用 handler。
+15. **P0-5 高亮双主题**：`globals.css` `--color-highlight*` 暗/亮两套 + `html.light` 纸墨 + `color-scheme`，`CardItem` mark 变量驱动；`layout.tsx` 内联防 FOUC + `suppressHydrationWarning`；`page.tsx` theme 实时跟随；`SettingsModal` 主题 select。
+16. 清理工具（neat-freak）只在整体完成 / 交付 / 文档明显失配时跑完整收尾。
+17. 阶段性 `commit` / `push` 需用户明确授权；`.gitignore` 隔离 `scratch/`、`node_modules/`、`.next/`、`.env*`、`data/`、`.workbuddy/`、`mcp/prompt-server/{node_modules,dist}/`。
 
 ## 文件结构（根目录，关键项）
 
@@ -67,7 +68,7 @@
 
 ## 下一步
 
-- **里程碑已收口（待提交）：P0-1 无法分类留空 + P0-2 筛选态继承 + P0-3 重复去重已通过 QA 第七次与产品验收 PASS（2026-08-27），待下轮按 `docs/review/PRODUCT_BACKLOG.md` 剩余候选 P0-4/P0-5 等择机排期。**
-- 剩余风险（不阻断，建议单独排期）：RISK-1 MCP 直读 `store.json` 陈旧数据、RISK-2 MCP 计数失败静默、RISK-5 调取码冲突边缘场景；P0-3 Composer 取消仍 toast 小风险，详见 `docs/review/CODE_REVIEW.md` 与 `docs/progress/CURRENT_STAGE.md`。
-- 待办候选：P0-4 网格直删入口（P2-10 升级，可配置二次确认）与 P0-5 高亮配色+亮色主题（需 frontend-design）、P2-11 批量管理、P2-3 `<md` 面板、P2-5 撤销、P2-7/P3-2/P3-4 等，详见 PRODUCT_BACKLOG。
+- **里程碑已收口（待提交）：P0-4 网格直删（可配置确认）+ P0-5 高亮双主题已通过 QA 第八次与产品验收 PASS（2026-08-27，P0-6 二次配色待优化），待下轮按 `docs/review/PRODUCT_BACKLOG.md` P0-6 高亮二次优化择机排期。**
+- 剩余风险（不阻断，建议单独排期）：RISK-1 MCP 直读 `store.json` 陈旧数据、RISK-2 MCP 计数失败静默、RISK-5 调取码冲突边缘场景；P0-3 Composer 取消仍 toast 小风险，P0-5 亮色 #cfc9ba 轨道对比 1.3:1（状态区分已达标），详见 `docs/review/CODE_REVIEW.md` 与 `docs/progress/CURRENT_STAGE.md`。
+- 待办候选：P0-6 搜索高亮双主题配色二次优化（亮色可见/暗色突出）、P2-11 批量管理、P2-3 `<md` 面板、P2-5 撤销、P2-7/P3-2/P3-4 等，详见 PRODUCT_BACKLOG。
 - 若 WorkBuddy 调取仍不自动按角色执行，用户可在 WorkBuddy 全局系统提示词加入工具触发说明。

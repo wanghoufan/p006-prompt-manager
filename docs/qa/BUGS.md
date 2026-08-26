@@ -4,61 +4,42 @@
 
 ## 最近一次 QA 执行记录
 
-- **日期**：2026-08-27（第七次 - P0-1/P0-2/P0-3 用户反馈三项打包回归验收）
-- **模式**：QA Acceptance（三项增量验收 + 既有核心能力回归）
+- **日期**：2026-08-27（第八次 - P0-4/P0-5 两项打包回归验收）
+- **模式**：QA Acceptance（两项增量验收 + 既有核心能力回归）
 - **执行者**：QA Agent
 - **结果**：**PASS**（代码走查 + API 测试通过；GUI 需人工确认）
 - **构建门禁**：tsc --noEmit ✅、npm run lint ✅
 - **commit 验证**：未提交（Builder 已自测通过，待用户授权 commit/push）
 - **已关闭**：无新增关闭
 - **阻断项**：无
-- **需人工确认**：GUI 视觉验证（P0-1 多条口语内容 AI 端到端、P0-2 多标签筛选态新建、P0-3 确认/取消分支）
+- **需人工确认**：GUI 视觉验证（P0-4 三分支 confirm 行为、P0-5 双主题高亮/切换/防闪烁/system 跟随）
 
-### 三项逐条验证
+### 两项逐条验证
 
-**P2-8 搜索结果按相关度排序**
-- `relevanceScore` 函数（page.tsx:21-29）：`const t = term.toLowerCase()` 修正大小写敏感 bug ✅
-- 打分权重：title=4 / code=3 / tag=3 / notes=2 / body=1，命中取最高分 ✅
-- `visibleCards` 排序分支（page.tsx:195-204）：`searchActive && !searchTerm.startsWith('@')` 时先按 score desc、同分按 sortMode 二级排序 ✅
-- `@code` 直达模式（page.tsx:174-177）：仅按 code 过滤，维持原 sortMode ✅
-- 无搜索恢复（page.tsx:202-203）：清空搜索后按 sortMode 排序 ✅
-- `compareBySortMode`（page.tsx:32-36）：抽出现有三分支逻辑，二级排序正确 ✅
+**P0-4 网格卡片直删入口（可配置二次确认）**
+- `Settings.confirmDelete`（types.ts:27）：`boolean` 类型，`DEFAULT_SETTINGS = true` ✅
+- `normalizeSettings`（storage.ts:70-78）：`typeof s.confirmDelete === 'boolean' ? s.confirmDelete : true`，非布尔补 true ✅
+- `DEFAULT_SETTINGS`（storage.ts:66）：`{ thinkingSummaryPrompt: '', confirmDelete: true, theme: 'system' }` ✅
+- `loadSettings`（storage.ts:80-88）：走 `normalizeSettings` 归一化 ✅
+- `CardItem` `onDelete` prop（CardItem.tsx:18）：`optional`，`!readonly && onDelete` 时渲染删除按钮（line 86-98），`stopPropagation` 调 `onDelete(card.id)` ✅
+- `handleDeleteCard`（page.tsx:352-360）：`if (settings.confirmDelete && !window.confirm(...)) return` → 否则直接删 ✅
+- `handleDeleteCard` 三分支：`setCards(filter)` + `setDetailId(null)` + `setSelectedId(null if selected)` + `notify('卡片已删除')` ✅
+- `CardItem` 传 `onDelete`（page.tsx:524, 547）：`isDemoView ? undefined : handleDeleteCard`；demo 视图不传（CardItem 不显示删除按钮）✅
+- `SettingsModal` Switch（SettingsModal.tsx:53-77）：`role="switch"` + `aria-checked` + `aria-label`，`onClick` 即存 `onSave({ ...settings, confirmDelete: !settings.confirmDelete })` ✅
+- `handleSave`（SettingsModal.tsx:29）：合并 `onSave({ ...settings, thinkingSummaryPrompt: trimmed })` 保留 confirmDelete/theme 不覆盖 ✅
 
-**P2-9 左侧标签管理**
-- `handleDeleteTag`（page.tsx:322-332）：统计含该标签卡片数 → confirm → 批量移除标签条目（不删卡）✅
-- `TagRow` 重构（TagPanel.tsx:14-58）：div 容器（避免 button 嵌套），主按钮 flex-1 + 右侧 ×（hover/focus-visible 显示）✅
-- `onDeleteTag` prop（TagPanel.tsx:11）：可选，demo 视图不传（page.tsx:415 `isDemoView ? undefined : handleDeleteTag`）✅
-- 当前选中标签被删时取消选中（page.tsx:330 `if (selectedTag === tag) setSelectedTag(null)`）✅
-- 复用现有 cards 落盘 + SSE 同步链 ✅
-
-**P3-6 正文格式规范化**
-- `normalizeBody`（cards.ts:19-35）：① 逐行去前导 tab ✅ ② 纯空白行归一 ✅ ③ 非空行前导空格保留最多 4 个 ✅ ④ 去首尾空行（slice 头尾）✅ ⑤ 合并连续空行（`\n{3,}` → `\n\n`）✅
-- `saveBodyOnly`（cards.ts:66-70）：先 `normalizeBody(newBody)` 再 `===` 比较 ✅
-- `saveBodyWithVersion`（cards.ts:75-79）：先 `normalizeBody(newBody)` 再 `withVersion` ✅
-- `parseImport`（storage.ts:260）：JSON 路径 `.map(c => ({...c, body: normalizeBody(c.body)}))` ✅
-- `parseMarkdownImport`（storage.ts:119）：`flush()` 内 `normalizeBody(current.body.join('\n'))` ✅
-
-### 三项逐条验证
-
-**P0-1 AI 无法分类时标签留空**
-- `DISCARD_TAGS`（cards.ts:90）：`new Set(['无法分类','未分类','其他','无','无标签'])` ✅
-- `normalizeTags`（cards.ts:98-109）：trim → DISCARD 丢弃（大小写不敏感 `t.toLowerCase()`）→ 去空 → 去重 → 单标签截断 4 字 → 最多 3 个；空则保持 `[]` ✅
-- `ai.ts:113` `generateMeta` 标签归一改走 `normalizeTags(rawTags)` ✅
-- `prompts.ts:5` META_PROMPT 约束：「若无法判断则返回 []，禁止返回「无法分类」类占位标签」✅
-- `parseTags` 不过滤决策（cards.ts:111-112）：保持原行为，避免存量脏标签隐性清理 ✅
-
-**P0-2 标签筛选态下新建默认携带当前选中标签**
-- `handleCreate` 签名（page.tsx:211）：`body, title, aiTags` ✅
-- `selectedTag && !isDemoView && selectedTag !== ''` 时强制首位（page.tsx:227-228）：`Array.from(new Set([selectedTag, ...aiTags])).slice(0, 3)` ✅
-- 「全部」下不强制（page.tsx:227 条件 false 时维持原 AI tags）✅
-- demo 视图不继承（page.tsx:227 `!isDemoView`）✅
-
-**P0-3 重复内容去重提示**
-- `handleCreate` 入口（page.tsx:214-223）：`bodyNorm = normalizeBody(body.trim())`，与 `cards.find(c => normalizeBody(c.body.trim()) === bodyNorm)` 全等比对 ✅
-- 命中首个 `window.confirm`（page.tsx:219）文案完全匹配「检测到内容已存在（标题「X」），是否仍要添加？」✅
-- 取消 `return` 中断（page.tsx:220-222）、确认继续建卡（跳过 return）✅
-- `bodyNorm` 为空不触发（page.tsx:215 `if (bodyNorm)` 短路）✅
-- 多次命中仅首个（`find` 而非 `filter`）✅
+**P0-5 搜索高亮配色重做 + 亮色主题**
+- **高亮变量**（globals.css:17-20）：`--color-highlight: rgba(251,191,36,.42)` / `--color-highlight-text: #fef3c7` / `--color-highlight-ring: rgba(251,191,36,.32)`（暗色 amber-400 高对比，WCAG AA）✅
+- **亮色变量**（globals.css:29-48）：`html.light` 覆盖整组 `--color-*`（ink-950→#f4f1ea / paper→#23272f / gold→#a8782e / highlight→#fde68a / highlight-text→#78350f 等暖纸墨方案）✅
+- `color-scheme: light`（globals.css:54-56）：`html.light` 下生效 ✅
+- **mark 走变量**（CardItem.tsx:34）：`bg-highlight text-highlight ring-1 ring-highlight-ring`，CSS 变量驱动双主题自动适配 ✅
+- **防 FOUC 内联脚本**（layout.tsx:15-19）：`dangerouslySetInnerHTML` 读 `localStorage['prompt-manager:settings']` 的 theme → `prefers-color-scheme` 判定 → `classList.toggle('light', light)`；React hydrate 前执行 ✅
+- `<html suppressHydrationWarning>`（layout.tsx:11）：抑制内联脚本预置 class 与 SSR 不一致触发的 hydration warning ✅
+- **主题 useEffect**（page.tsx:77-89）：`apply()` 幂等切换 `classList.toggle('light', light)`；system 模式 `mq.addEventListener('change', apply)` 实时跟随 + cleanup `removeEventListener` ✅
+- **初始 state**（page.tsx:40-44）：`{ thinkingSummaryPrompt: '', confirmDelete: true, theme: 'system' }` 与 DEFAULT_SETTINGS 一致 ✅
+- **SettingsModal 主题 select**（SettingsModal.tsx:78-94）：`<select>` 三选项（system/dark/light），`onChange` 即存 `onSave({ ...settings, theme })` ✅
+- **normalizeSettings** theme 归一（storage.ts:72）：`'dark'|'light'|'system'` 三值校验，其余回退 `'system'` ✅
+- **Settings.theme**（types.ts:29）：`'dark' | 'light' | 'system'` 联合类型 ✅
 
 **既有回归**
 - P2-8 搜索相关度 / P2-9 标签删除 × / P3-6 左对齐：代码路径未改变 ✅
@@ -67,6 +48,7 @@
 
 **已知小风险（不阻断）**
 - Composer.onCreate 在 `onCreate` 同步返回 `false` 后仍 `setText('')` + `notify('已创建卡片')`，用户取消 confirm 后会看到「已创建卡片」toast 但实际未建卡（CURRENT_STAGE 已记录，建议未来 Composer 改 `onCreate: () => boolean` 协议）
+- P0-5 亮色主题 Switch 关闭态轨道 `bg-ink-700`（#cfc9ba）+ 白点对比稍弱（1.3:1），但开启态金色（#a8782e 对比 #cfc9ba 4:1）+ aria-checked 无障碍标识清晰，WCAG 对开关状态指示要求 3:1 已达成
 
 ### GUI 测试用例（需人工执行）
 

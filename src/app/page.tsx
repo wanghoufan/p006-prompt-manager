@@ -37,7 +37,11 @@ function compareBySortMode(a: Card, b: Card, mode: SortMode): number {
 
 export default function Home() {
   const [cards, setCards] = useState<Card[]>([])
-  const [settings, setSettings] = useState<Settings>(() => ({ thinkingSummaryPrompt: '' }))
+  const [settings, setSettings] = useState<Settings>(() => ({
+    thinkingSummaryPrompt: '',
+    confirmDelete: true,
+    theme: 'system',
+  }))
   const [hydrated, setHydrated] = useState(false)
   const [view, setView] = useState<ViewMode>('mine')
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
@@ -67,6 +71,22 @@ export default function Home() {
     const timer = window.setTimeout(() => setDebouncedQuery(searchQuery), 300)
     return () => window.clearTimeout(timer)
   }, [searchQuery])
+
+  // P0-5 主题应用：light class 由 settings.theme 驱动；
+  // system 模式监听系统偏好实时跟随（layout 内联脚本已做首屏预置，此处幂等接管）
+  useEffect(() => {
+    const root = document.documentElement
+    const mq = window.matchMedia('(prefers-color-scheme: light)')
+    const apply = () => {
+      const light = settings.theme === 'light' || (settings.theme === 'system' && mq.matches)
+      root.classList.toggle('light', light)
+    }
+    apply()
+    if (settings.theme === 'system') {
+      mq.addEventListener('change', apply)
+      return () => mq.removeEventListener('change', apply)
+    }
+  }, [settings.theme])
 
   const isDemoView = view === 'demo'
   const sourceCards = isDemoView ? DEMO_CARDS : cards
@@ -327,10 +347,12 @@ export default function Home() {
     updateCard(id, (c) => ({ ...c, thinkingSummary: summary }))
   }
 
+  // P0-4：删除入口统一（网格直删 / PreviewPanel / CardDetail 共用）；
+  // settings.confirmDelete=true 时二次确认（默认），关闭后直接删
   function handleDeleteCard(id: string) {
     const card = cards.find((c) => c.id === id)
     if (!card) return
-    if (!window.confirm(`确定删除「${card.title}」？此操作不可撤销。`)) return
+    if (settings.confirmDelete && !window.confirm(`确定删除「${card.title}」？此操作不可撤销。`)) return
     setCards((prev) => prev.filter((c) => c.id !== id))
     setDetailId(null)
     if (selectedId === id) setSelectedId(null)
@@ -499,6 +521,7 @@ export default function Home() {
                     onOpen={() => setDetailId(card.id)}
                     onCopy={() => handleCopy(card.id)}
                     onRate={(r) => handleRate(card.id, r)}
+                    onDelete={isDemoView ? undefined : handleDeleteCard}
                   />
                 ))}
               </div>

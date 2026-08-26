@@ -8,8 +8,17 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="zh-CN" className="h-full antialiased">
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="zh-CN" className="h-full antialiased" suppressHydrationWarning>
+      <body className="min-h-full flex flex-col">
+        {/* P0-5 首屏主题预置（防 FOUC）：React hydrate 前按 localStorage 设置 + 系统偏好决定亮/暗，
+            page.tsx hydrate 后按 settings.theme 接管（值一致则幂等，无闪烁） */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var s=JSON.parse(localStorage.getItem('prompt-manager:settings')||'{}');var t=s.theme||'system';var light=t==='light'||(t==='system'&&window.matchMedia('(prefers-color-scheme: light)').matches);document.documentElement.classList.toggle('light',light);}catch(e){document.documentElement.classList.remove('light');}})();`,
+          }}
+        />
+        {children}
+      </body>
     </html>
   );
 }

@@ -142,3 +142,23 @@
 - [x] P0-3 空内容不触发（`if (bodyNorm)` 短路）
 - [x] P0-3 多次命中仅首个（find 而非 filter）
 - [x] 既有回归：P2-8 搜索相关度 / P2-9 标签删除 / P3-6 左对齐 / 失焦保存 / 建版 / API
+
+### P0-4/P0-5 - 2026-08-27 验证
+- [x] P0-4 Settings.confirmDelete：`types.ts:27` boolean 类型，`DEFAULT_SETTINGS = true`（`storage.ts:66`）
+- [x] P0-4 normalizeSettings：`storage.ts:70-78`，`typeof s.confirmDelete === 'boolean' ? s.confirmDelete : true`，非布尔补 true
+- [x] P0-4 CardItem onDelete：`CardItem.tsx:18` optional prop，`!readonly && onDelete` 时渲染删除按钮（line 86-98），`stopPropagation` 调 `onDelete(card.id)`
+- [x] P0-4 handleDeleteCard：`page.tsx:352-360`，`if (settings.confirmDelete && !window.confirm(...)) return` 三分支逻辑
+- [x] P0-4 CardItem 传 onDelete：`page.tsx:524, 547`，`isDemoView ? undefined : handleDeleteCard`，demo 视图不传
+- [x] P0-4 SettingsModal Switch：`SettingsModal.tsx:53-77`，`role="switch"` + `aria-checked`，`onClick` 即存
+- [x] P0-4 handleSave 合并：`SettingsModal.tsx:29`，`onSave({ ...settings, thinkingSummaryPrompt: trimmed })` 不覆盖 confirmDelete/theme
+- [x] P0-5 highlight CSS 变量：`globals.css:17-20`，暗色 `rgba(251,191,36,.42)` / `#fef3c7` / `rgba(251,191,36,.32)`，WCAG AA
+- [x] P0-5 html.light 覆盖：`globals.css:29-48`，暖纸墨全套变量（ink-950→#f4f1ea / paper→#23272f / gold→#a8782e / highlight→#fde68a）
+- [x] P0-5 color-scheme：`globals.css:54-56`，`html.light { color-scheme: light }`
+- [x] P0-5 mark 走变量：`CardItem.tsx:34`，`bg-highlight text-highlight ring-1 ring-highlight-ring`，双主题自动适配
+- [x] P0-5 防 FOUC：`layout.tsx:15-19`，`dangerouslySetInnerHTML` 内联脚本读 localStorage → matchMedia → classList.toggle
+- [x] P0-5 suppressHydrationWarning：`layout.tsx:11`，抑制内联脚本与 SSR class 不一致警告
+- [x] P0-5 主题 useEffect：`page.tsx:77-89`，apply 幂等切换 + system 时 matchMedia addEventListener/change + cleanup removeEventListener
+- [x] P0-5 初始 state：`page.tsx:40-44`，与 DEFAULT_SETTINGS 一致 `{ confirmDelete: true, theme: 'system' }`
+- [x] P0-5 主题 select：`SettingsModal.tsx:78-94`，`<select>` 三选项，onChange 即存
+- [x] P0-5 normalizeSettings theme：`storage.ts:72`，三值校验，其余回退 'system'
+- [x] 既有回归：P2-8 搜索相关度 / P2-9 标签删除 / P3-6 左对齐 / 失焦保存 / 建版 / API
