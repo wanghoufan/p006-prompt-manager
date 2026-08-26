@@ -14,10 +14,11 @@
   --color-gold-bright: #f0bf77;
   --color-gold-deep: #8a6a3f;
   --color-rust: #c96a5a;
-  /* P0-5 搜索高亮（暗色默认）：amber-400 高对比琥珀 + ring，WCAG AA */
-  --color-highlight: rgba(251, 191, 36, 0.42);
-  --color-highlight-text: #fef3c7;
-  --color-highlight-ring: rgba(251, 191, 36, 0.32);
+  /* P0-6 搜索高亮（暗色默认）：amber-400 实心底 + ink-950 黑字 + 外发光，最强对比 WCAG AA */
+  --color-highlight: #fbbf24;
+  --color-highlight-text: #111111;
+  --color-highlight-ring: rgba(252, 211, 153, 0.6);
+  --color-highlight-shadow: rgba(251, 191, 36, 0.25);
   --scroll-thumb: #2a3448;
   --font-sans: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", system-ui,
     sans-serif;
@@ -40,10 +41,11 @@ html.light {
   --color-gold-bright: #7a5218;
   --color-gold-deep: #6e4a16;
   --color-rust: #b04a3a;
-  /* 亮色高亮：深金棕琥珀（amber-200 底 + amber-900 文字），纸面划重点 */
-  --color-highlight: #fde68a;
-  --color-highlight-text: #78350f;
-  --color-highlight-ring: rgba(180, 131, 30, 0.4);
+  /* P0-6 亮色高亮：amber-300 实心底 + amber-950 深棕字 + amber-600 强描边，纸面可聚焦 */
+  --color-highlight: #fcd34d;
+  --color-highlight-text: #451a03;
+  --color-highlight-ring: rgba(217, 119, 6, 0.5);
+  --color-highlight-shadow: transparent;
   --scroll-thumb: #cfc9ba;
 }
 

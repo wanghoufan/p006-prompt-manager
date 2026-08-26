@@ -162,3 +162,21 @@
 - [x] P0-5 主题 select：`SettingsModal.tsx:78-94`，`<select>` 三选项，onChange 即存
 - [x] P0-5 normalizeSettings theme：`storage.ts:72`，三值校验，其余回退 'system'
 - [x] 既有回归：P2-8 搜索相关度 / P2-9 标签删除 / P3-6 左对齐 / 失焦保存 / 建版 / API
+
+### 工位A 验证 - 2026-08-27（P0-6/P2-6/P2-7/P3-4/P3-5 五合一）
+- [x] P0-6 暗色高亮变量：`--color-highlight:#fbbf24` / `--color-highlight-text:#111111` / `--color-highlight-ring:rgba(252,211,153,.6)` / `--color-highlight-shadow:rgba(251,191,36,.25)`（globals.css:18-21）
+- [x] P0-6 亮色高亮变量：`--color-highlight:#fcd34d` / `--color-highlight-text:#451a03` / `--color-highlight-ring:rgba(217,119,6,.5)` / `--color-highlight-shadow:transparent`（globals.css:45-48）
+- [x] P0-6 mark 样式：`rounded-[3px] px-[1px] bg-highlight text-highlight ring-1 ring-highlight-ring shadow-[0_0_0_2px_var(--color-highlight-shadow)]`（CardItem.tsx:34）
+- [x] P0-6 WCAG AA 对比度：暗色 11.31:1 / 亮色 10.39:1（均 ≥4.5:1）
+- [x] P2-6 评分守卫：`if (detailId || showSettings) return` 在 keydown 首行（page.tsx:441-442），弹窗聚焦按数字不误触背景卡
+- [x] P2-7 serverOnline 状态机：null=连接中 / false=离线 / true=在线（page.tsx:58）
+- [x] P2-7 离线横幅：rust 横幅 + 「同步服务离线」+ 提示文案 + 重试连接按钮（page.tsx:525-534）
+- [x] P2-7 连接中横幅：「正在连接同步服务…」（page.tsx:536-540）
+- [x] P2-7 在线横幅：「已连接同步服务」（page.tsx:541-543）
+- [x] P3-4 autoResize：useEffect([text]) 按 scrollHeight 自适应，maxRows=6，resize-none（Composer.tsx:24-37,93）
+- [x] P3-5 SkippedCard 类型 + describeCardFailure 字段级原因（storage.ts:43-60,120-124）
+- [x] P3-5 parseMarkdownImport 空正文入 skipped（storage.ts:151-153）
+- [x] P3-5 parseImport JSON 部分导入（storage.ts:290-310）
+- [x] P3-5 handleImportFile skipped → notify detail（page.tsx:423-431）
+- [x] P3-5 Toast detail 可滚动列表 + 6s 展示（Toast.tsx:3,13-21,page.tsx:70-75）
+- [x] 既有回归：tsc 0 错误（mcp/layout 环境前置问题）/ lint 0 错误 / curl /api/sync 31 张

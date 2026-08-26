@@ -21,6 +21,20 @@ export function Composer({ existingTags, onCreate, notify }: ComposerProps) {
   const [errorMsg, setErrorMsg] = useState('')
   // RISK-3：AI 请求取消控制器（新请求前 abort 上一个，卸载时 abort）
   const abortRef = useRef<AbortController | null>(null)
+  const taRef = useRef<HTMLTextAreaElement>(null)
+
+  // P3-4：autoResize 至 maxRows=6，粘贴长文自动展开，避免手动拖高
+  useEffect(() => {
+    const ta = taRef.current
+    if (!ta) return
+    ta.style.height = 'auto'
+    const cs = window.getComputedStyle(ta)
+    const lineHeight = parseFloat(cs.lineHeight) || 20
+    const paddingY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)
+    const maxHeight = lineHeight * 6 + paddingY
+    ta.style.maxHeight = `${maxHeight}px`
+    ta.style.height = `${Math.min(ta.scrollHeight, maxHeight)}px`
+  }, [text])
 
   useEffect(() => {
     return () => abortRef.current?.abort()
@@ -70,12 +84,13 @@ export function Composer({ existingTags, onCreate, notify }: ComposerProps) {
         <Corner position="-bottom-1.5 -left-1.5 border-b-2 border-l-2" />
         <Corner position="-bottom-1.5 -right-1.5 border-b-2 border-r-2" />
         <textarea
+          ref={taRef}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onPaste={handlePaste}
           rows={1}
           placeholder="在这里粘贴提示词正文，将自动生成标签与标题…"
-          className="field resize-y font-mono text-[13px] leading-relaxed"
+          className="field resize-none font-mono text-[13px] leading-relaxed"
         />
       </div>
 

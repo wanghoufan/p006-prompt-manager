@@ -5,10 +5,13 @@
 
 ## 当前目标
 
-本轮 **P0 用户反馈两项打包（P0-4 网格直删 + P0-5 高亮重做与亮色主题，最高优先级，用户已确认，Builder 合并规划+实现）**，纯前端 / 轻量逻辑，无新依赖：
+本轮 **P0-6 高亮二次优化 + P2-6/P2-7/P3-4/P3-5 五合一（Token 高效版）**，仅改高亮三变量与守卫/文案，不动布局，纯前端 / 轻量逻辑，无新依赖：
 
-1. **P0-4 网格卡片直删入口（编辑键下加删除，默认二次确认 + 设置可关闭）**：`CardItem` hover 时在「编辑」按钮下方出现小号红色/rust 色「删除」按钮，点击调 `onDelete(card.id)`（与 `handleDeleteCard` 共用）；`Settings` 新增 `confirmDelete: boolean`（默认 true），localStorage + serverStore + `data/store.json` 全链路同步，迁移缺省 true；`handleDeleteCard` 按 `settings.confirmDelete` 决定是否 `window.confirm`；`SettingsModal` 加「删除前二次确认」开关（onChange 即存）；readonly/demo 视图不显示删除。
-2. **P0-5 搜索高亮配色重做 + 亮色主题（调用 frontend-design Skill 规范化）**：暗色高亮改高对比琥珀方案（`bg-highlight` 走 CSS 变量 `--highlight-bg`/`--highlight-text`，暗色 = amber-400/40 + amber-100 + ring，WCAG AA）；新增亮色主题（`theme: 'dark' | 'light' | 'system'`，暖纸墨方案：亮色下高亮 = amber-200 + amber-900）；主题切换入口放 `SettingsModal`（跟随系统 / 暗色 / 亮色），持久化到 `Settings` + localStorage/serverStore；`layout.tsx` 首屏内联脚本按 `prefers-color-scheme` 预置 class 防闪烁；`system` 模式监听系统偏好实时跟随。
+1. **P0-6 搜索高亮双主题配色二次优化**：亮色 `bg-amber-300 #fcd34d + text-amber-950 #451a03 + ring-amber-600/50`（深字+强描边，纸面可聚焦）；暗色 `bg-amber-400 #fbbf24 + text-ink-950 #111 + ring-amber-300/60 + 外发光`（黑字+荧光笔在深底最突出）；调 `globals.css --color-highlight*` 四变量（含新增 `--color-highlight-shadow`），`<mark>` 加 `px-[1px] rounded-[3px] shadow`；亮/暗各搜「qa」WCAG AA ≥4.5:1。
+2. **P2-6 复制与评分反馈不一致**：全局 `keydown` 评分快捷键在 `detailId || showSettings` 时整体屏蔽，弹窗内按钮聚焦按数字不再误评背景卡（守卫已存在，本轮确认完整）。
+3. **P2-7 空状态与离线态区分**：空状态区常驻同步态横幅（在线/离线/迁移中）+ 离线「重试连接」入口；初始同步重构为可重连 `connect()`，`serverOnline: boolean|null`。
+4. **P3-4 Composer 自适应高度**：`textarea` autoResize 至 `maxRows=6`，粘贴长文自动展开，不再手动拖高（`resize-y` → `resize-none`）。
+5. **P3-5 导入反馈加强**：`parseImport` 部分导入 + 报告跳过原因（`ImportResult.skipped`）；导入后 Toast 显示「成功 N / 跳过 M」+ 跳过原因详情列表（Toast 支持 `detail`）。
 
 ## 验收标准
 
@@ -35,8 +38,8 @@
 
 ## 进行中 / 待办
 
-- 本轮两项：P0-4 / P0-5（最高优先级，Builder 合并规划+实现，完成后待【节奏】触发 QA 验收）。
-- 不在本轮范围（保留候选池）：P2-11 批量管理、P2-3 `<md` 面板降级、P2-5 危险操作撤销、P2-7 空/离线态区分、P3-2 版本 diff、P3-4 Composer 自适应等，见 `docs/review/PRODUCT_BACKLOG.md`。
+- 本轮五项：P0-6 / P2-6 / P2-7 / P3-4 / P3-5（Token 高效版，仅改高亮三变量+守卫/文案，不动布局），完成后待【节奏】触发 QA 验收。
+- 不在本轮范围（保留候选池）：P2-11 批量管理、P2-3 `<md` 面板降级、P2-5 危险操作撤销、P3-2 版本 diff 等，见 `docs/review/PRODUCT_BACKLOG.md`。
 
 ---
 
@@ -69,3 +72,11 @@
 - 本轮 P0-4/P0-5 两项打包已交付并通过 QA 第八次与产品验收 PASS（2026-08-27，P0-6 二次配色待优化），详见 `docs/progress/CURRENT_STAGE.md` 与 `docs/handoff/HANDOFF.md`。
 - 实现：`types.ts` `confirmDelete` + `storage.ts` 持久化归一化 + `CardItem` 网格直删（条件 confirm，demo 隐藏）+ `SettingsModal` Switch；`globals.css` 高亮变量 + `html.light` 纸墨 + `layout.tsx` 防 FOUC + `page.tsx` 主题系统跟随 + `SettingsModal` 主题 select；自测 10 项、tsc/lint 零错误。
 - 下轮待排期：P0-6 高亮二次优化、P2-11/P2-3 等，见 `docs/review/PRODUCT_BACKLOG.md` 剩余候选池。
+
+---
+
+## 已收口（2026-08-27，P0-6/P2-6/P2-7/P3-4/P3-5 五合一，待提交）
+
+- 本轮五合一已交付（tsc 0 错误 / lint 0 错误；mcp 子包与 layout 的 tsc 报错为环境前置、未触碰），详见 `docs/progress/CURRENT_STAGE.md`。
+- 实现：`globals.css` 高亮四变量（暗色 `#fbbf24/#111111`+ring+外发光，亮色 `#fcd34d/#451a03`+ring）+ `CardItem` `<mark>` 加描边/阴影；`page.tsx` 确认 `detailId||showSettings` 评分守卫 + 同步重构为可重连 `connect()` + 空状态同步态横幅 + `notify` 支持 `detail` + 导入跳过详情；`Composer` autoResize `maxRows=6`；`storage.ts` `parseImport` 部分导入 + `skipped` 原因 + `describeCardFailure`；`Toast` 支持 `detail` 列表（6s）。
+- 下轮待排期：P2-11/P2-3 等，见 `docs/review/PRODUCT_BACKLOG.md` 剩余候选池。

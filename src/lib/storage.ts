@@ -39,6 +39,26 @@ export function isCard(v: unknown): v is Card {
   )
 }
 
+/** P3-5：描述单张卡片为何未通过 isCard 校验，用于导入跳过详情 */
+function describeCardFailure(v: unknown): string {
+  if (!v || typeof v !== 'object') return '不是合法的对象'
+  const x = v as Record<string, unknown>
+  const bad: string[] = []
+  if (!isString(x.id)) bad.push('id')
+  if (!isString(x.title)) bad.push('title')
+  if (!isString(x.body)) bad.push('body')
+  if (!isStringArray(x.tags)) bad.push('tags')
+  if (typeof x.rating !== 'number') bad.push('rating')
+  if (typeof x.copyCount !== 'number') bad.push('copyCount')
+  if (!(x.code === undefined || x.code === null || isString(x.code))) bad.push('code')
+  if (!(x.thinkingSummary === null || isString(x.thinkingSummary))) bad.push('thinkingSummary')
+  if (!(x.notes === undefined || isString(x.notes))) bad.push('notes')
+  if (!Array.isArray(x.versions) || !x.versions.every(isVersion)) bad.push('versions')
+  if (!isString(x.createdAt)) bad.push('createdAt')
+  if (!isString(x.updatedAt)) bad.push('updatedAt')
+  return bad.length ? `字段缺失/类型错误：${bad.join('、')}` : '结构不合法'
+}
+
 /** 归一化卡片：老数据缺 code/notes 字段时补默认值 */
 function normalizeCard(c: Card): Card {
   return { ...c, code: c.code ?? null, notes: typeof c.notes === 'string' ? c.notes : '' }
@@ -97,8 +117,10 @@ export function saveSettings(settings: Settings): void {
   schedulePush()
 }
 
+export type SkippedCard = { title: string; reason: string }
+
 export type ImportResult =
-  | { ok: true; cards: Card[]; settings: Settings | null }
+  | { ok: true; cards: Card[]; settings: Settings | null; skipped?: SkippedCard[] }
   | { ok: false; error: string }
 
 function parseMarkdownImport(raw: string): ImportResult | null {
@@ -119,13 +141,20 @@ function parseMarkdownImport(raw: string): ImportResult | null {
   }
 
   const cards: Card[] = []
+  const skipped: SkippedCard[] = []
   let current: DraftCard | null = null
   let section: 'meta' | 'body' | 'summary' | 'notes' | 'versions' | null = null
 
   function flush() {
     if (!current) return
     const body = normalizeBody(current.body.join('\n'))
-    if (!body) return
+    if (!body) {
+      // P3-5：正文为空的卡片不导入，记录跳过原因
+      skipped.push({ title: current.title || '(无标题)', reason: '正文为空' })
+      current = null
+      section = null
+      return
+    }
     cards.push({
       id: uid(),
       title: current.title,
@@ -209,8 +238,11 @@ function parseMarkdownImport(raw: string): ImportResult | null {
     }
   }
   flush()
-  if (cards.length === 0) return { ok: false, error: '未在文件中找到卡片数据' }
-  return { ok: true, cards, settings: null }
+  if (cards.length === 0) {
+    const reason = skipped.length > 0 ? `全部 ${skipped.length} 张卡片正文为空` : '未在文件中找到卡片数据'
+    return { ok: false, error: reason }
+  }
+  return { ok: true, cards, settings: null, skipped: skipped.length ? skipped : undefined }
 }
 
 export function buildMarkdownExport(cards: Card[]): string {
@@ -253,13 +285,29 @@ export function parseImport(raw: string): ImportResult {
   if (data && typeof data === 'object' && !Array.isArray(data)) {
     const root = data as Record<string, unknown>
     if (Array.isArray(root.cards)) {
+      // P3-5：部分导入——结构合法的卡片入库，非法的记录跳过原因而非整体失败
+      const valid: Card[] = []
+      const skipped: SkippedCard[] = []
       for (const c of root.cards) {
-        if (!isCard(c)) {
-          return { ok: false, error: '存在结构不合法或字段类型错误的卡片' }
+        if (isCard(c)) {
+          valid.push({ ...c, body: normalizeBody(c.body) })
+        } else {
+          const raw = c as Record<string, unknown>
+          const rawTitle = isString(raw.title) ? raw.title : ''
+          skipped.push({
+            title: rawTitle.trim() || '(无标题)',
+            reason: describeCardFailure(c),
+          })
+        }
+      }
+      if (valid.length === 0) {
+        return {
+          ok: false,
+          error: `全部 ${skipped.length} 张卡片结构不合法或字段类型错误`,
         }
       }
       const settings: Settings = normalizeSettings(root.settings)
-      return { ok: true, cards: root.cards.map((c) => ({ ...c, body: normalizeBody(c.body) })), settings }
+      return { ok: true, cards: valid, settings, skipped: skipped.length ? skipped : undefined }
     }
   }
   return parseMarkdownImport(raw) ?? { ok: false, error: '既不是有效的 JSON 备份，也不是 Markdown 备份' }

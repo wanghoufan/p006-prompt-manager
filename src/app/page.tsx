@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Card, Settings, SortMode } from '@/lib/types'
 import { loadCards, loadSettings, parseImport, saveCards, saveSettings, buildMarkdownExport, isServerAvailable, loadFromServer, pushToServer, subscribeSync } from '@/lib/storage'
 import { createCard, normalizeBody, rollbackToVersion, saveBodyOnly, saveBodyWithVersion } from '@/lib/cards'
@@ -54,17 +54,28 @@ export default function Home() {
   const [detailId, setDetailId] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [toastDetail, setToastDetail] = useState<string[] | null>(null)
   const [serverOnline, setServerOnline] = useState<boolean | null>(null)
+  // P2-7：实时同步订阅句柄，重连前先关闭旧订阅，避免 EventSource 叠加
+  const syncUnsubRef = useRef<(() => void) | null>(null)
 
-  const notify = useCallback((msg: string) => {
+  const notify = useCallback((msg: string, detail?: string[]) => {
     setToast(msg)
+    setToastDetail(detail && detail.length > 0 ? detail : null)
   }, [])
 
   useEffect(() => {
     if (!toast) return
-    const timer = window.setTimeout(() => setToast(null), 2200)
+    // 带详情列表（如导入跳过项）时延长展示，便于阅读
+    const timer = window.setTimeout(
+      () => {
+        setToast(null)
+        setToastDetail(null)
+      },
+      toastDetail && toastDetail.length > 0 ? 6000 : 2200,
+    )
     return () => window.clearTimeout(timer)
-  }, [toast])
+  }, [toast, toastDetail])
 
   // 全局搜索 300ms 防抖（纯前端过滤，无依赖）
   useEffect(() => {
@@ -91,55 +102,64 @@ export default function Home() {
   const isDemoView = view === 'demo'
   const sourceCards = isDemoView ? DEMO_CARDS : cards
 
-  useEffect(() => {
-    let unsub: (() => void) | null = null
-    let cancelled = false
-    const timer = window.setTimeout(async () => {
-      const serverOk = await isServerAvailable()
-      if (!serverOk) {
-        // 离线兜底：使用本机 localStorage 数据
-        if (cancelled) return
-        setServerOnline(false)
-        setCards(loadCards())
-        setSettings(loadSettings())
-        setHydrated(true)
-        notify('未连接同步服务，已使用本机本地数据（不同步）')
-        return
-      }
-      const remote = await loadFromServer()
-      if (cancelled) return
-      if (!remote) {
-        setServerOnline(false)
-        return
-      }
-      setServerOnline(true)
-      // 服务端为空但本机有数据：首次迁移上传，避免两边永远为空
-      if (remote.cards.length === 0) {
-        const local = loadCards()
-        if (local.length > 0) {
-          await pushToServer(local, loadSettings())
-          setCards(local)
-          setSettings(loadSettings())
-        }
-      } else {
-        setCards(remote.cards)
-        setSettings(remote.settings)
-      }
-      // 订阅实时同步：另一台电脑改动时自动拉取最新数据
-      unsub = subscribeSync((rc, rs) => {
-        if (cancelled) return
-        setCards(rc)
-        setSettings(rs)
-      })
+  // P2-7：统一的同步连接例程（首屏启动 + 「重试连接」复用）。
+  // 先关闭旧订阅避免 EventSource 叠加；serverOnline=null 表示连接中/迁移中。
+  const connect = useCallback(async () => {
+    if (syncUnsubRef.current) {
+      syncUnsubRef.current()
+      syncUnsubRef.current = null
+    }
+    setServerOnline(null)
+    const serverOk = await isServerAvailable()
+    if (!serverOk) {
+      // 离线兜底：使用本机 localStorage 数据
+      setServerOnline(false)
+      setCards(loadCards())
+      setSettings(loadSettings())
       setHydrated(true)
+      notify('未连接同步服务，已使用本机本地数据（不同步）')
+      return
+    }
+    const remote = await loadFromServer()
+    if (!remote) {
+      setServerOnline(false)
+      setHydrated(true)
+      return
+    }
+    setServerOnline(true)
+    // 服务端为空但本机有数据：首次迁移上传，避免两边永远为空
+    if (remote.cards.length === 0) {
+      const local = loadCards()
+      if (local.length > 0) {
+        await pushToServer(local, loadSettings())
+        setCards(local)
+        setSettings(loadSettings())
+      }
+    } else {
+      setCards(remote.cards)
+      setSettings(remote.settings)
+    }
+    // 订阅实时同步：另一台电脑改动时自动拉取最新数据
+    syncUnsubRef.current = subscribeSync((rc, rs) => {
+      setCards(rc)
+      setSettings(rs)
+    })
+    setHydrated(true)
+  }, [notify])
+
+  useEffect(() => {
+    // 延迟到计时器回调中执行，避免 effect 同步体内直接 setState（react-hooks/set-state-in-effect）
+    const timer = window.setTimeout(() => {
+      void connect()
     }, 0)
     return () => {
-      cancelled = true
       window.clearTimeout(timer)
-      if (unsub) unsub()
+      if (syncUnsubRef.current) {
+        syncUnsubRef.current()
+        syncUnsubRef.current = null
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [connect])
 
   useEffect(() => {
     if (!hydrated) return
@@ -400,7 +420,16 @@ export default function Home() {
       setSelectedTag(null)
       setSelectedId(null)
       setDetailId(null)
-      notify(`导入成功：${result.cards.length} 张卡片`)
+      // P3-5：导入结果 Toast + 跳过原因详情列表
+      const skipped = result.skipped ?? []
+      if (skipped.length > 0) {
+        notify(
+          `导入成功 ${result.cards.length} 张，跳过 ${skipped.length} 张`,
+          skipped.map((s) => `· ${s.title}：${s.reason}`),
+        )
+      } else {
+        notify(`导入成功：${result.cards.length} 张卡片`)
+      }
     }
     reader.onerror = () => notify('读取文件失败')
     reader.readAsText(file)
@@ -492,6 +521,26 @@ export default function Home() {
                 </div>
               ) : cards.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-line bg-ink-900/40 px-6 py-16 text-center">
+                  {/* P2-7 空/离线态区分：常驻同步态横幅，避免误判「真空」与「未连上服务端」 */}
+                  {!isDemoView && serverOnline === false && (
+                    <div className="flex w-full max-w-sm flex-col items-center gap-2 rounded-lg border border-rust/40 bg-rust/10 px-4 py-3">
+                      <span className="text-sm font-medium text-rust">同步服务离线</span>
+                      <p className="max-w-xs text-xs leading-relaxed text-muted">
+                        未连接到同步服务，当前显示本机缓存（共 {cards.length} 张本地卡片）。修改不会同步到其他设备。
+                      </p>
+                      <button type="button" className="btn px-3 py-1 text-xs" onClick={() => void connect()}>
+                        重试连接
+                      </button>
+                    </div>
+                  )}
+                  {!isDemoView && serverOnline === null && (
+                    <div className="w-full max-w-sm rounded-lg border border-line bg-ink-850 px-4 py-2 text-xs text-muted">
+                      正在连接同步服务…
+                    </div>
+                  )}
+                  {!isDemoView && serverOnline === true && (
+                    <div className="w-full max-w-sm text-[11px] text-muted">已连接同步服务</div>
+                  )}
                   <span className="font-serif text-2xl tracking-widest text-paper-dim">提示词库还是空的</span>
                   <p className="max-w-sm text-sm leading-relaxed text-muted">
                     在上方粘贴第一条提示词正文，AI 会自动生成标题与标签，建立你的专属提示词库。
@@ -577,7 +626,7 @@ export default function Home() {
           onClose={() => setShowSettings(false)}
         />
       )}
-      <Toast message={toast} />
+      <Toast message={toast} detail={toastDetail} />
     </div>
   )
 }

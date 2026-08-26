@@ -31,7 +31,7 @@ function highlightParts(text: string, query: string): ReactNode[] {
   while (idx !== -1) {
     if (idx > i) parts.push(text.slice(i, idx))
     parts.push(
-      <mark key={idx} className="rounded-[2px] bg-highlight text-highlight ring-1 ring-highlight-ring">
+      <mark key={idx} className="rounded-[3px] px-[1px] bg-highlight text-highlight ring-1 ring-highlight-ring shadow-[0_0_0_2px_var(--color-highlight-shadow)]">
         {text.slice(idx, idx + q.length)}
       </mark>,
     )
