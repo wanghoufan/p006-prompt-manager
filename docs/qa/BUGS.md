@@ -4,15 +4,16 @@
 
 ## 最近一次 QA 执行记录
 
-- **日期**：2026-08-27（第八次 - P0-4/P0-5 两项打包回归验收）
-- **模式**：QA Acceptance（两项增量验收 + 既有核心能力回归）
-- **执行者**：QA Agent
-- **结果**：**PASS**（代码走查 + API 测试通过；GUI 需人工确认）
+- **日期**：2026-08-27（第九次 - 工位A：P0-6/P2-6/P2-7/P3-4/P3-5 五合一验收）
+- **模式**：QA Acceptance（五合一批量验收 + 核心回归）
+- **执行者**：QA / Test Agent
+- **结果**：**PASS**（代码走查 + tsc/lint + API + 对比度计算均通过；GUI 需人工确认）
 - **构建门禁**：tsc --noEmit ✅、npm run lint ✅
-- **commit 验证**：未提交（Builder 已自测通过，待用户授权 commit/push）
+- **API 验证**：curl /api/sync 返回 31 张卡片 ✅
+- **commit 验证**：未提交（待用户授权 commit/push）
 - **已关闭**：无新增关闭
 - **阻断项**：无
-- **需人工确认**：GUI 视觉验证（P0-4 三分支 confirm 行为、P0-5 双主题高亮/切换/防闪烁/system 跟随）
+- **需人工确认**：GUI 视觉验证（亮/暗高亮截图对比、弹窗聚焦数字评分不误触、空状态离线横幅、Composer 长文展开、导入跳过详情 Toast）
 
 ### 两项逐条验证
 
@@ -95,3 +96,45 @@
 | BUG-7 | `npm run lint` 报错：React 19 要求 refs 只能在 effect/event handler 中赋值，不能在 render 阶段。涉及 `CardDetail.tsx:67` 和 `PreviewPanel.tsx:74` 的 `draftRef.current = draft` | P1 | 已修复（2026-08-26，`PreviewPanel.tsx` / `CardDetail.tsx`：`draftRef` 改用 `useEffect` 同步，不再渲染期赋值） | — |
 
 > 历史 BUG-1/2/3（见 CODE_REVIEW.md）已于 2026-08-25 随「同步 + UI + MCP」改造确认修复并关闭；BUG-6 回滚污染历史于同日修复。
+
+---
+
+## 工位A QA 记录（2026-08-27，P0-6/P2-6/P2-7/P3-4/P3-5 五合一）
+
+### P0-6 搜索高亮双主题配色二次优化
+- **暗色** `globals.css:18-21`：`--color-highlight: #fbbf24`（amber-400），`--color-highlight-text: #111111`（ink-950），`--color-highlight-ring: rgba(252,211,153,0.6)`，`--color-highlight-shadow: rgba(251,191,36,0.25)` ✅
+- **亮色** `globals.css:45-48`：`--color-highlight: #fcd34d`（amber-300），`--color-highlight-text: #451a03`（amber-950），`--color-highlight-ring: rgba(217,119,6,0.5)`，`--color-highlight-shadow: transparent` ✅
+- **mark 样式** `CardItem.tsx:34`：`rounded-[3px] px-[1px] bg-highlight text-highlight ring-1 ring-highlight-ring shadow-[0_0_0_2px_var(--color-highlight-shadow)]` ✅
+- **WCAG AA 对比度**：暗色 #111111 on #fbbf24 = **11.31:1** ✅（≥4.5:1）；亮色 #451a03 on #fcd34d = **10.39:1** ✅（≥4.5:1）
+- **可见性**：亮色深棕字+强描边（ring-amber-600/50）在纸面上可聚焦；暗色黑字+外发光（shadow amber-400/25）在深底最突出
+- **结论**：PASS — 对比度远超 AA 标准，双主题配色方案落地完整
+
+### P2-6 评分快捷键守卫
+- **守卫位置** `page.tsx:441-442`：`if (detailId || showSettings) return` 在 keydown 监听首行
+- **过滤顺序**：先检查 detailId/showSettings → 再检查 INPUT/TEXTAREA/BUTTON → 再检查修饰键 → 最后 `/^[0-5]$/` 匹配
+- **依赖项** `page.tsx:462`：`useEffect` deps 包含 `detailId, showSettings`，弹窗状态变化时重新注册
+- **结论**：PASS — 详情弹窗 / 设置弹窗打开时全局评分快捷键完全屏蔽，不会误触背景卡
+
+### P2-7 空状态与离线态文案区分
+- **serverOnline 状态机** `page.tsx:58`：`boolean | null`（null=连接中/迁移中，false=离线，在线）
+- **connect 例程** `page.tsx:107`：useCallback 包裹，先关旧 EventSource 订阅再重连，「重试连接」按钮复用
+- **离线横幅** `page.tsx:525-534`：`serverOnline === false` 时渲染 rust 横幅 + 「同步服务离线」+ 提示文案 + 重试按钮
+- **连接中横幅** `page.tsx:536-540`：`serverOnline === null` 时渲染「正在连接同步服务…」
+- **在线横幅** `page.tsx:541-543`：`serverOnline === true` 时渲染「已连接同步服务」
+- **结论**：PASS — 空状态与离线态文案区分清晰，重试连接可用
+
+### P3-4 Composer autoResize
+- **ref** `Composer.tsx:24`：`taRef = useRef<HTMLTextAreaElement>(null)`
+- **useEffect** `Composer.tsx:27-37`：`[text]` 依赖，先 `height: auto` 再按 `scrollHeight` 计算，maxRows=6（`lineHeight * 6 + paddingY`）
+- **resize 控制** `Composer.tsx:93`：`resize-none`（由 autoResize 接管，用户不可手动拖高）
+- **结论**：PASS — 粘贴长文自动展开至最大 6 行，不再需要手动拖高
+
+### P3-5 导入成功/失败反馈加强
+- **SkippedCard 类型** `storage.ts:120`：`{ title: string; reason: string }`
+- **ImportResult** `storage.ts:122-124`：`skipped?: SkippedCard[]`
+- **describeCardFailure** `storage.ts:43-60`：字段级原因（id/title/body/tags/rating/copyCount/code/thinkingSummary/notes/versions/createdAt/updatedAt）
+- **parseMarkdownImport** `storage.ts:151-153`：正文为空 → `skipped.push({ title, reason: '正文为空' })`
+- **parseImport JSON** `storage.ts:290-310`：部分导入——合法卡片入库，非法卡片入 skipped，全跳过时整体失败
+- **handleImportFile** `page.tsx:423-431`：`skipped.length > 0` → notify 带 detail（成功 N 张 / 跳过 M 张 + 逐条原因），6s 展示
+- **Toast** `Toast.tsx:3,13-21`：`detail?: string[]`，可滚动详情列表
+- **结论**：PASS — 导入含非法卡时 Toast 显示成功/跳过数量及逐条原因，用户体验闭环

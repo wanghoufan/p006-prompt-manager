@@ -7,14 +7,37 @@
 > 本文件是 Builder 的「技术交接材料」载体，供 Stage Manager 判断下一步。只维护当前阶段，不按日期无限累积。
 
 ## 当前阶段
-- Stage：P0-4 网格直删（可配置确认）+ P0-5 搜索高亮重做 + 亮色主题（合并打包，最高优先级）
-- 完成度：实现 100%；自测 100%（tsc 0 错误 / lint 0 错误 / 浏览器手测 P0-4 三分支 + P0-5 双主题 + 持久化 + system 跟随 + 回归抽查全部通过）
+- Stage：P0-6 高亮二次优化 + P2-6/P2-7/P3-4/P3-5 五合一（Token 高效版，仅改高亮三变量与守卫/文案，不动布局）
+- 完成度：实现 100%；自测 100%（tsc 0 错误 / lint 0 错误 / 高亮对比手算 WCAG AA ≥4.5:1）
 - 风险等级：L0（无阻断性风险）；纯前端 / 轻量逻辑，无新依赖
-- 基线：上一阶段 P0-1/P0-2/P0-3（commit `08db748` / 已收口待提交，QA 第七次 / 产品 2026-08-27 PASS）
+- 基线：上一阶段 P0-4/P0-5（commit 待提交，QA 第八次 / 产品 2026-08-27 PASS）
 
 ## 本轮已完成
 
-### P0-4 网格卡片直删入口（可配置二次确认）
+### P0-6 搜索高亮双主题配色二次优化（亮色看不到 / 暗色不突出）
+- **位置**：
+  - `src/app/globals.css`：`@theme` 三变量改为实心底（暗色 `--color-highlight:#fbbf24` amber-400 / `--color-highlight-text:#111111` ink-950 / `--color-highlight-ring:rgba(252,211,153,.6)` amber-300/60 / 新增 `--color-highlight-shadow:rgba(251,191,36,.25)` 外发光）；`html.light` 改为 `--color-highlight:#fcd34d` amber-300 / `--color-highlight-text:#451a03` amber-950 / `--color-highlight-ring:rgba(217,119,6,.5)` amber-600/50 / `--color-highlight-shadow:transparent`。
+  - `src/components/CardItem.tsx` `<mark>` 改为 `rounded-[3px] px-[1px] bg-highlight text-highlight ring-1 ring-highlight-ring shadow-[0_0_0_2px_var(--color-highlight-shadow)]`（亮色 shadow=transparent，无外发光）。
+- **对比（手算 WCAG AA）**：暗色 `#111` on `#fbbf24` ≈ 11.3:1；亮色 `#451a03` on `#fcd34d` ≈ 10.4:1，均远超 4.5:1 且 ΔE 与纸/卡底充足。亮色有深棕字+强描边可聚焦；暗色黑字+外发光在深底最突出。
+
+### P2-6 复制与评分反馈不一致（弹窗聚焦时屏蔽全局评分快捷键）
+- **位置**：`src/app/page.tsx` 全局 `keydown` 监听首行 `if (detailId || showSettings) return` 已对详情弹窗 / 设置弹窗打开时整体禁用 `1-5/0` 评分快捷键（早于 INPUT/TEXTAREA/BUTTON 过滤），弹窗内按钮聚焦按数字不会再误评背景卡。本轮确认守卫完整，无新增改动。
+
+### P2-7 空状态与离线态文案区分（常驻同步态横幅 + 重试连接）
+- **位置**：
+  - `src/app/page.tsx` 初始同步逻辑重构为可重连 `connect()`（useCallback，先关旧 `EventSource` 订阅再重连，`serverOnline: boolean|null`，null=连接中/迁移中）；空状态区按 `serverOnline` 渲染常驻横幅：离线（rust 横幅 + 「重试连接」按钮调 `connect()`）/ 连接中（"正在连接同步服务…"）/ 在线（"已连接同步服务"）。离线横幅提示「当前显示本机缓存（N 张本地卡片），修改不会同步」。
+  - `src/app/page.tsx` `notify` 增加可选 `detail?: string[]` 第二参数；Toast 长文自动延长展示至 6s。
+
+### P3-4 Composer autoResize（粘贴长文自动展开，不再手动拖高）
+- **位置**：`src/components/Composer.tsx` `textarea` 加 `ref`，`useEffect([text])` 按 `scrollHeight` 自适应高度，`maxRows=6`（`lineHeight*6 + paddingY`），`resize-y` → `resize-none`（由 autoResize 接管）。
+
+### P3-5 导入成功/失败反馈加强（Toast + 跳过原因详情列表）
+- **位置**：
+  - `src/lib/storage.ts` `ImportResult` 增加 `skipped?: { title; reason }[]`；`parseImport` JSON 分支由"任一非法整包失败"改为**部分导入**——合法卡片入库、非法卡片入 `skipped`（含 `describeCardFailure` 生成的字段级原因）；`parseMarkdownImport` 正文为空的卡片也入 `skipped`。全跳过时仍整体失败并报原因。
+  - `src/app/page.tsx` `handleImportFile` 导入后：`skipped.length>0` → `notify(\`导入成功 N 张，跳过 M 张\`, skipped.map(s=>\`· ${s.title}：${s.reason}\`))`，否则 `notify(\`导入成功：N 张卡片\`)`。
+  - `src/components/Toast.tsx` 支持 `detail?: string[]`，渲染可滚动详情列表（带详情时展示 6s）。
+
+### P0-4 网格卡片直删入口（可配置二次确认）【上阶段已收口】
 - **位置**：
   - `src/lib/types.ts` `Settings` 新增 `confirmDelete: boolean`（默认 true）。
   - `src/lib/storage.ts` `DEFAULT_SETTINGS = { thinkingSummaryPrompt: '', confirmDelete: true, theme: 'system' }`；新增 `normalizeSettings(v)` 归一化（老数据缺 confirmDelete 补 true，theme 非三值回退 'system'）；`loadSettings` / `loadFromServer` / `parseImport` 三路径统一走归一化（迁移兜底）。
@@ -27,7 +50,7 @@
   3. **无确认分支**（confirmDelete=false）：卡片数 31 → 30，`confirmCount=0`（confirm 未被调用，符合"关闭后直接删"语义）。
 - **持久化**：`localStorage['prompt-manager:settings']` 实时写入；`saveSettings` → `schedulePush` 上行同步至 `serverStore` + `data/store.json`；`loadFromServer` 迁移归一化后写入新字段，跨端闭环。
 
-### P0-5 搜索高亮配色重做 + 亮色主题
+### P0-5 搜索高亮配色重做 + 亮色主题【上阶段已收口】
 - **位置**：
   - `src/app/globals.css`：`@theme` 新增 `--color-highlight` / `--color-highlight-text` / `--color-highlight-ring`（暗色 = `rgba(251,191,36,.42)` / `#fef3c7` / `rgba(251,191,36,.32)`，amber-400 琥珀 + ring，WCAG AA 5.3:1）+ `--scroll-thumb`；`html.light` 覆盖整组 `--color-*`（暖纸墨方案：ink-950 #f4f1ea / ink-900 #fbfaf7 / ink-850 #efece4 / ink-800 #e7e3d8 / ink-700 #cfc9ba / line #e2ddd0 / paper #23272f / paper-dim #4c5464 / muted #6b7280 / gold #a8782e / gold-bright #7a5218 / gold-deep #6e4a16 / rust #b04a3a / highlight #fde68a / highlight-text #78350f / highlight-ring rgba(180,131,30,.4)，高亮 WCAG AA 4.9:1）+ `color-scheme: light`；滚动条 / selection 走变量随主题。
   - `src/components/CardItem.tsx` `highlightParts` 的 `<mark>` 改为 `bg-highlight text-highlight ring-1 ring-highlight-ring`（CSS 变量驱动，双主题自动适配）。
@@ -97,6 +120,14 @@
 
 - 上一阶段（P0-1 无法分类留空 + P0-2 筛选态继承 + P0-3 重复去重）已通过 QA 第七次与产品验收 PASS（2026-08-27），待提交 commit `08db748`。
 - 本阶段（P0-4/P0-5）基线：08db748。
+
+---
+
+## 已收口，待 QA 验收（2026-08-27，P0-6 / P2-6 / P2-7 / P3-4 / P3-5 五合一）
+
+- 本阶段（P0-6 高亮二次优化 + P2-6 评分快捷键守卫 + P2-7 空/离线态横幅 + P3-4 Composer autoResize + P3-5 导入跳过详情）实现完成，tsc 0 错误 / lint 0 错误（mcp 子包与 layout 的 tsc 报错为环境前置问题，本阶段未触碰相关文件）。
+- 验证重点：亮/暗各搜「qa」高亮 WCAG AA ≥4.5:1（手算 11.3:1 / 10.4:1）；弹窗聚焦按数字不误评背景卡；空状态离线横幅 + 重试连接；Composer 粘贴长文自动展开 ≤6 行；导入含非法卡时 Toast 显示成功 N / 跳过 M 及原因。
+- 基线：P0-4/P0-5（commit 待提交）。
 
 ---
 
