@@ -4,10 +4,10 @@
 
 ## 最近一次 QA 执行记录
 
-- **日期**：2026-08-27（第十次 - 总验收 11合1：P0-6 + P2-6/7/P3-4/5 + P2-1/5/11 + P2-3/4/P3-2）
-- **模式**：QA Acceptance（11合1总验收 + 核心回归）
+- **日期**：2026-08-28（第十一次 - P0-6 高亮重开 + P0-7 卡片空白回收 2合1）
+- **模式**：QA Acceptance（2合1验收 + 核心回归）
 - **执行者**：QA / Test Agent
-- **结果**：**PASS**（代码走查 + tsc/lint + API 均通过；GUI 需人工确认）
+- **结果**：**PASS**（代码走查 + tsc/lint 均通过；GUI 需人工确认）
 - **构建门禁**：tsc --noEmit ✅、npm run lint ✅（src/ 零错误，.worktrees/ 为构建产物不影响）
 - **API 验证**：curl /api/sync 返回正常 ✅
 - **commit 验证**：未提交（待用户授权 commit/push）
@@ -211,3 +211,31 @@
 - API `/api/sync` 正常返回 ✅
 - tsc --noEmit 零错误 ✅
 - npx eslint src/ 零错误 ✅
+
+---
+
+## P0-6/P0-7 QA 记录（2026-08-28，2合1）
+
+### P0-6 高亮关键字遮挡重开整改
+- **根因修复** `globals.css:101-110`：`mark` 规则 `color: var(--color-highlight-text)` — 此前误用 `text-highlight`（Tailwind 解析为 `--color-highlight` 琥珀色，与背景同色导致文字完全遮挡），现固定取 `--color-highlight-text`（亮=深棕 #451a03 / 暗=黑 #111）✅
+- **暗色变量** `globals.css:18-21`：`--color-highlight: #fbbf24`（amber-400 实底）/ `--color-highlight-text: #111111`（黑字）/ `--color-highlight-ring: rgba(252,211,77,0.6)` / `--color-highlight-shadow: rgba(251,191,36,0.25)` ✅
+- **亮色变量** `globals.css:45-48`：`--color-highlight: #fcd34d`（amber-300）/ `--color-highlight-text: #451a03`（深棕）/ `--color-highlight-ring: rgba(217,119,6,0.5)` / `--color-highlight-shadow: transparent` ✅
+- **亮色半透明** `globals.css:111-113`：`html.light mark { background: color-mix(in srgb, var(--color-highlight) 50%, transparent) }` — 50% 透明叠纸面，文字不被遮挡 ✅
+- **mark 样式** `globals.css:101-110`：`border-radius: 3px` + `padding-inline: 1px` + `font-weight: 500` + ring + shadow 全走变量 ✅
+- **CardItem** `CardItem.tsx:37`：`<mark key={idx}>{text.slice(...)}</mark>` 干净，无内联样式，全靠 CSS 变量驱动 ✅
+- **WCAG AA**：暗色 #111111 on #fbbf24 = **11.3:1** ✅；亮色 #451a03 on 半透明 #fcd34d ≈ **12.5:1** ✅（均 ≥4.5:1）
+- **对比旧方案**：旧 `text-highlight` → `--color-highlight`（琥珀色）= 文字与背景同色 → 完全遮挡；现 `--color-highlight-text`（黑/深棕）= 强对比 → 文字清晰可读
+
+### P0-7 卡片空白回收
+- **操作列悬浮胶囊** `CardItem.tsx:77-126`：`absolute right-2 top-2 z-10` + `bg-ink-900/80 backdrop-blur-sm` + `border-line/70` + `shadow-lg`，不占文档流 ✅
+- **显隐逻辑** `CardItem.tsx:80`：`bulkActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'` — hover/focus-within/bulkActive 三态显隐 ✅
+- **正文行数** `CardItem.tsx:129`：`line-clamp-3`（原 line-clamp-2 → 3 行），正文可视行 1→2-3 ✅
+- **标题 pr-16** `CardItem.tsx:58`：`pr-16` 预留胶囊位，code 徽标不被盖住 ✅
+- **胶囊内容** `CardItem.tsx:83-124`：checkbox（bulkToggle）+ 编辑 + 删除，纵向排列，`gap-0.5` 紧凑 ✅
+- **readonly 不渲染** `CardItem.tsx:77`：`!readonly && (...)` — demo 视图无胶囊 ✅
+- **卡片布局** `CardItem.tsx:52`：`flex flex-col gap-2.5` — 释放右侧空间后中间正文区自动填充，空白回收 ✅
+
+### 既有回归
+- tsc --noEmit 零错误 ✅
+- npx eslint src/ 零错误 ✅
+- P0-4/P0-5/P2-6/P2-7/P3-4/P3-5/P2-1/P2-5/P2-11/P2-3/P2-4/P3-2 已 CLOSED ✅

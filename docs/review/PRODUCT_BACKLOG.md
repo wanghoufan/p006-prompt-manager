@@ -2,26 +2,18 @@
 
 > 产品体验审查员（Product Reviewer）维护的优化候选池。已完成事项应及时移除，勿与 `CODE_REVIEW.md` 混淆。
 
-## 最近一次 Product 执行记录（总验收 11合1）
+## 最近一次 Product 执行记录（2合1）
 
-- 时间：2026-08-27（产品验收 + 视觉验收 — 总验收 11合1）
+- 时间：2026-08-28（产品验收 + 视觉验收 — P0-6 高亮重开 + P0-7 空白回收 2合1）
 - 模式：Product Reviewer · 产品验收 + 视觉验收（Token高效版）
-- 结果：**PASS** — 11项全通过，无新增 P1 阻断项
-- 输入：`docs/progress/CURRENT_STAGE.md:7-14`「11合1」小节（P0-6/P2-6/P2-7/P3-4/P3-5 +P2-1/P2-5/P2-11 +P2-3/P2-4/P3-2） / `docs/review/PRODUCT_BACKLOG.md:25-196` 11标题段各一小段（已CLOSED只读结论） / 定点源码 `src/app/page.tsx`（relevanceScore/visibleCards/handleDeleteTag） `src/app/globals.css:17-48`（highlight变量+html.light） `src/components/Toast.tsx`（detail+撤销） `src/components/PreviewPanel.tsx:抽屉onClose` `src/components/VersionDiff.tsx` `src/lib/diff.ts` `src/components/Composer.tsx:自适应` / 视觉 Vision 必选（亮/暗高亮截图对比、撤销Toast、批量、抽屉显隐、备注切卡、版本diff展开、导入跳过详情、Composer6行） + 实时探活 `localhost:3000 200` `/api/sync 200`
-- 体验方式：Vision（11项抽查截图）+ 定点走查（≤4000 token）+ 探活；未改业务代码/UI，未提交 Git；已CLOSED项（P0-4/5/P2-8/9等）只读结论不重查
-- 覆盖维度（11项）：
-  1. P0-6 高亮：亮 WCAG≥4.5:1深字强描边可见、暗黑字外发光突出，对比旧gold/30显著提升
-  2. P2-6 评分守卫：弹窗内键盘评分不透传背景卡
-  3. P2-7 空/离线横幅：空态与离线文案区分、可恢复
-  4. P3-4 Composer自适应：6行内自适应展开无滚动遮挡
-  5. P3-5 导入详情：Toast detail+跳过数可追溯
-  6. P2-1 版本节流：失焦不建版、手动建版、节流合并
-  7. P2-5 撤销10s：删除/清空双功能Toast detail + 10s撤销
-  8. P2-11 批量：多选+批量删除/标签等
-  9. P2-3 移动端抽屉：`md:hidden`→抽屉onClose显隐正确
-  10. P2-4 备注防丢：700ms防抖切卡不丢
-  11. P3-2 版本diff：VersionDiff展开高亮对比
-- 结论：11项已验证通过，移入「已完成」；无新增 P1，阻断项：无；待总工程收尾
+- 结果：**PASS** — 2项全通过，无新增 P1 阻断项
+- 输入：`docs/progress/CURRENT_STAGE.md:7-18`「2合1」小节（P0-6重开整改+ P0-7胶囊，10项手测L0） / `docs/review/PRODUCT_BACKLOG.md:32-54` P0-6重开段（2026-08-28最新反馈色块完全覆盖文字） + P0-7空白段（悬浮胶囊/3行/pr-16） / 定点源码 `src/components/CardItem.tsx:28-37,57-77`（mark→--color-highlight-text + 胶囊悬浮） + `src/app/globals.css:17-50,95-113`（highlight四变量+mark修复+亮50%半透明） / 视觉 Vision 必选（亮/暗高亮文字可读 + 胶囊hover + 正文3行 + code不被盖，截图p06-light-qa-v2/p06-dark-qa-final/p07-dark-grid） + 实时探活 `localhost:3000 200`
+- 体验方式：Vision（3张截图复核）+ 定点走查（≤4000 token）+ 探活；未改业务代码/UI，未提交 Git；已CLOSED只读结论不重查
+- 覆盖维度（2项）：
+  1. P0-6 高亮：mark文字由 --color-highlight（琥珀同背景）→ --color-highlight-text（亮深棕#451a03/暗黑#111）修复，亮半透明50%+深棕字强描边、暗实底amber-400+黑字外发光，文字清晰可读不被遮挡，亮≈12.5:1暗≈11.3:1均≥WCAG AA 4.5:1
+  2. P0-7 空白：操作列absolute胶囊`bg-ink-900/80 backdrop-blur`不占流`hover/focus-within/bulkActive`显隐，正文line-clamp 2→3，标题pr-16让位code徽标，卡片紧凑空白回收
+  3. 回归：P0-4/5网格直删高亮双主题、P2-8相关度等无退化
+- 结论：P0-6 / P0-7 已验证通过，移入「已完成」；无新增 P1，阻断项：无；待工程收尾
 
 ---
 
@@ -29,29 +21,14 @@
 
 > 规则：此 P0 段为**最高优先级**，高于一切 P1/P2/P3；后续新增用户反馈均置顶于此，进入当前 PLAN 即时排期。
 
-### P0-6 搜索高亮双主题配色二次优化（亮色看不到关键词、暗色突出不明显，2026-08-27 二次反馈）— CLOSED 2026-08-27（五合一），2026-08-28 最新反馈需重开
-- 问题：`P0-5` 已落地的高亮（暗色 `bg-amber-400/42 + #fef3c7`；亮色 `bg-amber-200 #fde68a + #78350f`）经 2026-08-27 真机对比仍不达标。截图反馈：① 亮色（Image 1）：米白纸面 `#fbfaf7` 上浅黄高亮几乎与背景同化，「qa」关键词被黄色块覆盖后文字对比消失，边框无 ring 导致无法聚焦；② 暗色（Image 2）：深灰卡片上琥珀高亮与卡片描边/标签金色同族，`QA` 关键词未提亮（仍深色文字或同色），扫视时淹没在卡片群中，突出度不足。
-- **2026-08-28 最新反馈（Image 1/2 二次截图）**：当前高亮（`--color-highlight: #fbbf24 / #fcd34d`）在实机中**关键字被色块完全遮挡看不到**——亮色下「qa」被浅黄块覆盖文字消失，暗色下「QA」被琥珀块覆盖文字同化，色块不透明且无文字提亮。需重开为 P0 最高整改，纳入下一轮。
-- 用户场景：用户在亮色搜「qa」时 6 个命中块中关键词找不着；在暗色搜「qa」时 16 命中中首屏 6 张卡的高亮与标签/标题金色混淆；最新截图中搜索命中词完全被覆盖。
-- 建议方案：复用 `frontend-design` Skill 二次调优（不推翻 `P0-5` 双主题变量体系，仅调 `--color-highlight*` 三变量）：
-  1. 亮色：高亮改为**深色字 + 强描边**（如 `bg-amber-300 #fcd34d + text-amber-950 #451a03 + ring-amber-600/50 ring-1 + font-medium`），或用 `bg-orange-200 + text-orange-900` 与纸面拉开；在 `CardItem.tsx` `<mark>` 上加 `px-[1px] + rounded-[3px]` 提升块面积。
-  2. 暗色：高亮改为**提亮文字 + 外发光**（如 `bg-amber-400 + text-ink-950 #111 + ring-amber-300/60 shadow-[0_0_0_2px_rgba(251,191,36,.25)]`），让关键词在深底上形成“荧光笔+黑字”最强对比；或试 `bg-yellow-300 + text-zinc-900`。
-  3. 验证：亮/暗各搜「qa」/「产品」后截图对比，**命中文字必须清晰可读（色块半透明 + 文字高对比）**，WCAG AA ≥4.5:1，色块与背景 ΔE ≥30；首屏命中块扫视 1s 内可定位，**关键字不被遮挡**。
-- 预期收益：亮色可见、暗色突出，搜索首要价值闭环；**关键字可读为硬验收**。
-- 实现成本：低（仅变量调优 + `<mark>` 样式，不动布局）
-- 优先级：P0（用户反馈最高，`P0-5` 二次优化，2026-08-28 重开整改）
-
-### P0-7 卡片网格加入删除键后中间空白过大，正文可视行被压缩（2026-08-27 截图反馈）
-- 问题：`P0-4` 在 `src/components/CardItem.tsx` 右上垂直叠放「编辑 + 删除」两按钮后，卡片右侧操作列固定高度（`flex-col gap`），导致中间正文区（`line-clamp-2` 的 2 行预览 + `···`）下方出现大段空白（截图：标题「开发节奏与质量门控决策…」→ 右上编辑/删除 → 中间仅 1 行「【节奏】」→ 大空白 → 标签/星级）。原来 2 行正文可更充分利用卡片纵向空间，现有布局浪费。
-- 用户场景：用户在网格扫视时，卡片中部空白导致单屏可读信息密度下降，本可多展示 1 行正文却被按钮列挤占。
-- 建议方案：调用 `frontend-design` 优化 `CardItem` 布局，目标“正文多显示、空白回收、操作可达不减”：
-  1. 操作列改为**悬浮覆盖**（`absolute top-2 right-2` + `bg-ink-900/80 backdrop-blur` 小胶囊，`group-hover` 显隐），不占文档流，释放右侧纵向空间
-  2. 或改为**单行横向**（`flex gap-1` 横排编辑/删除，置于标题行右侧或底部操作行与“复制”并列），减少纵向占位
-  3. 正文区 `line-clamp` 由 2 行提至 3 行（或 `min-h` 自适应），或当无操作列占位时自动填充
-  4. 验证：同数据对比截图，单卡正文可视行从 1 行提升至 2-3 行，卡片总高度不变或更紧凑，hover 时操作仍可达。
-- 预期收益：单卡信息密度提升，网格扫视效率回升。
-- 实现成本：低（纯布局/样式，不改数据流）
-- 优先级：P0（用户反馈最高，截图直观）
+### P0-8 标签体系完善（重命名自动修正为首，待调研 flomo 后定方向，2026-08-27 记录）
+- 问题：当前标签仅支持 AI 生成/手动输入与 `P2-9` 删除（批量从卡片移除），**标签重命名、合并、层级、筛选联动**等体系化能力缺失；用户已明确首需：选中标签重命名时，带有该标签的所有笔记应自动修正为新标签。
+- 用户场景：用户选中左侧「vpn代理」重命名为「代理配置」时，期望 1 张卡的 `tags: ['vpn代理']` 自动变为 `['代理配置']`（批量原子更新，`updatedAt` 同步），无需逐卡手动改。用户原话：“标签重命名。当我选中一个标签并重命名时，带有该标签的笔记，其标签应该自动修正过来。”
+- 调研任务（优先级 P0 前置）：调研 flomo 标签体系 — 入口 `https://flomoapp.com` / 帮助文档 / WebApp 实测，重点清单：重命名（含批量静默修正）、合并/拆分、层级/嵌套、标签页筛选+新建继承（已做 P0-2）、标签计数与排序、回收站、快捷输入 `#tag` 联想、批量管理联动 `P2-11`。产出 `docs/review/flomo-tags-research.md`（未建），再与用户讨论确定下一方向。
+- 建议方案（待调研后细化）：`TagPanel` 选中标签行加“重命名”入口（✎ hover），`prompt` 输入新标签名（`normalizeTags` 单标签校验，判重/空/非法），`handleRenameTag(old, next)` 批量 `cards.map(c => c.tags.includes(old) ? {...c, tags: c.tags.map(t=>t===old?next:t) 去重截断} : c)`；若 `next` 已存在则为合并语义（去重后同卡去重）。调研后视需追加层级等。
+- 预期收益：标签体系从“增删”升级为“治理”，批量维护闭环。
+- 实现成本：中（调研 + 批量更新 + 去重/校验，单工位可闭环）
+- 优先级：P0（用户反馈最高，调研后即时排期，已记录 2026-08-27）
 
 ---
 
@@ -272,3 +249,5 @@
 - **P0-4 网格卡片直删（可配置确认）**（2026-08-27 完成：`types.ts:27`+`storage.ts:66,70-78` `confirmDelete`默认true+normalize+`types`/`storage`/`page`三路径持久化；`CardItem.tsx:17-98` `onDelete`+编辑下垂直删除`text-rust` hover/focus-visible+demo隐藏；`page.tsx:352-360` 条件confirm+三分支+`SettingsModal.tsx:53-77` Switch即存合并保存）
 - **P0-5 搜索高亮重做+亮色主题**（2026-08-27 完成：`globals.css:17-48` 双主题变量amber高亮暗琥珀42%+亮荧光笔+`html.light`纸墨；`CardItem.tsx:34` mark走变量；`layout.tsx:11,15-19` 防FOUC内联+suppressHydrationWarning；`page.tsx:40-44,77-89` 主题state+system监听+初始一致；`SettingsModal.tsx:78-94` select即存；搜qa亮/暗16命中高对比）
 - **11合1 总验收（P0-6/P2-6/P2-7/P3-4/P3-5/P2-1/P2-5/P2-11/P2-3/P2-4/P3-2）**（2026-08-27 完成：P0-6亮/暗WCAG≥4.5:1高亮二次优化、P2-6评分守卫弹窗内屏蔽、P2-7空/离线横幅区分、P3-4 Composer自适应6行、P3-5导入Toast detail+跳过详情、P2-1版本节流失焦不建版、P2-5撤销Toast detail+10s撤销栈、P2-11批量多选、P2-3移动端抽屉onClose显隐、P2-4备注700ms防丢切卡、P3-2 VersionDiff高亮展开；Vision 11项抽查+定点走查+探活，Token高效版）
+- **P0-6 高亮重开整改（遮挡修复）**（2026-08-28 完成：`globals.css:95-113` mark根因 `text-highlight`→`--color-highlight-text` 修复，亮`--color-highlight:#fcd34d` + `html.light mark` 50%半透明 + `color:var(--color-highlight-text)#451a03` 深棕强描边，暗`--color-highlight:#fbbf24`实底+`#111`黑字+`--color-highlight-ring/box-shadow`外发光，亮≈12.5:1暗≈11.3:1≥AA；`CardItem.tsx:37` mark无类名走全局mark）
+- **P0-7 卡片空白回收**（2026-08-28 完成：`CardItem.tsx:57-77,129` 胶囊`absolute right-2 top-2` `bg-ink-900/80 backdrop-blur` `hover/focus-within/bulkActive`显隐不占流，标题`pr-16`让位code徽标，`line-clamp-2→3`正文多1行，卡片紧凑）

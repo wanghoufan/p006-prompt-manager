@@ -24,7 +24,7 @@ interface CardItemProps {
 
 /** 把文本按关键词拆分为片段数组：非命中片段为纯文本节点，命中片段包 <mark>。
  *  全程只渲染文本节点，绝不使用 dangerouslySetInnerHTML，天然免疫 XSS。
- *  高亮样式走 CSS 变量 --color-highlight / --color-highlight-text（P0-5 双主题自适应）。 */
+ *  高亮样式集中在 globals.css 的 mark 规则（--color-highlight* 四变量，P0-6 双主题高对比）。 */
 function highlightParts(text: string, query: string): ReactNode[] {
   if (!query) return [text]
   const q = query.toLowerCase()
@@ -34,11 +34,7 @@ function highlightParts(text: string, query: string): ReactNode[] {
   let idx = lower.indexOf(q, i)
   while (idx !== -1) {
     if (idx > i) parts.push(text.slice(i, idx))
-    parts.push(
-      <mark key={idx} className="rounded-[3px] px-[1px] bg-highlight text-highlight ring-1 ring-highlight-ring shadow-[0_0_0_2px_var(--color-highlight-shadow)]">
-        {text.slice(idx, idx + q.length)}
-      </mark>,
-    )
+    parts.push(<mark key={idx}>{text.slice(idx, idx + q.length)}</mark>)
     i = idx + q.length
     idx = lower.indexOf(q, i)
   }
@@ -58,7 +54,8 @@ export function CardItem({ card, selected, readonly = false, query = '', onSelec
       }`}
       title={readonly ? '双击查看详情（只读）' : undefined}
     >
-      <div className="flex items-start justify-between gap-2">
+      {/* P0-7 标题行右侧预留胶囊位（pr-16），操作胶囊悬浮时不再挤压标题/正文 */}
+      <div className="flex items-start justify-between gap-2 pr-16">
         <h3 className="min-w-0 flex-1 truncate text-sm font-medium text-paper" title={card.title}>
           {highlightParts(card.title, match)}
         </h3>
@@ -75,56 +72,61 @@ export function CardItem({ card, selected, readonly = false, query = '', onSelec
             示例
           </span>
         )}
-        {!readonly && (
-          <div className="flex shrink-0 flex-col items-end gap-0.5">
-            {onBulkToggle && (
-              <button
-                type="button"
-                role="checkbox"
-                aria-checked={bulkSelected}
-                title={bulkSelected ? '取消多选' : '加入多选'}
-                className={`flex h-4 w-4 items-center justify-center rounded border text-[10px] leading-none transition-opacity focus-visible:opacity-100 ${
-                  bulkSelected
-                    ? 'border-gold bg-gold text-ink-950'
-                    : 'border-ink-700 bg-ink-900 text-transparent hover:border-gold/60'
-                } ${bulkSelected || bulkActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onBulkToggle(card.id)
-                }}
-              >
-                ✓
-              </button>
-            )}
+      </div>
+      {/* P0-7 操作列悬浮胶囊：absolute 不占文档流，group-hover / 批量激活时显隐，回收中间空白 */}
+      {!readonly && (
+        <div
+          className={`absolute right-2 top-2 z-10 flex flex-col items-end gap-0.5 rounded-md border border-line/70 bg-ink-900/80 p-1 shadow-lg backdrop-blur-sm transition-opacity ${
+            bulkActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'
+          }`}
+        >
+          {onBulkToggle && (
             <button
               type="button"
-              className="btn-ghost opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+              role="checkbox"
+              aria-checked={bulkSelected}
+              title={bulkSelected ? '取消多选' : '加入多选'}
+              className={`flex h-4 w-4 items-center justify-center rounded border text-[10px] leading-none transition-opacity ${
+                bulkSelected
+                  ? 'border-gold bg-gold text-ink-950'
+                  : 'border-ink-700 bg-ink-900 text-transparent hover:border-gold/60'
+              } ${bulkSelected || bulkActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
               onClick={(e) => {
                 e.stopPropagation()
-                onOpen()
+                onBulkToggle(card.id)
               }}
             >
-              编辑
+              ✓
             </button>
-            {onDelete && (
-              <button
-                type="button"
-                className="btn-ghost text-rust opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 hover:bg-rust/10"
-                title="删除卡片"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onDelete(card.id)
-                }}
-              >
-                删除
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+          )}
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={(e) => {
+              e.stopPropagation()
+              onOpen()
+            }}
+          >
+            编辑
+          </button>
+          {onDelete && (
+            <button
+              type="button"
+              className="btn-ghost text-rust hover:bg-rust/10"
+              title="删除卡片"
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete(card.id)
+              }}
+            >
+              删除
+            </button>
+          )}
+        </div>
+      )}
       {card.body && (
         <p
-          className="line-clamp-2 min-w-0 whitespace-pre-wrap text-xs leading-relaxed text-paper-dim/80"
+          className="line-clamp-3 min-w-0 whitespace-pre-wrap text-xs leading-relaxed text-paper-dim/80"
           title={card.body}
         >
           {highlightParts(card.body, match)}

@@ -3,7 +3,7 @@
 > 一个本地网页端的**提示词知识库 + Agent 接口**：把常用提示词沉淀成可检索的卡片，复制即统计，支持跨设备实时同步，并可通过 **MCP** 让 WorkBuddy 等 AI Agent 用「调取码」一键把任意卡片注入为系统提示词直接执行。
 
 ![首页截图](docs/screenshots/home.png)
-> 截图为 2026-08-27 前版本（搜索框/标签×/格式规范化/网格删除/主题等新增 UI 以实际页面为准）。
+> 截图为 2026-08-28 前版本（搜索框/标签×/网格悬浮胶囊/高亮文字可读等新增 UI 以实际页面为准）。
 
 ## 🤔 为什么需要它
 
@@ -39,11 +39,11 @@
 | 星级评分 | 点击 `1`~`5` 打星、`0` 清除 |
 | 标签筛选 | 左侧标签面板单选筛选（再点取消），按数量排序；筛选态下新建卡片默认携带当前选中标签（强制首位，其余 AI 标签去重补充，最多 3 个；「全部」与 demo 视图不强制） |
 | 标签管理 | 标签行 hover 显示 ×（键盘 focus-visible 可达），点击 confirm「将从 N 张卡片中移除标签…卡片本身不会删除」→ 批量从所有含该标签的卡片移除该条目（原文不动），计数归 0 自动消失；demo 视图隐藏 × |
-| 网格直删 | 卡片 hover 时「编辑」下出现 `text-rust` 删除（`group-hover`/`focus-visible` 显示，`stopPropagation`），按 `Settings.confirmDelete` 决定是否 `window.confirm`「确定删除「{title}」？此操作不可撤销。」；预览/详情共用同一 `handleDeleteCard`；demo 隐藏；设置中 Switch 即存可关闭二次确认 |
+| 网格直删 | 卡片 hover 时悬浮胶囊 `absolute top-2 right-2 bg-ink-900/80 backdrop-blur`（`group-hover`/`focus-within`/`bulkActive` 显隐）内含多选/编辑/删除，`text-rust` 删除按 `Settings.confirmDelete` 决定是否 `window.confirm`「确定删除「{title}」？此操作不可撤销。」；标题 `pr-16` 预留位 code 徽标不被盖，正文 `line-clamp-3` 空白回收；demo 隐藏；设置中 Switch 即存 |
 | 排序 | 按更新时间 / 复制次数 / 评分降序；搜索激活时按相关度（标题 4/调取码·标签 3/备注 2/正文 1）置顶，同分二级排序 |
 | 格式规范化 | 保存时自动 `normalizeBody`：逐行去前导 tab、纯空白归一、非空行前导空格最多保留 4 个、去首尾空行、合并连续空行（`\\n{3,}`→`\\n\\n`）；导入（JSON/Markdown）路径同步规范化，保证全篇左对齐 |
 | 重复去重 | 新建提交前 `normalizeBody` 全等比对，命中已有内容弹 `confirm`「检测到内容已存在（标题「X」），是否仍要添加？」— 取消不新增、确认继续；空内容/不同内容不弹，首个命中仅一次 |
-| 搜索高亮 | `--color-highlight`/`--color-highlight-text`/`--color-highlight-ring`/`--color-highlight-shadow` 变量驱动，暗色 `#fbbf24/#111111` 11.31:1 / 亮色 `#fcd34d/#451a03` 10.39:1 高对比二次优化（`rounded-[3px] px-[1px] shadow`），`<mark>` 双主题自适应 |
+| 搜索高亮 | `--color-highlight`/`--color-highlight-text`/`--color-highlight-ring`/`--color-highlight-shadow` 变量驱动，暗 `#fbbf24/#111111` 11.3:1 实底黑字外发光 / 亮 `color-mix 50% #fcd34d/#451a03` 12.5:1 半透明深棕强描边（根因：`text-highlight`→`--color-highlight-text` 修复遮挡），`rounded-[3px] px-[1px] shadow` 双主题自适应 |
 | 主题切换 | `Settings.theme: 'dark'\|'light'\|'system'`，`DEFAULT_SETTINGS` + `normalizeSettings` 迁移补全；`layout.tsx` 内联脚本 + `suppressHydrationWarning` 防 FOUC；`page.tsx` `theme` useEffect 系统跟随；设置中 select 即存 |
 | 评分守卫 | 详情/设置弹窗打开时 `if (detailId \|\| showSettings) return` 屏蔽全局 `1-5` 评分，避免误触背景卡 |
 | 空/离线横幅 | `serverOnline` 三态（null 连接中 / false 离线 rust 横幅 + 重试 / true 在线），与「仓库空」文案区分可恢复 |

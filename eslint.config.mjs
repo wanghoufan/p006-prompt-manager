@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Git worktree 特性分支的构建产物（.next 同类缓存，勿扫描）
+    ".worktrees/**",
   ]),
 ]);
 

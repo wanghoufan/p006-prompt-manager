@@ -5,20 +5,11 @@
 ## 当前状态
 
 - 项目：提示词管理工具（Prompt Manager），Next.js 16（App Router）+ React 19 + TypeScript 5 + Tailwind v4。
-- 阶段：功能开发期。已完成主体：跨设备实时同步、UI 优化（含正文优先布局重构）、调取码字段、MCP 集成、MCP 调用计数、备注字段、失焦自动保存、回滚 bug 修复、**全局搜索 + 健壮性批次（范围 A+B）+ P2-8/P2-9/P3-6 三项打包 + P0-1~P0-5 用户反馈五项 + 11合1 总验收（P0-6/P2-6/7/P3-4/5/P2-1/5/11/P2-3/4/P3-2）**。
-- **最新提交（待提交，11合1 总验收）**：「P0-6 高亮二次优化 + P2-6 评分守卫 + P2-7 空/离线 + P3-4 自适应 + P3-5 导入详情 + P2-1 版本节流 + P2-5 撤销 + P2-11 批量 + P2-3 抽屉 + P2-4 备注防丢 + P3-2 diff」：
-  - P0-6 高亮二次：`globals.css` 暗 `#fbbf24/#111111` 11.31:1 / 亮 `#fcd34d/#451a03` 10.39:1，`CardItem` mark `rounded-[3px] px-[1px] shadow` 二次优化；
-  - P2-6 评分守卫：`page.tsx` `if (detailId||showSettings) return` 弹窗内屏蔽；
-  - P2-7 空/离线：`page.tsx` `serverOnline` 三态横幅 + 重试；
-  - P3-4 自适应：`Composer` `autoResize` maxRows6；
-  - P3-5 导入详情：`storage` SkippedCard + `Toast` detail 6s；
-  - P2-1 节流：`cards.ts` 失焦不建版/手动建版；
-  - P2-5 撤销：`page.tsx` 10s `undoRef` 撤销栈 5处；
-  - P2-11 批量：`bulkIds` Set + checkbox 操作栏；
-  - P2-3 抽屉：`PreviewPanel` 底部抽屉 `onClose`；
-  - P2-4 防丢：`notesTimer` cleanup + flush；
-  - P3-2 diff：`VersionDiff` + `lineDiff` LCS。
-- 上一提交（10bd764，已推送）：P0-4/P0-5 两项打包（QA 第八次、产品 2026-08-27 PASS）；再上一提交 08db748：P0-1~3 三项打包（QA 第七次、产品 2026-08-27 PASS）。
+- 阶段：功能开发期。已完成主体：跨设备实时同步、UI 优化（含正文优先布局重构）、调取码字段、MCP 集成、MCP 调用计数、备注字段、失焦自动保存、回滚 bug 修复、**全局搜索 + 健壮性批次（范围 A+B）+ P2-8/P2-9/P3-6 三项打包 + P0-1~P0-5 用户反馈五项 + 11合1 总验收（P0-6/P2-6/7/P3-4/5/P2-1/5/11/P2-3/4/P3-2）+ P0-6/P0-7 2合1**。
+- **最新提交（待提交，2合1）**：「P0-6 高亮重开(遮挡根因 text-highlight→--color-highlight-text) + P0-7 空白回收」：
+  - P0-6 高亮重开：根因 `mark` 误用 `text-highlight`（→ `--color-highlight` 琥珀同色遮挡）修复为 `color:var(--color-highlight-text)`；亮色 `color-mix 50% #fcd34d` + 深棕 #451a03 + ring 强描边 ≈12.5:1 / 暗色 `#fbbf24` 实底 + 黑字 #111 + 外发光 ≈11.3:1，均 WCAG AA；
+  - P0-7 空白回收：`CardItem` 操作列 `absolute top-2 right-2` 悬浮胶囊 `bg-ink-900/80 backdrop-blur`（hover/focus-within/bulkActive 显隐）+ 标题 `pr-16` 预留 + 正文 `line-clamp-3`。
+- 上一提交（2e7b635，已推送）：11合1 总验收（QA 第十次、产品 2026-08-27 PASS）；再上一提交 10bd764：P0-4/P0-5 两项打包（QA 第八次、产品 2026-08-27 PASS）。
 - 远程仓库：https://github.com/wanghoufan/prompt-manager.git（master，已配置）。
 - dev 服务：`./dev-server.sh` watchdog 管理（start/stop/restart/status/logs），监听 `*:3000`。
 
@@ -77,7 +68,7 @@
 
 ## 下一步
 
-- **里程碑已收口（待提交）：11合1 总验收（P0-6/P2-6/7/P3-4/5/P2-1/5/11/P2-3/4/P3-2）已通过 QA 第十次与产品验收 PASS（2026-08-27，无新增 P1），待下轮按 `docs/review/PRODUCT_BACKLOG.md` 剩余候选（P1/P2 未完成项）择机排期。**
-- 剩余风险（不阻断）：RISK-1/2 MCP 陈旧/静默、RISK-5 调取码冲突、P0-3 Composer toast、P0-5 轨道对比 1.3:1 已达标，详见 `CODE_REVIEW.md` 与 `CURRENT_STAGE.md`。
-- 待办候选：按 `PRODUCT_BACKLOG.md` 剩余 P1/P2 未完成项择机排期，无 11合1 遗留。
+- **里程碑已收口（待提交）：P0-6 高亮重开 + P0-7 空白回收 2合1 已通过 QA 第十一次与产品验收 PASS（2026-08-28，亮≈12.5:1暗≈11.3:1，无新增 P1），待下轮按 `docs/review/PRODUCT_BACKLOG.md` P0-8 标签重命名调研后择机排期。**
+- 剩余风险（不阻断）：RISK-1/2 MCP 陈旧/静默、RISK-5 调取码冲突、P0-3 Composer toast 已记录，详见 `CODE_REVIEW.md` 与 `CURRENT_STAGE.md`。
+- 待办候选：P0-8 标签重命名调研 + 剩余 P1/P2 未完成项择机排期，无 2合1 遗留。
 - 若 WorkBuddy 调取仍不自动按角色执行，用户可在 WorkBuddy 全局系统提示词加入工具触发说明。

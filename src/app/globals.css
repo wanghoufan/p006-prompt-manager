@@ -14,10 +14,10 @@
   --color-gold-bright: #f0bf77;
   --color-gold-deep: #8a6a3f;
   --color-rust: #c96a5a;
-  /* P0-6 搜索高亮（暗色默认）：amber-400 实心底 + ink-950 黑字 + 外发光，最强对比 WCAG AA */
+  /* P0-6 搜索高亮（暗色默认，2026-08-28 重开整改）：amber-400 实底 + ink-950 黑字 + amber-300/60 描边 + 外发光 */
   --color-highlight: #fbbf24;
   --color-highlight-text: #111111;
-  --color-highlight-ring: rgba(252, 211, 153, 0.6);
+  --color-highlight-ring: rgba(252, 211, 77, 0.6);
   --color-highlight-shadow: rgba(251, 191, 36, 0.25);
   --scroll-thumb: #2a3448;
   --font-sans: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", system-ui,
@@ -41,7 +41,7 @@ html.light {
   --color-gold-bright: #7a5218;
   --color-gold-deep: #6e4a16;
   --color-rust: #b04a3a;
-  /* P0-6 亮色高亮：amber-300 实心底 + amber-950 深棕字 + amber-600 强描边，纸面可聚焦 */
+  /* P0-6 亮色高亮（2026-08-28 重开整改）：amber-300 实底基准 + amber-950 深棕字 + amber-600/50 强描边（纸面可聚焦） */
   --color-highlight: #fcd34d;
   --color-highlight-text: #451a03;
   --color-highlight-ring: rgba(217, 119, 6, 0.5);
@@ -90,6 +90,26 @@ body {
 :focus-visible {
   outline: 2px solid var(--color-gold);
   outline-offset: 2px;
+}
+
+/* P0-6 搜索高亮命中文字（2026-08-28 重开整改）
+ * 根因：此前 mark 误用 text-highlight（解析为 --color-highlight 琥珀色），文字与背景同色被完全遮挡。
+ * 现在文字固定取 --color-highlight-text（亮=深棕 #451a03 / 暗=黑 #111），与底色强对比。
+ * 对比度：亮色半透明浅黄上深棕字 ≈12.5:1，暗色实底 amber-400 上黑字 ≈11.3:1，均 ≥ WCAG AA 4.5:1。
+ * 说明：暗色若按 50% 半透明，混合底色会拖暗（黑字仅 ≈3.7:1 不达 AA），故暗色保持实底 + 外发光（荧光笔黑字）。
+ */
+mark {
+  border-radius: 3px;
+  padding-inline: 1px;
+  font-weight: 500;
+  color: var(--color-highlight-text);
+  background: var(--color-highlight);
+  box-shadow:
+    0 0 0 1px var(--color-highlight-ring),
+    0 0 0 2px var(--color-highlight-shadow);
+}
+html.light mark {
+  background: color-mix(in srgb, var(--color-highlight) 50%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -197,3 +197,16 @@
 - [x] P2-4 备注防丢：useEffect cleanup clearTimeout + commitSave flush（PreviewPanel.tsx:216-225）+ 外部数据覆盖前清理（PreviewPanel.tsx:155-158）+ CardDetail 同模式（CardDetail.tsx:76,145-146,156,166）
 - [x] P3-2 版本 diff：VersionDiff 组件 + lineDiff LCS 行级 diff + PreviewPanel/CardDetail 版本展开（VersionDiff.tsx, diff.ts, PreviewPanel.tsx:419-433, CardDetail.tsx:516-539）
 - [x] 既有回归：tsc 0 错误 / eslint src/ 0 错误 / curl /api/sync 正常 / P0-4/5 P2-8/9 P3-6 已 CLOSED
+
+### P0-6/P0-7 - 2026-08-28 验证
+- [x] P0-6 mark 根因修复：`color: var(--color-highlight-text)`（globals.css:105），此前 `text-highlight` → `--color-highlight` 同色遮挡，现固定取 highlight-text（黑/深棕）
+- [x] P0-6 暗色变量：`--color-highlight:#fbbf24` / `--color-highlight-text:#111111` / `--color-highlight-ring:rgba(252,211,77,.6)` / `--color-highlight-shadow:rgba(251,191,36,.25)`（globals.css:18-21）
+- [x] P0-6 亮色变量：`--color-highlight:#fcd34d` / `--color-highlight-text:#451a03` / `--color-highlight-ring:rgba(217,119,6,.5)` / `--color-highlight-shadow:transparent`（globals.css:45-48）
+- [x] P0-6 亮色半透明：`html.light mark { background: color-mix(in srgb, var(--color-highlight) 50%, transparent) }`（globals.css:111-113）
+- [x] P0-6 WCAG AA：暗色 11.3:1 / 亮色 12.5:1（均 ≥4.5:1）
+- [x] P0-7 悬浮胶囊：`absolute right-2 top-2 z-10` + `bg-ink-900/80 backdrop-blur-sm` + `border-line/70` + `shadow-lg`（CardItem.tsx:77-126）
+- [x] P0-7 胶囊显隐：`bulkActive ? opacity-100 : opacity-0 group-hover/focus-within:opacity-100`（CardItem.tsx:80）
+- [x] P0-7 正文行数：`line-clamp-3`（原 line-clamp-2 → 3 行）（CardItem.tsx:129）
+- [x] P0-7 标题 pr-16：预留胶囊位，code 徽标不被盖（CardItem.tsx:58）
+- [x] P0-7 胶囊内容：checkbox + 编辑 + 删除，readonly 不渲染（CardItem.tsx:77-126）
+- [x] 既有回归：tsc 0 错误 / eslint src/ 0 错误 / 11合1 已 CLOSED
