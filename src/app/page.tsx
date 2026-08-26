@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Card, Settings, SortMode } from '@/lib/types'
 import { loadCards, loadSettings, parseImport, saveCards, saveSettings, buildMarkdownExport, isServerAvailable, loadFromServer, pushToServer, subscribeSync } from '@/lib/storage'
-import { createCard, rollbackToVersion, saveBodyOnly, saveBodyWithVersion } from '@/lib/cards'
+import { createCard, normalizeBody, rollbackToVersion, saveBodyOnly, saveBodyWithVersion } from '@/lib/cards'
 import { DEMO_CARDS } from '@/lib/demo'
 import { nowIso } from '@/lib/util'
 import { TopBar } from '@/components/TopBar'
@@ -208,7 +208,25 @@ export default function Home() {
   const detailCard = detailId ? sourceCards.find((c) => c.id === detailId) ?? null : null
   const previewCard = selectedId ? sourceCards.find((c) => c.id === selectedId) ?? null : null
 
-  function handleCreate(body: string, title: string, tags: string[]) {
+  function handleCreate(body: string, title: string, aiTags: string[]) {
+    // P0-3 重复内容去重：normalizeBody 全等比对（大小写敏感、空白归一后），命中首个提示二次确认；
+    // 空内容（bodyNorm 为空）不触发
+    const bodyNorm = normalizeBody(body.trim())
+    if (bodyNorm) {
+      const existing = cards.find((c) => normalizeBody(c.body.trim()) === bodyNorm)
+      if (
+        existing &&
+        !window.confirm(`检测到内容已存在（标题「${existing.title}」），是否仍要添加？`)
+      ) {
+        return
+      }
+    }
+    // P0-2 标签筛选态下新建强制携带当前选中标签（首位），其余 AI 标签去重补充，最多 3 个；
+    // 「全部」（selectedTag 为空）时维持原 AI 1~3 个；demo 只读视图不继承
+    let tags = aiTags
+    if (selectedTag && !isDemoView && selectedTag !== '') {
+      tags = Array.from(new Set([selectedTag, ...aiTags])).slice(0, 3)
+    }
     setCards((prev) => [createCard(body, title, tags), ...prev])
   }
 

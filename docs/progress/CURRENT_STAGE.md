@@ -7,65 +7,77 @@
 > 本文件是 Builder 的「技术交接材料」载体，供 Stage Manager 判断下一步。只维护当前阶段，不按日期无限累积。
 
 ## 当前阶段
-- Stage：P2-8 / P2-9 / P3-6 三项打包
-- 完成度：实现 100%；自测 100%（tsc 0 错误 / lint 0 错误 / 浏览器手测关键路径全部通过）
+- Stage：P0-1 / P0-2 / P0-3 用户反馈三项打包（最高优先级）
+- 完成度：实现 100%；自测 100%（tsc 0 错误 / lint 0 错误 / 浏览器手测三项关键路径全部通过）
 - 风险等级：L0（无阻断性风险）；纯前端 / 轻量逻辑，无新依赖
+- 基线：上一阶段 P2-8/P2-9/P3-6（commit `500b875` / 已收口）
 
 ## 本轮已完成
 
-### P2-8 搜索结果按相关度排序（标题命中优先）
-- **位置**：`src/app/page.tsx` 模块级新增 `relevanceScore(c, term)`（title=4 / code=3 / tag=3 / notes=2 / body=1，命中取最高分）与 `compareBySortMode(a, b, mode)`（抽出现有三分支 sortMode 比较逻辑）。
-- **`visibleCards` 排序分支**：`searchActive && !searchTerm.startsWith('@')` 时先按 score desc 排序、同分再按 sortMode 二级排序；`@code` 直达模式与无搜索时维持原 sortMode。
-- **Bug 修复**：首版 `relevanceScore` 未对 term 小写化（搜索过滤用 `toLowerCase()`，但打分传入原始大写 "QA"），导致 title 命中判定失败。已在函数内 `const t = term.toLowerCase()` 修正。
-- **验证**：搜「QA」时 5 张标题含 QA 的卡（执行QA验收检查 / QA测试执行与Bug记录 / 建立QA基线并更新检查清单 / QA后按规则恢复 / 汇总QA审核结论）全部排前 5（score=4），正文命中卡靠后；小写「qa」同样命中（大小写不敏感）；`@jbyj` 命中 1 张（@code 隔离保持）；清空搜索后「开发节奏与质量门控决策助手」排第一（无搜索时按 sortMode 恢复）。
+### P0-1 AI 无法分类时标签留空（堵住脏标签源头）
+- **位置**：`src/lib/cards.ts` 新增导出 `DISCARD_TAGS = new Set(['无法分类','未分类','其他','无','无标签'])` 与 `normalizeTags(tags: string[])`（trim → 命中 DISCARD 即丢弃（大小写不敏感 `t.toLowerCase()`）→ 去空 → 去重 → 单标签截断 4 字 → 最多 3 个；过滤后为空保持 `[]`）；`src/lib/ai.ts` `generateMeta` 标签归一改走 `normalizeTags(rawTags)`；`src/lib/prompts.ts` `META_PROMPT` 追加约束「若无法判断这条提示词属于任何领域，请直接返回空标签数组 []，禁止返回「无法分类」「未分类」等占位标签」。
+- **`parseTags` 决策**：保持原行为**不过滤**（避免 `cardDraftChanges` 对存量脏标签误判 tagsChanged → 打开即触发 commitSave 把脏标签清空，造成「隐性清理」，违反「存量污染不自动清理」规则；用户手动输入「其他」属显式行为应尊重）。存量「无法分类 1」保持不变，待 P2-9 手动清理。
+- **验证**：逻辑级（Node `--experimental-strip-types` 跑真实 `src/lib/cards.ts` 副本）13 用例全部 PASS（脏标签 5 个全过滤、`vpn代理`/`标签很长超过四字的标签` 等保留且按 4 字截断、去重、trim、混合）；UI 链路真实建卡（粘贴口语内容触发 AI，AI 返回复用标签「qa基线」而非「无法分类」——AI 行为不可控，但过滤逻辑已兜底，链路正常）。
 
-### P2-9 左侧标签管理（删除标签 = 批量从卡片移除）
-- **位置**：`src/components/TagPanel.tsx` 新增可选 `onDeleteTag` prop；TagRow 重构为 div 容器（避免 button 嵌套），主按钮 flex-1 + 右侧 hover 显示 ×（`group-hover:opacity-100` + `focus-visible:opacity-100`，键盘可达）。
-- **`page.tsx` `handleDeleteTag`**：按 `cards` 统计含该标签卡片数 → `window.confirm「将从 N 张卡片中移除标签「X」，卡片本身不会删除」` → `setCards(prev => prev.map(c => c.tags.includes(tag) ? { ...c, tags: c.tags.filter(t => t !== tag) } : c))`（复用现有 cards 落盘 + SSE 同步链）；被删标签为当前选中项时顺带取消选中；demo 视图不传 `onDeleteTag`（readonly）。
-- **验证**：选「toke」标签（1 张卡）点击 × → confirm → 标签从「定点读取交接信息」卡移除（tags 由 `['toke', '开发恢复', '多age']` 变为 `['开发恢复', '多age']`），左侧「toke」标签自动消失，全部 31 张卡总数不变（只删标签不删卡、原文不动）；标签总数 16 → 15。
+### P0-2 标签筛选态下新建默认携带当前选中标签
+- **位置**：`src/app/page.tsx` `handleCreate(body, title, aiTags)` 改写签名（原 `tags` 参数改为 `aiTags`）；当 `selectedTag && !isDemoView && selectedTag !== ''` 时 `tags = Array.from(new Set([selectedTag, ...aiTags])).slice(0, 3)`（选中标签强制首位，其余 AI 标签去重补充，最多 3 个）；否则维持原 AI 1~3 个；`createCard(body, title, tags)` 入参用 `tags`。demo 只读视图不继承。
+- **验证**：选中「vpn代理（1 张）」→ 粘贴「function selectProxy(profile) { return profiles[profile].url; }」→ 点击生成卡片 → 新卡「选择代理配置函数」tags=`[vpn代理, 代理配置]`，**vpn代理 强制首位**；左侧「vpn代理」计数 1→2，代理配置 1→2，排序方式显示「vpn代理 · 2 张」；卡片总数 32→33。截图 `scratch/manual-test/p0-2-newcard-with-vpn.png`。
 
-### P3-6 保存时自动规范化正文格式（左对齐风格）
-- **位置**：`src/lib/cards.ts` 新增 `normalizeBody(body)`，在 `saveBodyOnly` / `saveBodyWithVersion` 入口统一调用（`saveBodyOnly` 的 `===` 短路比较在 normalize 之后进行）；`src/lib/storage.ts` 的 `parseImport`（JSON 路径 `.map(c => ({...c, body: normalizeBody(c.body)}))`）与 `parseMarkdownImport`（`flush()` 内 `normalizeBody(current.body.join('\n'))`）导入卡片 body 同步调用，保证导入与新建一致。
-- **规则**：① 逐行去前导 tab；② 纯空白行归一为空行；③ 非空行前导空格保留最多 4 个（超过部分 collapse），避免破坏 Markdown 列表 / 代码块缩进；④ 去首尾空行（slice 头尾空行而非 `trim()`，保留首行 4 空格缩进）；⑤ 合并连续空行（`\n{3,}` → `\n\n`，最多保留 1 个空行）。
-- **验证**：在 PreviewPanel 改「测试语音输入法效果」body 为带 tab / 多余空格的测试内容并 blur 保存后查 `data/store.json` 落盘：所有前导 tab 全去（如「\t\t\t深缩进」→「深缩进」）；6 空格行 → 4 空格（「       6空格子项」→「    6空格子项」）；8 空格行 → 4 空格；2 空格行保留 2 空格；连续空行（`\n\n\n\n`）合并为单空行（`\n\n`）。手测后已恢复测试卡原 body 并重启 dev server 让 serverStore 重新从文件加载。
+### P0-3 重复内容去重提示
+- **位置**：`src/app/page.tsx` `handleCreate` 入口处先 `bodyNorm = normalizeBody(body.trim())`，与 `cards` 中 `normalizeBody(c.body.trim())` 全等比对（大小写敏感、空白归一后）；命中首个（`find`）`window.confirm('检测到内容已存在（标题「X」），是否仍要添加？')` → 取消 `return` 中断、确认继续建卡；`bodyNorm` 为空不触发。复用现有 `normalizeBody`（P3-6 已落地）保证比对与新建一致。
+- **验证**（注入 `window.confirm` 覆盖精确控制返回值）：
+  - 复制原 vpn代理 卡 body（2545 字符）→ paste 触发 `handlePaste` → AI 生成成功 → `confirm` 被调用 1 次，文案完全匹配「检测到内容已存在（标题「生成国家故障转移代理组」），是否仍要添加？」；
+  - 取消 confirm → 卡片数 33 不变（**取消不新增**）；
+  - 设 `confirmNext=true` 再 paste → `confirm` 再被调用 1 次 → 卡片数 33→34（**确认继续建卡**）；
+  - 注入全新内容（与任何已有卡都不同）→ `confirm` 调用次数 0（**不同内容不弹**）。
+- **意外发现（小风险，不阻断）**：Composer `generate` 在 `onCreate` 同步返回 `false` 后仍会 `setText('')` + `notify('已创建卡片')` + `setPhase('idle')`——用户取消 confirm 后会看到「已创建卡片」toast 但实际未建卡，与 confirm 提示语义不一致。属 Composer.onCreate 回调契约问题，不在 P0-3 验收范围，建议未来版本（不动本轮）；可在 Composer 内根据 `onCreate` 返回值调整或新增 `onCreate -> boolean` 协议。
 
 ## 涉及文件
-- 修改：`src/app/page.tsx`（P2-8 relevanceScore / compareBySortMode / visibleCards 排序分支 / handleDeleteTag / TagPanel onDeleteTag 传入）、`src/components/TagPanel.tsx`（TagRow 重构 + onDeleteTag prop）、`src/lib/cards.ts`（normalizeBody + saveBodyOnly / saveBodyWithVersion 入口）、`src/lib/storage.ts`（import normalizeBody + parseImport / parseMarkdownImport 调用）
-- 文档：`docs/pm/PLAN.md`（当前目标段覆盖为 P2-8/P2-9/P3-6）、本文件
+- 修改：`src/app/page.tsx`（handleCreate 改写签名 + P0-2 finalTags + P0-3 去重 + import normalizeBody）、`src/lib/ai.ts`（import normalizeTags + tags 归一改走 normalizeTags）、`src/lib/cards.ts`（新增 DISCARD_TAGS + normalizeTags）、`src/lib/prompts.ts`（META_PROMPT 追加 P0-1 约束）
+- 文档：`docs/pm/PLAN.md`（当前目标段覆盖为 P0-1/P0-2/P0-3）、本文件
+- 备份：`scratch/store.json.bak-p0-20260826`（手测前 31 张卡原状备份，手测后已恢复）
 
 ## 自测
 - `npx tsc --noEmit`：零错误。
 - `npm run lint`：零错误。
-- 浏览器手测（agent-browser Chromium，真机目检）：
-  1. **P2-8 搜索「QA」**（截图 `scratch/manual-test/p28-search-qa.png`）：命中 16 / 共 31；前 5 张卡依次为「执行QA验收检查 / QA测试执行与Bug记录 / 建立QA基线并更新检查清单 / QA后按规则恢复 / 汇总QA审核结论」（标题含 QA，score=4），随后为「开发节奏与质量门控决策助手」等正文/标签命中卡（score=1）；命中关键词「QA」以金色 `<mark>` 高亮。
-  2. **P2-8 大小写不敏感**：搜「qa」命中 16 张，顺序与「QA」一致。
-  3. **P2-8 `@code` 隔离**：`@jbyj` 命中 1 张（开发经验记录Agent提示词），排序维持原 sortMode（@ 模式跳过相关度）。
-  4. **P2-8 无搜索恢复 sortMode**：清空搜索后「开发节奏与质量门控决策助手」排第一。
-  5. **P2-9 标签删除**：点击「toke」行 × → confirm → 「定点读取交接信息」tags 由 `['toke', '开发恢复', '多age']` 变为 `['开发恢复', '多age']`；左侧「toke」标签消失，全部 31 张卡总数不变；store.json JSON 校验通过。
-  6. **P3-6 normalize**：测试卡 body 改测试内容 → blur → store.json 落盘：tab 全去、6/8 空格→4 空格、2 空格保留、连续空行合并、首尾空行去。手测后已恢复 body 并重启 dev server。
-  7. **回归：失焦保存**：点 QA 卡片 → PreviewPanel title 改 + Tab blur → 角标「· 已自动保存」出现 + grid 标题同步更新。手测后已恢复原 title。
-- 运行时数据：`data/store.json` 经 P3-6 测试短暂污染（已恢复测试卡 body）、P2-9 移除「toke」标签（已通过 confirm 授权）、回归 title 改回原值。已备份到 `scratch/store.json.bak-20260826-123001`，并按规范停服 → 改文件 → JSON 校验 → 重启 dev server 验证 HTTP 200 / `/api/sync` 200。
+- **逻辑级（真实源码）**：`normalizeTags` 13 用例 全部 PASS（脏标签 5 个全过滤、保留正常标签按 4 字截断、去重、trim、混合、空数组）；`scratch/_cards_test.ts`（别名替换临时副本，跑完即删）。
+- **浏览器手测（agent-browser Chromium，真机目检）**：
+  1. **P0-1**：粘贴口语内容「今天天气不错，我想测试一下自己开发的语音输入法到底好不好用」→ AI 生成 → 新卡「测试语音输入法识别效果」tags=`[qa基线]`，未产生「无法分类」（AI 复用 qa基线）。
+  2. **P0-2**：选中 vpn代理 标签 → 粘贴 `function selectProxy(profile) { return profiles[profile].url; }` → 生成 → 新卡 tags=`[vpn代理, 代理配置]`，vpn代理 强制首位，vpn代理 计数 1→2，代理配置 1→2。
+  3. **P0-3 命中 + 取消**：paste 原 vpn代理 body（2545 字符）→ confirm 调用 1 次，文案匹配 → confirm 返回 false → 卡片数不变。
+  4. **P0-3 命中 + 确认**：再 paste → confirm 返回 true → 卡片数 +1（33→34）。
+  5. **P0-3 不同内容**：paste 全新内容（与任何已有卡不同）→ confirm 调用次数 = 0。
+  6. **回归：标签面板**：qa基线、vpn代理、代理配置 等所有标签计数变化符合手测预期；恢复后回到原状（qa基线 8、vpn代理 1 等）。
+  7. **回归：搜索/Composer/PreviewPanel**：搜索框、标签筛选、Composer textarea、PreviewPanel 占位、底部「局域网实时同步（服务端共享存储），离线回退本机缓存」文案均正常渲染。
+- **截图**：`scratch/manual-test/p0-2-vpn-selected-js.png`（vpn代理 筛选态）、`scratch/manual-test/p0-2-newcard-with-vpn.png`（P0-2 新卡 vpn代理 首位）、`scratch/manual-test/regression-search-qa.png`（搜索 + 标签 AND 叠加）、`scratch/manual-test/regression-restored.png`（恢复后 31 张原状）。
+- **运行时数据**：手测期间新建 4 张测试卡（测试语音输入法识别效果 / 选择代理配置函数 / 重复确认分支 / 不同内容验证），已停服 → 恢复备份 → JSON 校验 → 重启 dev server → HTTP 200 + /api/sync 200 + cards=31 验活。
 
 ## 风险 / 未验证
-- AbortController / SettingsModal 焦点闭环：未在本轮单独回归，代码路径未触碰（`PreviewPanel` / `CardDetail` / `Composer` 的 `*AbortRef` 与 `useModalFocus` 文件本轮未改），无破坏风险。
-- normalizeBody 对粘贴的 4 空格代码块（Markdown fenced 缩进）保留 4 空格符合「保留 Markdown 合法缩进」原则，但未在真实代码块场景实测。
-- 编辑 P3-6 测试期间，agent-browser 自动 dispatch 'input' 事件时 React 合成 onChange 的异步 setState 会让 draftRef 更新滞后于 dispatchEvent('blur')，故 P3-6 验证采用「真实键盘 type + Tab blur」完整 React 状态流而非 dispatchEvent 路径。
+- **AI 返回「无法分类」场景未在真实 UI 复现**：本次手测 AI 返回了复用标签「qa基线」（existingTags 排序靠前）而非「无法分类」；P0-1 核心过滤逻辑已用真实源码 13 用例验证兜底，但 UI 端到端的「AI 返回脏标签 → 被过滤 → tags=[]」真实命中未复现（AI 行为不可控，建议 QA 阶段多粘贴几条口语内容验证）。
+- **Composer.onCreate 同步返回 false 后仍 setText + notify**（P0-3 小风险）：用户取消 confirm 后会看到「已创建卡片」toast 但实际未建卡，语义不一致。建议未来 Composer.onCreate 改 `onCreate: (body, title, aiTags) => boolean` 返回 true/false 控制 setText 与 notify；本轮不动。
+- **`parseTags` 不过滤决策的风险面**：用户手动输入「其他」会被保留为标签（合理：尊重用户显式输入）；但若用户从含「无法分类」标签的卡片编辑 tagsText（输入框）后失焦，tagsChanged = false（因为 parseTags 不过滤、原 card.tags 也不变），不触发保存——与「脏标签保留」一致，无回归。
 
 ## 给下一角色的技术交接要点
 - QA 重点：
-  - P2-8：搜不同字段关键词（标题/正文/标签/调取码/备注）确认相关度排序；同分时切换 sortMode 验证二级排序；@code 模式。
-  - P2-9：在含多张卡的标签上删除验证批量；空标签（cards.length===0 的边界）；demo 视图不显示 ×；带 confirm 取消分支。
-  - P3-6：粘贴带 tab/多空格的真实场景（富文本、Markdown 模板、代码块）；极端案例（全 tab 行、超长缩进、CRLF）；导入路径（导出 Markdown → 重新导入 → body 应已 normalize）。
-- 技术风险：无阻断项。
-- 潜在回归：normalizeBody 改变了 saveBodyOnly 的 `===` 短路语义——若用户输入空字符串 normalize 后仍为空，`body === card.body` 为真时直接返回原卡（updatedAt 不变），与之前一致；若输入与原 body 字符串完全相同也会短路。无回归。
+  - P0-1：多粘贴几条口语化、跨领域弱归类内容（已测试「测试语音输入法效果」、「今天天气不错」类），观察 AI 返回是否含「无法分类/未分类/其他/无/无标签」任一被过滤为 tags=[]。
+  - P0-2：在 vpn代理 / qa基线 / 界面测试 等筛选态下分别新建，验证选中标签强制首位 + 其余 AI 标签去重 + 最多 3 个；「全部」下新建不强制；demo 视图无 Composer 不影响。
+  - P0-3：复制任意已有卡 body 粘贴新建 → confirm 文案「检测到内容已存在（标题「X」），是否仍要添加？」；取消不新增；不同内容不弹；空内容不触发；多次命中仅首个（粘贴多条与不同卡完全相同的 body 应只调 1 次 confirm）。
+  - 回归：搜索相关度 / 标签删除 × / 格式规范化（左对齐）/ 失焦保存 / 建版（上一轮已验收的功能），本轮未改其代码路径。
+- 技术风险：L0；P0-3 Composer.onCreate 同步返回 false 后 UI 残留 toast 属次要体验问题，未阻断。
+- 潜在回归：parseTags 不过滤是显式选择，已记录风险面。
 
 ## 建议下一步
 - 等待用户【节奏】触发 QA Acceptance。
 - 本轮三项（实现 4 改 + 2 文档）需用户授权后 commit / push。
 
+## 已收口，待 QA 验收（2026-08-26，P2-8/P2-9/P3-6 三项打包）
+
+- 上一阶段（搜索 + 健壮性批次 A+B，commit `bef563f`）已交付并通过 QA PASS / 产品验收 PASS。
+- P2-8 / P2-9 / P3-6 三项打包已交付：relevanceScore 4/3/3/2/1 + compareBySortMode 二级 + `@code` 隔离 + 大小写不敏感 + 7 项自测含大小写/@/清空恢复；TagPanel TagRow 重构 + `handleDeleteTag` 批量移除（confirm、选中态取消、总数不变）；`normalizeBody` 5 步左对齐于 `saveBodyOnly`/`saveBodyWithVersion` 与导入路径统一生效。详见历史 git 提交（基线 `500b875`）。
+- 本阶段（P0-1/P0-2/P0-3）基线：500b875。
+
 ---
 
-## 已收口，待 QA 验收（2026-08-26）
+## 已收口，待 QA 验收（2026-08-26，bef563f 搜索 + 健壮性批次 A+B）
 
-- 上一阶段（搜索 + 健壮性批次 A+B，commit `bef563f`）已交付并通过 QA PASS / 产品验收 PASS，详见历史版本。
-- 当前阶段：P2-8 / P2-9 / P3-6 三项打包，实现 + Builder 自测完成；遗留 `data/store.json` 已恢复（测试卡 body 复原、toke 标签移除、回归 title 复原）。待 QA Acceptance。
+- 上一更早阶段（搜索 + 健壮性批次 A+B，commit `bef563f`）已交付并通过 QA PASS / 产品验收 PASS，详见历史版本。

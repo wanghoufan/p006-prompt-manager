@@ -4,7 +4,7 @@
 
 ## 最近一次 QA 执行记录
 
-- **日期**：2026-08-26（第六次 - P2-8/P2-9/P3-6 三项打包回归验收）
+- **日期**：2026-08-27（第七次 - P0-1/P0-2/P0-3 用户反馈三项打包回归验收）
 - **模式**：QA Acceptance（三项增量验收 + 既有核心能力回归）
 - **执行者**：QA Agent
 - **结果**：**PASS**（代码走查 + API 测试通过；GUI 需人工确认）
@@ -12,7 +12,7 @@
 - **commit 验证**：未提交（Builder 已自测通过，待用户授权 commit/push）
 - **已关闭**：无新增关闭
 - **阻断项**：无
-- **需人工确认**：GUI 视觉验证（搜索相关度排序、标签删除×按钮、normalizeBody 格式效果）
+- **需人工确认**：GUI 视觉验证（P0-1 多条口语内容 AI 端到端、P0-2 多标签筛选态新建、P0-3 确认/取消分支）
 
 ### 三项逐条验证
 
@@ -37,6 +37,36 @@
 - `saveBodyWithVersion`（cards.ts:75-79）：先 `normalizeBody(newBody)` 再 `withVersion` ✅
 - `parseImport`（storage.ts:260）：JSON 路径 `.map(c => ({...c, body: normalizeBody(c.body)}))` ✅
 - `parseMarkdownImport`（storage.ts:119）：`flush()` 内 `normalizeBody(current.body.join('\n'))` ✅
+
+### 三项逐条验证
+
+**P0-1 AI 无法分类时标签留空**
+- `DISCARD_TAGS`（cards.ts:90）：`new Set(['无法分类','未分类','其他','无','无标签'])` ✅
+- `normalizeTags`（cards.ts:98-109）：trim → DISCARD 丢弃（大小写不敏感 `t.toLowerCase()`）→ 去空 → 去重 → 单标签截断 4 字 → 最多 3 个；空则保持 `[]` ✅
+- `ai.ts:113` `generateMeta` 标签归一改走 `normalizeTags(rawTags)` ✅
+- `prompts.ts:5` META_PROMPT 约束：「若无法判断则返回 []，禁止返回「无法分类」类占位标签」✅
+- `parseTags` 不过滤决策（cards.ts:111-112）：保持原行为，避免存量脏标签隐性清理 ✅
+
+**P0-2 标签筛选态下新建默认携带当前选中标签**
+- `handleCreate` 签名（page.tsx:211）：`body, title, aiTags` ✅
+- `selectedTag && !isDemoView && selectedTag !== ''` 时强制首位（page.tsx:227-228）：`Array.from(new Set([selectedTag, ...aiTags])).slice(0, 3)` ✅
+- 「全部」下不强制（page.tsx:227 条件 false 时维持原 AI tags）✅
+- demo 视图不继承（page.tsx:227 `!isDemoView`）✅
+
+**P0-3 重复内容去重提示**
+- `handleCreate` 入口（page.tsx:214-223）：`bodyNorm = normalizeBody(body.trim())`，与 `cards.find(c => normalizeBody(c.body.trim()) === bodyNorm)` 全等比对 ✅
+- 命中首个 `window.confirm`（page.tsx:219）文案完全匹配「检测到内容已存在（标题「X」），是否仍要添加？」✅
+- 取消 `return` 中断（page.tsx:220-222）、确认继续建卡（跳过 return）✅
+- `bodyNorm` 为空不触发（page.tsx:215 `if (bodyNorm)` 短路）✅
+- 多次命中仅首个（`find` 而非 `filter`）✅
+
+**既有回归**
+- P2-8 搜索相关度 / P2-9 标签删除 × / P3-6 左对齐：代码路径未改变 ✅
+- 失焦保存不建版 / 手动建版：bodyDirtyRef 机制未改变 ✅
+- API `/api/sync` 正常返回数据（curl 测试通过）✅
+
+**已知小风险（不阻断）**
+- Composer.onCreate 在 `onCreate` 同步返回 `false` 后仍 `setText('')` + `notify('已创建卡片')`，用户取消 confirm 后会看到「已创建卡片」toast 但实际未建卡（CURRENT_STAGE 已记录，建议未来 Composer 改 `onCreate: () => boolean` 协议）
 
 ### GUI 测试用例（需人工执行）
 

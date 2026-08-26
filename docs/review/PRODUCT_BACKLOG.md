@@ -4,17 +4,39 @@
 
 ## 最近一次 Product 执行记录
 
-- 时间：2026-08-26（产品验收 + 视觉验收 — P2-8/P2-9/P3-6 三项打包）
+- 时间：2026-08-27（产品验收 + 视觉验收 — P0-1/P0-2/P0-3 用户反馈三项）
 - 模式：Product Reviewer · 产品验收 + 视觉验收
 - 结果：**PASS** — 无新增 P1 阻断项
-- 输入：`docs/progress/CURRENT_STAGE.md`（P2-8 relevanceScore 权重 4/3/3/2/1 + score desc+sortMode二级 + @隔离 + 7项自测含大小写/@/清空恢复） / `docs/pm/PLAN.md`（三项打包验收标准） / `docs/qa/BUGS.md`（第六次 QA PASS） / `docs/qa/QA_CHECKLIST.md`（P2-8/P2-9/P3-6 15项已勾） / `docs/review/CODE_REVIEW.md`（RISK-1/2/5 未修不阻断） / `docs/review/PRODUCT_BACKLOG.md`（上次 2026-08-26 PASS） / 源码走查 `src/app/page.tsx:20-29`（relevanceScore `t=term.toLowerCase()`） + `32-36`（compareBySortMode） + `195-204`（score分支/@隔离） + `322-332`（handleDeleteTag） + `src/components/TagPanel.tsx:14-58`（TagRow div+主按钮+右侧× hover/focus-visible） + `src/lib/cards.ts:19-35`（normalizeBody 5步） + `66-79`（saveBodyOnly/WithVersion 入口） + `src/lib/storage.ts:119-120,260`（导入normalize） / 视觉 `docs/screenshots/home.png|detail.png|preview.png` + 实时探活 `curl localhost:3000 200` + `/api/sync 200` + `dev-server.sh` 运行中
+- 输入：`docs/progress/CURRENT_STAGE.md`（P0-1 DISCARD/parseTags决策 P0-2 vpn1→2强制首位 P0-3 confirm3分支+Composer小风险 7项手测） / `docs/pm/PLAN.md`（P0三项验收标准） / `docs/qa/BUGS.md`（第七次 QA PASS） / `docs/qa/QA_CHECKLIST.md`（P0 13项已勾） / `docs/review/CODE_REVIEW.md` / `docs/review/PRODUCT_BACKLOG.md:21`（P0-1~P0-5 Image1/2场景） / 源码走查 `src/lib/cards.ts:89-113`（DISCARD_TAGS/normalizeTags/parseTags） + `src/lib/ai.ts:92-114` + `src/lib/prompts.ts:1-5` + `src/app/page.tsx:211-230`（handleCreate强制首位+去重confirm） + `src/components/TagPanel.tsx` / 视觉 `docs/screenshots/home.png|detail.png|preview.png` + 实时探活 `localhost:3000 200` + `/api/sync 31张`
 - 体验方式：Vision（截图复核）+ 源码走查 + 实时服务探活；未改业务代码/UI，未提交 Git
 - 覆盖维度：
-  1. P2-8 搜索相关度：QA标题置顶（score 4>1）+ 同分sortMode二级 + 大小写不敏感与@code隔离 + 清空恢复 + 计数「命中 x / 共 y」与高亮 gold/30 协调
-  2. P2-9 标签管理：×可发现不喧宾（hover/focus-visible）+ confirm文案清晰 + 批量移除后计数归0自动消失/总数不变/取消无副作用 + demo隐藏× + 选中态取消
-  3. P3-6 格式规范化：富文本/tab缩进保存后全篇左对齐 + 4空格内Markdown缩进保留 + 导入路径一致性（导出再导入不回退）
-  4. 回归：P1-1~P1-4 已关闭无复发 + 既有布局（正文优先80%、2行预览、拖宽320-720、3列网格）无退化
-- 结论：P2-8 / P2-9 / P3-6 已验证通过，移入「已完成」；剩余候选 P2-10/P2-11/P2-3/P2-5/P2-7/P3-2/P3-4 等继续留池；无新增 P1，阻断项：无
+  1. P0-1 无法分类留空：新增不再产生「无法分类」（normalizeTags过滤+提示词约束）、存量1张保留待P2-9手动清理符合预期、大小写不敏感、空数组展示
+  2. P0-2 继承标签：vpn代理筛选态新建强制首位、补充≤3去重、总数1→2计数准确、全部下不强制、demo不继承
+  3. P0-3 去重：confirm文案「检测到内容已存在（标题「X」）是否仍要添加？」清晰、取消不新增/确认新增/空内容不弹/不同内容不弹、首个命中仅一次，Composer取消后toast小风险可接受
+  4. 回归：搜索相关度/标签删除/格式左对齐等既有布局无退化（P1-1~P1-4已关闭）
+- 结论：P0-1 / P0-2 / P0-3 已验证通过，移入「已完成」；P0-4/P0-5 保留候选（不入本轮）；无新增 P1，阻断项：无
+
+---
+
+## P0 用户反馈（最高优先级 · 2026-08-27 新增，直接来自用户口述与截图）
+
+> 规则：此 P0 段为**最高优先级**，高于一切 P1/P2/P3；后续新增用户反馈均置顶于此，进入当前 PLAN 即时排期。
+
+### P0-4 网格卡片直删入口（编辑键下加删除，默认二次确认 + 设置可关闭）
+- 问题：`P2-10` 已列但未实现且缺确认可配置性。当前 `CardItem` 仅 hover 显示「编辑」按钮，删除需点编辑 → 进 `CardDetail` 弹窗 → 底部“删除卡片” → confirm，至少 3 步；`PreviewPanel` 需先选中卡片。用户反馈（2026-08-27）删除为高频维护操作，入口太深劝退清理意愿，且需可配置的二次确认。
+- 用户场景：用户在网格上 hover 卡片时，编辑按钮下方应直接出现删除按钮（小、红色/rust 色），点删除 → 默认二次确认「确定删除「{title}」？」→ 确认后删除；用户可在右上角「设置」中关闭二次确认，关闭后点删除即直接删（更快速）。
+- 建议方案：`CardItem.tsx` 在编辑按钮下方加删除按钮（`onDelete(card.id)`，与现有 `handleDeleteCard` 共用），`readonly` 视图（demo）不显示。`Settings` 新增 `confirmDelete: boolean`（默认 true），存于 `Settings`（`src/lib/types.ts`/`storage.ts`/`serverStore.ts` + `data/store.json` 同步）；`handleDeleteCard` 中 `if (settings.confirmDelete) confirm(...) else 直接删`。`SettingsModal.tsx` 加 Switch/Checkbox「删除前二次确认」。
+- 预期收益：删除路径 3 步→2 步（或 1 步无确认），平衡安全与效率。
+- 实现成本：低
+- 优先级：P0（用户反馈最高，源 `P2-10` 升级）
+
+### P0-5 搜索高亮配色不合理 + 缺亮色主题（需 Frontend Design 规范化）
+- 问题：当前搜索高亮 `<mark className="rounded-[2px] bg-gold/30">` 的黄色 `bg-gold/30` 在暗色背景下不明显（截图 `Image 1`：`QA` 黄色高亮与深色卡片对比弱，`gold/30` 透明度过低）。且产品仅有暗色主题，无亮色版本。
+- 用户场景：用户搜「qa」时命中词黄色高亮在暗色卡片上可辨识度差；长期使用仅暗色，亮色环境下对比与可访问性缺失。
+- 建议方案：调用 `frontend-design` Skill 按设计规范重做高亮与主题：① 暗色高亮改高对比配色（如 `bg-gold/40 + ring` 或 `bg-amber-400/40 + text-amber-100`，WCAG AA 对比），`CardItem.tsx:highlightParts` 的 `<mark>` 样式走 Tailwind 变量；② 新增亮色主题（`light` mode，CSS 变量或 `prefers-color-scheme` + 手动切换），高亮在亮色下用深色金棕/琥珀对比；③ 主题切换入口放 `TopBar`/`SettingsModal`，持久化到 `Settings` + localStorage/serverStore。
+- 预期收益：搜索体感与可访问性达标，暗/亮双主题闭环。
+- 实现成本：中（需设计 + 双主题变量体系）
+- 优先级：P0（用户反馈最高）
 
 ---
 
@@ -229,3 +251,6 @@
 - **P2-8 搜索结果按相关度排序**（2026-08-26 完成：`page.tsx` 新增 `relevanceScore(c,term)` title4/code3/tag3/notes2/body1 取最高分，`compareBySortMode` 抽取；`visibleCards` 在 `searchActive && !searchTerm.startsWith('@')` 时先 score desc 同分再 sortMode 二级，`@code` 直达与无搜索维持原 sortMode；大小写不敏感 `t=term.toLowerCase()` 已修正；搜 QA 前5标题置顶、搜 qa 同序、@jbyj隔离、清空恢复）
 - **P2-9 左侧标签管理**（2026-08-26 完成：`TagPanel.tsx` TagRow 重构为 div容器 主按钮flex-1 + 右侧× `group-hover:opacity-100`/`focus-visible`，`onDeleteTag`可选 demo隐藏；`page.tsx:322-332` `handleDeleteTag` 统计N→confirm「将从 N 张卡片中移除标签…卡片本身不会删除」→批量 `filter(t!==tag)` 复用落盘+SSE，选中态自动取消，计数归0自动消失，总数不变）
 - **P3-6 保存时自动规范化正文格式**（2026-08-26 完成：`cards.ts:19-35` `normalizeBody` ①去前导tab②纯空白归一③非空行保留最多4空格④去首尾空行⑤合并连续空行；`saveBodyOnly:66-70`/`saveBodyWithVersion:75-79`入口统一调用；`storage.ts:119-120`/`260` 导入两路径同步；tab全去、6/8空格→4、2空格保留、连续空行合并已验证）
+- **P0-1 AI 无法分类时标签留空**（2026-08-27 完成：`cards.ts:89-109` `DISCARD_TAGS` 5脏标签+`normalizeTags` trim/去DISCARD/去空去重/截4字/≤3空则[]，`ai.ts:113` `normalizeTags(rawTags)`，`prompts.ts:5` 约束「无法判断返回[]禁止占位」，`parseTags`不过滤保存量手动清理，新增不再出现「无法分类」）
+- **P0-2 标签筛选态下新建默认携带当前选中标签**（2026-08-27 完成：`page.tsx:211-230` `handleCreate(body,title,aiTags)` `selectedTag&&!isDemoView`时 `Array.from(new Set([selectedTag,...aiTags])).slice(0,3)`强制首位去重≤3，全部/ demo不强制，vpn代理1→2验证）
+- **P0-3 重复内容去重提示**（2026-08-27 完成：`page.tsx:214-223` `normalizeBody(body.trim())`全等比对`cards.find`命中`confirm`「检测到内容已存在（标题「X」），是否仍要添加？」取消中断/确认继续，空内容不弹，首个命中仅一次，Composer小风险已记录不阻断）

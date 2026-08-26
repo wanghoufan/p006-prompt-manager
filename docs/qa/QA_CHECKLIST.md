@@ -125,3 +125,20 @@
 - [x] P3-6 parseImport（JSON）：`.map(c => ({...c, body: normalizeBody(c.body)}))`
 - [x] P3-6 parseMarkdownImport（Markdown）：`flush()` 内 `normalizeBody(current.body.join('\n'))`
 - [x] 既有回归：失焦保存不建版 / 手动建版 / 评分守卫 / API 正常
+
+### P0-1/P0-2/P0-3 - 2026-08-27 验证
+- [x] P0-1 DISCARD_TAGS：`new Set(['无法分类','未分类','其他','无','无标签'])` 5 个脏标签
+- [x] P0-1 normalizeTags：trim → DISCARD 丢弃（toLowerCase 大小写不敏感）→ 去空 → 去重 → 单标签截断 4 字 → 最多 3 个；空则保持 []
+- [x] P0-1 ai.ts generateMeta：标签归一改走 `normalizeTags(rawTags)`
+- [x] P0-1 prompts.ts META_PROMPT：约束「若无法判断则返回 []，禁止返回「无法分类」类占位标签」
+- [x] P0-1 parseTags 不过滤：保持原行为，避免存量脏标签隐性清理
+- [x] P0-2 handleCreate 签名：`body, title, aiTags`
+- [x] P0-2 强制首位：`selectedTag && !isDemoView && selectedTag !== ''` 时 `Array.from(new Set([selectedTag, ...aiTags])).slice(0, 3)`
+- [x] P0-2 「全部」下不强制：条件 false 时维持原 AI tags
+- [x] P0-2 demo 视图不继承：`!isDemoView`
+- [x] P0-3 去重：`normalizeBody(body.trim())` 与 `cards.find(c => normalizeBody(c.body.trim()) === bodyNorm)` 全等比对
+- [x] P0-3 confirm 文案：「检测到内容已存在（标题「X」），是否仍要添加？」
+- [x] P0-3 取消 return 中断 / 确认继续建卡
+- [x] P0-3 空内容不触发（`if (bodyNorm)` 短路）
+- [x] P0-3 多次命中仅首个（find 而非 filter）
+- [x] 既有回归：P2-8 搜索相关度 / P2-9 标签删除 / P3-6 左对齐 / 失焦保存 / 建版 / API

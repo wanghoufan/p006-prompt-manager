@@ -86,6 +86,28 @@ export function rollbackToVersion(card: Card, versionId: string): Card {
   return { ...card, body: version.body, updatedAt: nowIso() }
 }
 
+/** P0-1：AI 无法归类时丢弃的占位脏标签（trim 后命中即丢弃，大小写不敏感） */
+export const DISCARD_TAGS = new Set(['无法分类', '未分类', '其他', '无', '无标签'])
+
+/**
+ * 标签数组归一（P0-1）：trim → 丢弃 DISCARD_TAGS 脏标签（大小写不敏感）→ 去空 → 去重
+ * → 单标签截断 4 字 → 最多 3 个；过滤后为空则保持 []（无标签状态正常展示，无标签徽标）。
+ * 供 AI 标签路径（ai.ts generateMeta）与新建卡片合并标签使用；手动编辑标签（parseTags）不过滤，
+ * 避免对存量脏标签误判变更导致隐性清理（存量污染由 P2-9 标签管理手动删）。
+ */
+export function normalizeTags(tags: string[]): string[] {
+  return [
+    ...new Set(
+      tags
+        .map((t) => t.trim())
+        .filter((t) => t !== '')
+        .filter((t) => !DISCARD_TAGS.has(t.toLowerCase())),
+    ),
+  ]
+    .map((t) => t.slice(0, 4))
+    .slice(0, 3)
+}
+
 export function parseTags(text: string): string[] {
   return [...new Set(text.split(/[,，、\s]+/).map((s) => s.trim()).filter(Boolean))].slice(0, 3)
 }

@@ -1,4 +1,5 @@
 import { DEFAULT_THINKING_PROMPT, META_PROMPT } from '@/lib/prompts'
+import { normalizeTags } from '@/lib/cards'
 import type { GenerateMetaResult } from '@/lib/types'
 
 const MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash'
@@ -105,13 +106,11 @@ export async function generateMeta(body: string, existingTags: string[]): Promis
     throw new AiError('AI 返回的 JSON 结构不符合预期')
   }
   const title = typeof obj.title === 'string' ? obj.title.trim().slice(0, 20) : ''
+  // P0-1：AI 标签归一走 normalizeTags（过滤 DISCARD_TAGS 脏标签，命中即丢弃，空则保持 []）
   const rawTags = Array.isArray(obj.tags)
-    ? obj.tags.filter((t): t is string => typeof t === 'string').map((t) => t.trim())
+    ? obj.tags.filter((t): t is string => typeof t === 'string')
     : []
-  const tags = [...new Set(rawTags)]
-    .map((t) => t.slice(0, 4))
-    .filter(Boolean)
-    .slice(0, 3)
+  const tags = normalizeTags(rawTags)
   return { title, tags }
 }
 
