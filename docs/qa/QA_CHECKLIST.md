@@ -71,11 +71,40 @@
 - [ ] 手动保存按钮给「已保存」提示
 
 ### P0/P1 修复验证（2026-08-26）
-- [ ] 渲染期 ref 赋值修复（PreviewPanel / CardDetail：`draftRef` 改用 `useEffect` 同步）
-- [ ] 正文失焦不再生成版本快照（拆 `saveBodyOnly` / `saveBodyWithVersion`）
-- [ ] 同步推送串行化（`storage.ts` schedulePush 队列化，`pushInFlight` + `pushPending`）
-- [ ] 全局评分快捷键守卫（`detailId` / `showSettings` 开启时禁用）
-- [ ] TagPanel 文案与离线态提示（"局域网实时同步…离线回退"）
-- [ ] 关闭/切卡丢稿 + 备注定时器泄漏修复（卸载 flush + clearTimeout）
-- [ ] 导入选择器支持 `.md`（`accept=".json,.md"`）
-- [ ] 调取码冲突语义统一（跳过冲突字段、其余照存、冲突提示）
+- [x] 渲染期 ref 赋值修复（PreviewPanel / CardDetail：`draftRef` 改用 `useEffect` 同步）
+- [x] 正文失焦不再生成版本快照（拆 `saveBodyOnly` / `saveBodyWithVersion`）
+- [x] 同步推送串行化（`storage.ts` schedulePush 队列化，`pushInFlight` + `pushPending`）
+- [x] 全局评分快捷键守卫（`detailId` / `showSettings` 开启时禁用）
+- [x] TagPanel 文案与离线态提示（"局域网实时同步…离线回退"）
+- [x] 关闭/切卡丢稿 + 备注定时器泄漏修复（卸载 flush + clearTimeout）
+- [x] 导入选择器支持 `.md`（`accept=".json,.md"`）
+- [x] 调取码冲突语义统一（跳过冲突字段、其余照存、冲突提示）
+
+### 全局搜索（P2-2）- 2026-08-26 验证
+- [x] SortBar 搜索框：放大镜 + 清除按钮 + placeholder「搜索标题/正文/标签/备注 · @code 直达」
+- [x] 过滤链三段：baseCards → 搜索过滤 → 排序，AND 叠加
+- [x] @code 直达：`@` 开头仅按 code includes（lowercase），不匹配正文
+- [x] 多字段过滤：标题/正文/标签/调取码/备注，大小写不敏感
+- [x] 高亮：`highlightParts` 纯文本拆分 + `<mark className="rounded-[2px] bg-gold/30">`，XSS 免疫
+- [x] 计数：`search.trim()` 非空时「命中 x / 共 y」
+- [x] 空态：0 命中时「未找到匹配的卡片」+ 引导
+- [x] 不持久化：`searchQuery` 仅 useState，刷新即清
+
+### 健壮性批次 - 2026-08-26 验证
+- [x] RISK-3 AbortController：PreviewPanel（metaAbortRef/summaryAbortRef）、CardDetail（metaAbortRef/summaryAbortRef）、Composer（abortRef）共 5 处 AI 请求
+- [x] 新请求前 abort 旧请求：`abortRef.current?.abort()` + `const ac = new AbortController()`
+- [x] 卸载 cleanup abort：`useEffect(() => () => { abortRef.current?.abort() }, [])`
+- [x] ac.signal.aborted 守卫：catch/finally 中跳过 toast/setState
+- [x] OPT-NEW-2 useModalFocus：FOCUSABLE 选择器 / Tab 循环 / 首焦点 / 归还 / onEscClose ref
+- [x] CardDetail 复用 useModalFocus（无 onEscClose，保留自有 window Esc 监听）
+- [x] SettingsModal 复用 useModalFocus（传 onClose 处理 Esc）
+- [x] P3-1 标题计数 x/20、调取码计数 x/12
+- [x] P3-1 调取码非法字符即时过滤 `replace(/[^a-zA-Z0-9-]/g,'')` + 2.5s 提示
+- [x] P3-3 仓库空态引导文案「双击卡片进入详情 · 拖动左缘调宽，双击重置 · 选中后 1-5 打星」
+- [x] P3-3 PreviewPanel !card 占位引导文案
+
+### 既有能力回归 - 2026-08-26 验证
+- [x] 失焦保存不建版（代码走查确认 bodyDirtyRef 机制）
+- [x] 手动/Ctrl+Enter 才建版（代码走查确认）
+- [x] 评分快捷键在 detailId/showSettings 时屏蔽（代码走查 page.tsx:338）
+- [x] API /api/sync 正常返回数据（curl 测试通过）

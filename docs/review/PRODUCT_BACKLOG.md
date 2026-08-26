@@ -4,13 +4,17 @@
 
 ## 最近一次 Product 执行记录
 
-- 时间：2026-08-26（视觉验收 + 产品验收）
-- 模式：Visual Acceptance + Product Acceptance
-- 结果：PASS（P1-1～P1-4 全部关闭）
-- 输入：`AGENTS.md` / `docs/roles/product-reviewer.md` / `docs/progress/CURRENT_STAGE.md` / `docs/review/PRODUCT_BACKLOG.md` + 源码走查 + `docs/screenshots/home.png|detail.png|preview.png` 视觉复核
-- 体验方式：Vision（截图）+ 源码走查 + 实时服务探活；未改业务代码/UI
-- 覆盖维度：P1-1～P1-4 逐条验证 + 正文优先布局/排序栏/卡片网格 3 列回归扫视
-- 结论：P1-1～P1-4 全部已修复并验证通过，移入「已完成」；无新增 P1
+- 时间：2026-08-26（产品验收 + 视觉验收 — 搜索+健壮性批次 bef563f）
+- 模式：Product Reviewer · 产品验收 + 视觉验收
+- 结果：**PASS** — 无新增 P1 阻断项
+- 输入：`docs/progress/CURRENT_STAGE.md`（待验收含 10 项自测） / `docs/handoff/HANDOFF.md`（bef563f） / `docs/pm/PLAN.md`（搜索/健壮性验收标准） / `docs/qa/BUGS.md`（第五次 QA PASS） / `docs/qa/QA_CHECKLIST.md`（全局搜索 8 项 + 健壮性 12 项） / `docs/review/CODE_REVIEW.md`（RISK-1/2/5 未修不阻断） / `docs/review/PRODUCT_BACKLOG.md`（P2-8~11/P3-6 候选池） / 源码走查 `src/app/page.tsx:144-183`（baseCards→搜索→排序） / `src/components/SortBar.tsx:22-97`（搜索框+计数） / `src/components/CardItem.tsx:21-40`（highlightParts <mark>） / `src/hooks/useModalFocus.ts:1-56` / `src/components/SettingsModal.tsx:6-20` / `src/components/PreviewPanel.tsx:73-296` / `src/components/CardDetail.tsx:30-171`（计数/提示/引导） / `src/components/Composer.tsx:22-55`（Abort）
+- 体验方式：Vision（`docs/screenshots/home.png|detail.png|preview.png` 复核）+ 源码走查 + 实时服务探活（`curl localhost:3000` 200 + `/api/sync` 正常 + `dev-server.sh` 运行中）；未改业务代码/UI，未提交 Git
+- 覆盖维度：
+  1. P2-2 搜索：5 字段命中/叠加/@code 隔离/高亮 XSS 免疫/计数「命中 x / 共 y」/空态引导/placeholder/刷新即清
+  2. 健壮性：连点仅最后生效（Abort）、SettingsModal 焦点闭环（首焦点/TAB 循环/Esc/归还）、标题 20/调取码 12 计数与非法字符 2.5s 提示、空态与占位引导
+  3. 回归：P1-1~P1-4 已关闭无复发、既有布局（正文优先 80%、2 行预览、拖宽 320-720、3 列网格）无退化
+  4. 视觉：搜索框与 SortBar 对齐、高亮 gold/30 克制度、计数/空态排版、引导小字灰度、移动端 hidden 预期
+- 结论：P2-2 / P3-1 / P3-3 / RISK-3 / OPT-NEW-2 已验证通过，保持在「已完成」；P2-8~11/P3-6 继续留候选池；无新增 P1，阻断项：无
 
 ---
 

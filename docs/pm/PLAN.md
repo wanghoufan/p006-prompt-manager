@@ -33,5 +33,12 @@
 
 ## 进行中 / 待办
 
-- 提交并推送本轮改动（连同工作区已有 `docs/DEV_EXPERIENCE.md` 未提交改动一并提交推送）——需用户明确授权。
 - 剩余候选不在本轮范围：范围 C（MCP 架构）、P2-3（`<md` 面板降级）、P2-5（危险操作撤销）等，见 `docs/review/PRODUCT_BACKLOG.md`。
+
+---
+
+## 已收口（2026-08-26，commit bef563f）
+
+- 本轮（搜索 + 健壮性批次 A+B）已交付并通过 QA PASS / 产品验收 PASS，详见 `docs/progress/CURRENT_STAGE.md` 与 `docs/handoff/HANDOFF.md`。
+- 实现：SortBar 搜索框 + 三段过滤链（baseCards→搜索→排序，AND 叠加）+ `highlightParts` `<mark>` 高亮（XSS 免疫）+ 命中计数/空态引导（刷新即清）+ AbortController 5 处 + `useModalFocus` 共享 Hook + 字符计数/非法字符提示 + 引导文案；自测 10 项、tsc/lint 零错误。
+- 下轮待排期：P2-8~11 / P3-6 等，见 `docs/review/PRODUCT_BACKLOG.md` 候选池。

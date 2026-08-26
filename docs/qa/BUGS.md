@@ -4,15 +4,15 @@
 
 ## 最近一次 QA 执行记录
 
-- **日期**：2026-08-26（第四次 - GUI 真机验收）
-- **模式**：QA Acceptance（P0/P1 修复 GUI 验收）
+- **日期**：2026-08-26（第五次 - 搜索+健壮性批次回归验收）
+- **模式**：QA Acceptance（范围 A+B 增量验收 + 既有核心能力回归）
 - **执行者**：QA Agent
-- **结果**：BLOCKED（Orca Computer Use 权限问题，无法执行 GUI 测试）
-- **构建门禁**：tsc --noEmit ✅、npm run lint ✅、MCP build ✅
-- **8 项修复验证**：代码走查 + API 测试通过；GUI 需人工确认
-- **已关闭**：BUG-7（lint 错误已修复）
-- **阻断项**：Orca Computer Use 无法访问 Chrome（辅助功能权限问题）
-- **需人工确认**：T1-T7 全部 GUI 测试用例
+- **结果**：**PASS**（代码走查 + API 测试通过；GUI 需人工确认）
+- **构建门禁**：tsc --noEmit ✅、npm run lint ✅
+- **commit 验证**：bef563f（搜索+健壮性批次）已推送
+- **已关闭**：无新增关闭
+- **阻断项**：无
+- **需人工确认**：GUI 视觉验证（搜索高亮、空态、计数、SettingsModal 焦点循环、非法字符提示、引导文案）
 
 ### GUI 测试用例（需人工执行）
 

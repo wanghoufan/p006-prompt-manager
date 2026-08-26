@@ -63,9 +63,7 @@
 
 ## 下一步
 
-- **进入 QA 验收（QA Acceptance）→ 产品 / 视觉验收（Product / Visual Acceptance）→ neat-freak 里程碑收尾（Full Milestone Closeout）**，由用户触发。
-- 待 QA 核验项：搜索（各字段命中 / 叠加 / @code 直达 / 高亮 XSS 免疫 / 空态计数 / 刷新即清）、连点重新生成仅最后一次生效（AbortController）、SettingsModal 焦点（Tab 循环 / Esc / 归还）、计数与非法字符提示、引导文案；既有回归（失焦保存 / 手动建版 / 回滚 / 导入导出 .md / 冲突提示）。Builder 已自测通过，需正式 QA 验收。
-- 剩余风险（不阻断，建议单独排期）：MCP 直读 `store.json` 陈旧数据（RISK-1）、MCP 计数失败静默（RISK-2）、调取码冲突检测时机边缘场景（RISK-5），详见 `docs/review/CODE_REVIEW.md`。**RISK-3（AI 请求 AbortController）已于 bef563f 修复。**
-- 待办候选见 `docs/review/PRODUCT_BACKLOG.md`：P2-8 搜索结果按相关度排序（标题命中优先）、P2-9 左侧标签管理（删除标签=批量移除、不删卡片）、P2-10 卡片网格直删入口、P2-11 批量管理、P2-3 `<md` 面板适配、P2-5 危险操作撤销、P2-7 空/离线态区分；P3：版本 diff、Composer 自适应等。
-- **待 neat-freak 统一对账**（本轮未改，需用户授权或 neat-freak 轮处理）：① `AGENTS.md` §一「当前进展」仍写 commit `44c4a3a`，应更新为 bef563f + 全局搜索/健壮性批次；② `README.md` 功能列表未提及全局搜索（搜索框 / @code 直达 / 命中计数）与调取码输入计数提示，应补充；③ `docs/qa/BUGS.md` 最近一次 QA 记录为「BLOCKED（Orca Computer Use 权限问题）」，本轮 Builder 已用 agent-browser 完成 GUI 自测，正式 QA 记录待 QA 轮刷新。
+- **里程碑已收口（bef563f）：全局搜索（P2-2）+ 健壮性批次（RISK-3/OPT-NEW-2/P3-1/P3-3）已通过 QA PASS（2026-08-26）与产品验收 PASS（2026-08-26），待下轮按 `docs/review/PRODUCT_BACKLOG.md` P2-8~11/P3-6 择机排期。**
+- 剩余风险（不阻断，建议单独排期）：RISK-1 MCP 直读 `store.json` 陈旧数据、RISK-2 MCP 计数失败静默、RISK-5 调取码冲突边缘场景，详见 `docs/review/CODE_REVIEW.md`。
+- 待办候选：P2-8 搜索相关度排序（标题命中优先）、P2-9 标签管理（删除标签=批量移除，不删卡片）、P2-10 网格直删入口、P2-11 批量管理、P2-3 `<md` 面板适配、P2-5 危险操作撤销、P2-7 空/离线态区分；P3：版本 diff、Composer 自适应、P3-6 正文格式规范化等，详见 PRODUCT_BACKLOG。
 - 若 WorkBuddy 调取仍不自动按角色执行，用户可在 WorkBuddy 全局系统提示词加入工具触发说明。
