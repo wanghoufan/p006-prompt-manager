@@ -108,3 +108,20 @@
 - [x] 手动/Ctrl+Enter 才建版（代码走查确认）
 - [x] 评分快捷键在 detailId/showSettings 时屏蔽（代码走查 page.tsx:338）
 - [x] API /api/sync 正常返回数据（curl 测试通过）
+
+### P2-8/P2-9/P3-6 - 2026-08-26 验证
+- [x] P2-8 relevanceScore：title=4 / code=3 / tag=3 / notes=2 / body=1，`const t = term.toLowerCase()` 大小写不敏感
+- [x] P2-8 visibleCards：`searchActive && !searchTerm.startsWith('@')` 时先按 score desc、同分按 sortMode 二级排序
+- [x] P2-8 @code 直达：`@` 开头仅按 code includes，维持原 sortMode（跳过相关度排序）
+- [x] P2-8 无搜索恢复：清空搜索后按 sortMode 排序
+- [x] P2-8 compareBySortMode：抽出现有三分支逻辑（updated/copies/rating），二级排序正确
+- [x] P2-9 handleDeleteTag：统计含该标签卡片数 → confirm → 批量移除标签条目（不删卡）
+- [x] P2-9 TagRow 重构：div 容器（避免 button 嵌套），主按钮 flex-1 + 右侧 ×（hover/focus-visible 显示）
+- [x] P2-9 onDeleteTag prop：可选，demo 视图不传（isDemoView ? undefined : handleDeleteTag）
+- [x] P2-9 当前选中标签被删时取消选中（if (selectedTag === tag) setSelectedTag(null)）
+- [x] P3-6 normalizeBody：① 逐行去前导 tab ② 纯空白行归一 ③ 非空行前导空格保留最多 4 个 ④ 去首尾空行 ⑤ 合并连续空行
+- [x] P3-6 saveBodyOnly：先 normalizeBody(newBody) 再 === 比较
+- [x] P3-6 saveBodyWithVersion：先 normalizeBody(newBody) 再 withVersion
+- [x] P3-6 parseImport（JSON）：`.map(c => ({...c, body: normalizeBody(c.body)}))`
+- [x] P3-6 parseMarkdownImport（Markdown）：`flush()` 内 `normalizeBody(current.body.join('\n'))`
+- [x] 既有回归：失焦保存不建版 / 手动建版 / 评分守卫 / API 正常

@@ -5,35 +5,30 @@
 
 ## 当前目标
 
-本轮两项增量，均进入开发期：
+本轮三项增量打包（P2-8 / P2-9 / P3-6），均进入开发期，低风险、无新依赖，纯前端 / 轻量逻辑：
 
-1. **A. 全局搜索（P2-2）**：`SortBar` 旁新增搜索输入框，纯前端过滤（不引入任何依赖），300ms 防抖；过滤范围 = 标题 / 正文 / 标签 / 调取码 / 备注，大小写不敏感；与左侧标签筛选、排序叠加（AND 组合）；`@code` 片段按调取码匹配直达；命中关键词在卡片标题与正文预览高亮（`<mark>`，纯文本拆分渲染防 XSS）；搜索框有值时计数显示「命中 x / 共 y」；空结果显示空态引导；搜索词不持久化（刷新即清）。
-2. **B. 健壮性批次**：
-   - **RISK-3**：PreviewPanel / CardDetail / Composer 所有 AI 请求（regenMeta / runSummary / generate）接入 AbortController——新请求发出前 abort 上一个，组件卸载时 abort；请求进行中禁用触发按钮。
-   - **OPT-NEW-2**：`useModalFocus` 抽为共享 Hook（src/hooks/useModalFocus.ts），SettingsModal 复用，补齐打开聚焦 / 关闭归还 / Tab 循环 / Esc 关闭 / aria 完整。
-   - **P3-1**：标题输入「x/20」、调取码「x/12」实时计数；调取码输入非法字符即时提示「仅支持英文/数字/短横线，已自动过滤」并自动过滤。
-   - **P3-3**：仓库空态与面板占位处各加一行引导「双击卡片进入详情 · 拖动左缘调宽，双击重置 · 选中后 1-5 打星」。
+1. **P2-8 搜索结果按相关度排序（标题命中优先）**：搜索激活（`search.trim()` 非空）时，`visibleCards` 在过滤后、排序前插入相关度打分；无搜索时维持原 sortMode；`@code` 直达保持仅按调取码匹配、排序不变。
+2. **P2-9 左侧标签管理（删除标签 = 批量从卡片移除，不删卡片）**：TagPanel 每行标签右侧加删除按钮（hover 显示 ×），confirm 后批量从所有含该标签的卡片移除该标签条目（卡片原文不动，与 Flomo 语义一致）；标签计数归 0 时自动从左侧消失；空标签（[]）保留。
+3. **P3-6 保存时自动规范化正文格式（左对齐风格）**：新增 `normalizeBody(body)` 工具，在 `saveBodyOnly` / `saveBodyWithVersion` 入口统一调用；`parseImport` / `parseMarkdownImport` 导入路径同步调用。
 
 ## 验收标准
 
-- 搜索：各字段分别命中；搜索 + 标签筛选叠加正确；`@api` 直达（仅留 code 含 api 的卡）；高亮正确且正文含 `<script>` 文本的卡不被执行（XSS 免疫）；空态与计数正确；刷新即清。
-- 健壮性：快速连点「重新生成」仅最后一次生效、无报错 toast；SettingsModal Tab 循环 / Esc 关闭 / 焦点归还；两个计数器与非法字符提示工作；引导文案显示。
-- 既有回归不破坏：失焦保存、手动建版、回滚、导入导出 .md、冲突提示。
+- **P2-8**：搜「QA」时标题含 QA 的卡排首位，正文仅含 QA 的旧卡靠后；大小写不敏感与 `@code` 隔离保持；同分按现有 sortMode（updated/copies/rating）二级排序；无搜索时维持原 sortMode。
+- **P2-9**：点击标签行 × → confirm「将从 N 张卡片中移除标签「X」，卡片本身不会删除」→ 确认后批量更新并触发 localStorage 落盘与 SSE 同步；标签计数为 0 时自动从左侧消失；只删标签不删卡、卡片原文不动；空标签（[]）保留。
+- **P3-6**：粘贴带前导 tab / 空格的段落保存后，`whitespace-pre-wrap` 下全篇左对齐，无「上半靠左、下半靠右」错位；现有手写 Markdown 结构（≤4 空格缩进的列表嵌套 / 代码块）不被破坏。
+- 既有回归不破坏：失焦保存、手动建版、`@code` 直达、搜索高亮、AI 请求 Abort、焦点闭环。
 - `npx tsc --noEmit` 零错误；`npm run lint` 零错误。
 
 ## 实施方案
 
-- **搜索状态**：`page.tsx` 增 `searchQuery`（立即值，受控输入）与 `debouncedQuery`（useEffect 300ms 防抖）。`visibleCards` 拆为三段：`baseCards`（视图 + 标签过滤）→ 搜索过滤（`@` 开头仅匹配 code，否则多字段 includes，均 lowercase）→ 排序。
-- **SortBar**：新增 `search` / `onSearchChange` / `total` props；渲染搜索框（放大镜 + 清除按钮 + placeholder 注明 `@code 直达`）；`search.trim()` 非空时计数切换为「命中 x / 共 y」。
-- **CardItem**：新增 `query` prop；组件内 `highlightParts(text, query)` 按小写 indexOf 拆分纯文本节点，命中片段包 `<mark>`（bg-gold/30），不触碰 dangerouslySetInnerHTML；标题 / 正文 / 标签 / 调取码徽标均高亮。
-- **AbortController**：PreviewPanel / CardDetail 各加 `metaAbortRef` / `summaryAbortRef`，Composer 加 `abortRef`；fetch 传 `signal`；新请求前 `abort()` 旧请求；`catch`/`finally` 中 `ac.signal.aborted` 时跳过 toast 与 setState；卸载 `useEffect` cleanup 统一 abort。
-- **useModalFocus**：新建 `src/hooks/useModalFocus.ts`（FOCUSABLE 选择器 + Tab 循环 + 打开聚焦首个可聚焦元素 + cleanup 归还焦点 + 可选 onEscClose 用 ref 保存避免依赖抖动）；CardDetail 移除组件内定义改 import（Esc 仍走原有 window 监听）；SettingsModal 移除自建 useEffect 改复用（传 onClose 处理 Esc）。
-- **P3-1 计数**：PreviewPanel 标题输入容器 relative + 右下角「n/20」、调取码「n/12」（input 加右 padding）；CardDetail 的 label 行改 flex 两端布局加计数。调取码 onChange 先 `replace(/[^a-zA-Z0-9-]/g, '')` 过滤，若过滤掉字符则 setState 提示 + 2.5s 定时器消失（卸载清理）。
-- **P3-3 引导**：`page.tsx` 仓库空态（cards.length === 0 分支）按钮下方加一行小字；`PreviewPanel` 未选中卡片占位（!card 分支）加同一行小字。
+- **P2-8 相关度打分**（`src/app/page.tsx`）：模块级新增 `relevanceScore(c, term)`（title=4 / code=3 / tag=3 / notes=2 / body=1，命中取最高分）与 `compareBySortMode(a, b, mode)`（抽出现有三分支 sortMode 比较逻辑）；`visibleCards` 中 `searchActive && !searchTerm.startsWith('@')` 时先按 score desc 排序、同分再按 sortMode 二级排序；`@` 模式与无搜索维持原 sortMode。
+- **P2-9 标签删除**（`src/components/TagPanel.tsx` + `src/app/page.tsx`）：TagPanel 新增可选 `onDeleteTag` prop；TagRow 重构为 div 容器（避免 button 嵌套），主按钮 flex-1 + 右侧 hover 显示 ×（focus-visible 也显示，键盘可达）；`page.tsx` 新增 `handleDeleteTag`：按 `cards` 统计含该标签卡片数 → `window.confirm` → `setCards(prev => prev.map(c => c.tags.includes(tag) ? { ...c, tags: c.tags.filter(t => t !== tag) } : c))`（复用现有 cards 落盘 + SSE 同步链）；被删标签为当前选中项时顺带取消选中；demo 视图不传 `onDeleteTag`。
+- **P3-6 normalizeBody**（`src/lib/cards.ts` + `src/lib/storage.ts`）：`cards.ts` 新增 `normalizeBody(body)`：① 逐行去前导 tab；② 纯空白行归一为空行；③ 非空行前导空格保留最多 4 个（超过部分 collapse），避免破坏 Markdown 列表 / 代码块缩进；④ 去首尾空行；⑤ 合并连续空行（`\n{3,}` → `\n\n`，最多保留 1 个空行）。`saveBodyOnly` / `saveBodyWithVersion` 入口先 normalize 再落库（`saveBodyOnly` 的 `===` 短路比较在 normalize 之后进行）；`storage.ts` 的 `parseImport`（JSON）与 `parseMarkdownImport`（Markdown）导入卡片 body 同步 normalize，保证导入与新建一致。
 
 ## 进行中 / 待办
 
-- 剩余候选不在本轮范围：范围 C（MCP 架构）、P2-3（`<md` 面板降级）、P2-5（危险操作撤销）等，见 `docs/review/PRODUCT_BACKLOG.md`。
+- 本轮三项：P2-8 相关度排序 / P2-9 标签管理 / P3-6 正文规范化。
+- 不在本轮范围（保留候选池）：P2-10 网格直删、P2-11 批量管理、P2-3 `<md` 面板降级、P2-5 危险操作撤销、P2-7 空/离线态区分、P3-2 版本 diff、P3-4 Composer 自适应等，见 `docs/review/PRODUCT_BACKLOG.md`。
 
 ---
 
@@ -42,3 +37,11 @@
 - 本轮（搜索 + 健壮性批次 A+B）已交付并通过 QA PASS / 产品验收 PASS，详见 `docs/progress/CURRENT_STAGE.md` 与 `docs/handoff/HANDOFF.md`。
 - 实现：SortBar 搜索框 + 三段过滤链（baseCards→搜索→排序，AND 叠加）+ `highlightParts` `<mark>` 高亮（XSS 免疫）+ 命中计数/空态引导（刷新即清）+ AbortController 5 处 + `useModalFocus` 共享 Hook + 字符计数/非法字符提示 + 引导文案；自测 10 项、tsc/lint 零错误。
 - 下轮待排期：P2-8~11 / P3-6 等，见 `docs/review/PRODUCT_BACKLOG.md` 候选池。
+
+---
+
+## 已收口（2026-08-26，P2-8/P2-9/P3-6 三项打包，待提交）
+
+- 本轮三项打包已交付并通过 QA PASS 第六次与产品验收 PASS（2026-08-26），详见 `docs/progress/CURRENT_STAGE.md` 与 `docs/handoff/HANDOFF.md`。
+- 实现：`relevanceScore`（title 4/code 3/tag 3/notes 2/body 1，`toLowerCase()` 大小写不敏感）+ `compareBySortMode` 二级排序（`@code` 隔离）；`TagPanel` TagRow 重构 + `handleDeleteTag` 批量移除（confirm、选中态取消、总数不变）；`normalizeBody` 5 步左对齐（去 tab/纯空白归一/最多 4 空格/去首尾空行/合并连续空行）于 `saveBodyOnly`/`saveBodyWithVersion` 与导入路径统一生效；自测 7 项、tsc/lint 零错误。
+- 下轮待排期：P2-10/P2-11/P2-3 等，见 `docs/review/PRODUCT_BACKLOG.md` 剩余候选池。

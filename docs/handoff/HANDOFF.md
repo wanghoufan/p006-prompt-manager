@@ -5,13 +5,12 @@
 ## 当前状态
 
 - 项目：提示词管理工具（Prompt Manager），Next.js 16（App Router）+ React 19 + TypeScript 5 + Tailwind v4。
-- 阶段：功能开发期。已完成主体：跨设备实时同步、UI 优化（含正文优先布局重构）、调取码字段、MCP 集成、MCP 调用计数、备注字段、失焦自动保存、回滚 bug 修复、**全局搜索 + 健壮性批次（范围 A+B）**。
-- **最新提交（bef563f，已推送）**：「全局搜索 + 健壮性批次（RISK-3/OPT-NEW-2/P3-1/P3-3）」：
-  - 全局搜索（P2-2）：SortBar 旁搜索框 + 300ms 防抖 + 标题/正文/标签/调取码/备注五字段过滤（大小写不敏感）+ 与标签筛选/排序 AND 叠加 + `@code` 直达（仅按调取码匹配）+ `<mark>` 纯文本拆分高亮（XSS 免疫）+ SortBar「命中 x / 共 y」计数 + 空态引导；搜索词不持久化。
-  - RISK-3 已修复：PreviewPanel / CardDetail / Composer 5 处 AI 请求全部接入 AbortController（新请求前 abort 旧、卸载 abort、`ac.signal.aborted` 守卫跳过 toast/setState）。
-  - OPT-NEW-2 已修复：`useModalFocus` 抽为共享 Hook（`src/hooks/useModalFocus.ts`），CardDetail 与 SettingsModal 复用（Tab 循环 / 首焦点 / 归还 / 可选 Esc）。
-  - P3-1：标题「x/20」、调取码「x/12」计数 + 调取码非法字符即时过滤并提示；P3-3：仓库空态与面板占位引导文案。
-- 上一提交（44c4a3a）：P0/P1 修复 8 项（渲染期 ref / 失焦不建版 / 同步串行化 / 评分快捷键守卫 / TagPanel 文案 / 关闭切卡丢稿 / 导入选择器 / 调取码冲突语义）。
+- 阶段：功能开发期。已完成主体：跨设备实时同步、UI 优化（含正文优先布局重构）、调取码字段、MCP 集成、MCP 调用计数、备注字段、失焦自动保存、回滚 bug 修复、**全局搜索 + 健壮性批次（范围 A+B）+ P2-8/P2-9/P3-6 三项打包**。
+- **最新提交（待推送，三项打包）**：「P2-8 搜索相关度排序 + P2-9 标签管理 + P3-6 正文格式规范化」：
+  - P2-8 搜索相关度：`src/app/page.tsx` 新增 `relevanceScore(c, term)`（title 4 / code 3 / tag 3 / notes 2 / body 1 取最高分，`term.toLowerCase()` 修正大小写）与 `compareBySortMode`；`visibleCards` 在 `searchActive && !searchTerm.startsWith('@')` 时先 score desc、同分再 sortMode 二级排序，`@code` 直达与无搜索维持原 sortMode。
+  - P2-9 标签管理：`src/components/TagPanel.tsx` TagRow 重构为 div+主按钮 flex-1+右侧 hover×（focus-visible 可达），新增 `onDeleteTag` prop；`src/app/page.tsx` `handleDeleteTag` 统计 N→confirm「将从 N 张卡片中移除标签…卡片本身不会删除」→批量 `filter(t!==tag)` 复用落盘+SSE，选中态自动取消，总数不变；demo 视图隐藏×。
+  - P3-6 格式规范化：`src/lib/cards.ts` 新增 `normalizeBody` 5 步（逐行去前导 tab / 纯空白归一 / 非空行最多保留 4 空格 / 去首尾空行 / 合并连续空行 `\n{3,}`→`\n\n`），在 `saveBodyOnly`/`saveBodyWithVersion` 入口统一调用；`src/lib/storage.ts` `parseImport`/`parseMarkdownImport` 导入路径同步调用，保证导入与新建一致。
+- 上一提交（a8598cf，已推送）：里程碑收尾——搜索+健壮性批次 QA/产品验收对账；再上一提交 bef563f：全局搜索 + 健壮性批次（RISK-3/OPT-NEW-2/P3-1/P3-3）。
 - 远程仓库：https://github.com/wanghoufan/prompt-manager.git（master，已配置）。
 - dev 服务：`./dev-server.sh` watchdog 管理（start/stop/restart/status/logs），监听 `*:3000`。
 
@@ -23,10 +22,12 @@
 4. **MCP 注册位置（重要坑）**：WorkBuddy UI 读的是 `~/.workbuddy/mcp.json`（**不带点**）；`~/.workbuddy/.mcp.json`（**带点**）是 connector-proxy 专用，勿混。MCP 中途启用需**新开会话**才加载工具元数据。
 5. **触发话术**：单纯发短码 WorkBuddy 不识别，需「调取/激活/加载/切换到/用…跑 + 短码」。
 6. **自动注入限制**：MCP 协议无法强制客户端把 tool result 注入 system prompt；最终依赖 WorkBuddy 模型遵循工具 description，或用户在 WorkBuddy 全局系统提示词加固定指令。
-7. **全局搜索**：`searchQuery`（受控即时值）与 `debouncedQuery`（300ms 防抖过滤依据）分离，均仅 `useState` 不持久化（刷新即清）；过滤链三段：`baseCards`（视图+标签）→ 搜索过滤（普通 5 字段 includes / `@` 模式仅 code）→ 排序；搜索激活时 SortBar 计数切换为「命中 x / 共 y」。**已知待优化**：搜索命中后仍按 sortMode 排序，无「标题命中优先」的相关度排序（已记 P2-8）。
+7. **全局搜索**：`searchQuery`（受控即时值）与 `debouncedQuery`（300ms 防抖过滤依据）分离，均仅 `useState` 不持久化（刷新即清）；过滤链三段：`baseCards`（视图+标签）→ 搜索过滤（普通 5 字段 includes / `@` 模式仅 code）→ 排序；搜索激活时 SortBar 计数切换为「命中 x / 共 y」；**P2-8 已补相关度排序**：非 `@` 搜索时先按 `relevanceScore`（title 4 / code 3 / tag 3 / notes 2 / body 1，`toLowerCase()` 大小写不敏感）score desc、同分再 `compareBySortMode` 二级排序，`@code` 直达保持原 sortMode。
 8. **共享 Hook（OPT-NEW-2）**：`src/hooks/useModalFocus.ts` 统一模态框焦点（FOCUSABLE 选择器 / Tab 循环 / 打开聚焦首元素 / cleanup 归还 / 可选 onEscClose 经 ref 保存避免依赖抖动）；CardDetail 保留自有 window Esc 监听（不传 onEscClose），SettingsModal 传 onClose 处理 Esc。
-9. 清理工具（neat-freak）只在整体完成 / 交付 / 文档明显失配时跑完整收尾。
-10. 阶段性 `commit` / `push` 需用户明确授权；`.gitignore` 隔离 `scratch/`、`node_modules/`、`.next/`、`.env*`、`data/`、`.workbuddy/`、`mcp/prompt-server/{node_modules,dist}/`。
+9. **标签管理（P2-9）**：`TagPanel` hover× 批量移除语义与 Flomo 一致（只删标签条目，不删卡片，原文不动）；`handleDeleteTag` 复用 `setCards` 落盘+SSE 同步链，计数归 0 自动消失。
+10. **正文规范化（P3-6）**：`normalizeBody` 左对齐 5 步规则（去前导 tab / 纯空白归一 / 最多保留 4 空格 / 去首尾空行 / 合并连续空行），在 `saveBodyOnly`/`saveBodyWithVersion` 与导入两路径统一入口，保证新建与导入一致。
+11. 清理工具（neat-freak）只在整体完成 / 交付 / 文档明显失配时跑完整收尾。
+12. 阶段性 `commit` / `push` 需用户明确授权；`.gitignore` 隔离 `scratch/`、`node_modules/`、`.next/`、`.env*`、`data/`、`.workbuddy/`、`mcp/prompt-server/{node_modules,dist}/`。
 
 ## 文件结构（根目录，关键项）
 
@@ -63,7 +64,7 @@
 
 ## 下一步
 
-- **里程碑已收口（bef563f）：全局搜索（P2-2）+ 健壮性批次（RISK-3/OPT-NEW-2/P3-1/P3-3）已通过 QA PASS（2026-08-26）与产品验收 PASS（2026-08-26），待下轮按 `docs/review/PRODUCT_BACKLOG.md` P2-8~11/P3-6 择机排期。**
+- **里程碑已收口（待提交）：P2-8 搜索相关度排序 + P2-9 标签管理 + P3-6 正文格式规范化已通过 QA PASS 第六次与产品验收 PASS（2026-08-26），待下轮按 `docs/review/PRODUCT_BACKLOG.md` 剩余候选 P2-10/P2-11/P2-3 等择机排期。**
 - 剩余风险（不阻断，建议单独排期）：RISK-1 MCP 直读 `store.json` 陈旧数据、RISK-2 MCP 计数失败静默、RISK-5 调取码冲突边缘场景，详见 `docs/review/CODE_REVIEW.md`。
-- 待办候选：P2-8 搜索相关度排序（标题命中优先）、P2-9 标签管理（删除标签=批量移除，不删卡片）、P2-10 网格直删入口、P2-11 批量管理、P2-3 `<md` 面板适配、P2-5 危险操作撤销、P2-7 空/离线态区分；P3：版本 diff、Composer 自适应、P3-6 正文格式规范化等，详见 PRODUCT_BACKLOG。
+- 待办候选：P2-10 网格直删入口、P2-11 批量管理、P2-3 `<md` 面板适配、P2-5 危险操作撤销、P2-7 空/离线态区分；P3：版本 diff、Composer 自适应等，详见 PRODUCT_BACKLOG。
 - 若 WorkBuddy 调取仍不自动按角色执行，用户可在 WorkBuddy 全局系统提示词加入工具触发说明。

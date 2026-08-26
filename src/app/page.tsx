@@ -17,6 +17,24 @@ import { CardDetail } from '@/components/CardDetail'
 import { SettingsModal } from '@/components/SettingsModal'
 import { Toast } from '@/components/Toast'
 
+// P2-8 搜索相关度打分：命中字段优先级 title=4 / code=3 / tag=3 / notes=2 / body=1，取最高分
+function relevanceScore(c: Card, term: string): number {
+  const t = term.toLowerCase()
+  if (c.title.toLowerCase().includes(t)) return 4
+  if ((c.code ?? '').toLowerCase().includes(t)) return 3
+  if (c.tags.some((tag) => tag.toLowerCase().includes(t))) return 3
+  if ((c.notes ?? '').toLowerCase().includes(t)) return 2
+  if (c.body.toLowerCase().includes(t)) return 1
+  return 0
+}
+
+// 现有 sortMode 三分支排序逻辑（updated / copies / rating）
+function compareBySortMode(a: Card, b: Card, mode: SortMode): number {
+  if (mode === 'copies') return b.copyCount - a.copyCount || b.updatedAt.localeCompare(a.updatedAt)
+  if (mode === 'rating') return b.rating - a.rating || b.updatedAt.localeCompare(a.updatedAt)
+  return b.updatedAt.localeCompare(a.updatedAt)
+}
+
 export default function Home() {
   const [cards, setCards] = useState<Card[]>([])
   const [settings, setSettings] = useState<Settings>(() => ({ thinkingSummaryPrompt: '' }))
@@ -172,12 +190,17 @@ export default function Home() {
       }
     }
     const arr = [...list]
-    if (sortMode === 'copies') {
-      arr.sort((a, b) => b.copyCount - a.copyCount || b.updatedAt.localeCompare(a.updatedAt))
-    } else if (sortMode === 'rating') {
-      arr.sort((a, b) => b.rating - a.rating || b.updatedAt.localeCompare(a.updatedAt))
+    // P2-8：搜索激活（非 @code 模式）时先按相关度排序（score desc），同分再按现有 sortMode 二级排序；
+    // @code 直达仅按调取码匹配，保持原有 sortMode；无搜索时维持原 sortMode
+    if (searchActive && !searchTerm.startsWith('@')) {
+      arr.sort((a, b) => {
+        const sa = relevanceScore(a, searchTerm)
+        const sb = relevanceScore(b, searchTerm)
+        if (sa !== sb) return sb - sa
+        return compareBySortMode(a, b, sortMode)
+      })
     } else {
-      arr.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      arr.sort((a, b) => compareBySortMode(a, b, sortMode))
     }
     return arr
   }, [baseCards, searchActive, searchTerm, sortMode])
@@ -296,6 +319,18 @@ export default function Home() {
     notify('卡片已删除')
   }
 
+  // P2-9 删除标签 = 批量从卡片移除该标签条目（不删卡片，语义与 Flomo 一致）
+  function handleDeleteTag(tag: string) {
+    const count = cards.filter((c) => c.tags.includes(tag)).length
+    if (count === 0) return
+    if (!window.confirm(`将从 ${count} 张卡片中移除标签「${tag}」，卡片本身不会删除，确定继续？`)) return
+    setCards((prev) =>
+      prev.map((c) => (c.tags.includes(tag) ? { ...c, tags: c.tags.filter((t) => t !== tag) } : c)),
+    )
+    if (selectedTag === tag) setSelectedTag(null)
+    notify(`已从 ${count} 张卡片移除标签「${tag}」`)
+  }
+
   function handleExport() {
     const md = buildMarkdownExport(cards)
     const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
@@ -377,6 +412,7 @@ export default function Home() {
           selected={selectedTag}
           onSelect={handleSelectTag}
           offline={serverOnline === false}
+          onDeleteTag={isDemoView ? undefined : handleDeleteTag}
         />
         <main className="flex min-w-0 flex-1 gap-4 overflow-hidden px-5 py-4">
           <div className="min-w-0 flex-1 space-y-4 overflow-y-auto">

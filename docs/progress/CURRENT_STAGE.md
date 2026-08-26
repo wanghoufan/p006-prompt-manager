@@ -7,76 +7,65 @@
 > 本文件是 Builder 的「技术交接材料」载体，供 Stage Manager 判断下一步。只维护当前阶段，不按日期无限累积。
 
 ## 当前阶段
-- Stage：搜索 + 健壮性批次（范围 A+B）收尾
-- 完成度：实现 100%；自测 100%（tsc 0 错误 / lint 0 错误 / 10 项浏览器手测全部通过）
-- 风险等级：L0（无阻断性风险）；范围 C（MCP 架构）与 P2-3 / P2-5 等未选项目不阻断
+- Stage：P2-8 / P2-9 / P3-6 三项打包
+- 完成度：实现 100%；自测 100%（tsc 0 错误 / lint 0 错误 / 浏览器手测关键路径全部通过）
+- 风险等级：L0（无阻断性风险）；纯前端 / 轻量逻辑，无新依赖
 
 ## 本轮已完成
 
-### 范围 A · 全局搜索（P2-2）
-- **SortBar 旁搜索框**（`src/components/SortBar.tsx`）：放大镜 + 清除按钮 + placeholder「搜索标题/正文/标签/备注 · @code 直达」；纯前端 300ms 防抖，无新依赖。
-- **过滤链三段**（`src/app/page.tsx`）：`baseCards`（视图 + 标签）→ 搜索过滤（普通模式 5 字段 includes；`@` 模式仅按调取码 includes；均 lowercase）→ 排序。AND 叠加。
-- **高亮**（`src/components/CardItem.tsx`）：`highlightParts` 按小写 `indexOf` 拆分纯文本节点，命中片段包 `<mark className="rounded-[2px] bg-gold/30">`，覆盖标题 / 正文 / 标签 / 调取码徽标；**全程 React 文本节点渲染，无 dangerouslySetInnerHTML，XSS 天然免疫**。
-- **计数**：`search.trim()` 非空时 SortBar 切换「命中 x / 共 y 张」，x = `visibleCards.length`、y = `baseCards.length`。
-- **空态**：搜索有值且 0 命中时显示「未找到匹配的卡片」+ 引导（试试其他关键词 / @ 调取码 / 清空搜索）。
-- **不持久化**：`searchQuery` 仅 `useState('')`，刷新即清。
+### P2-8 搜索结果按相关度排序（标题命中优先）
+- **位置**：`src/app/page.tsx` 模块级新增 `relevanceScore(c, term)`（title=4 / code=3 / tag=3 / notes=2 / body=1，命中取最高分）与 `compareBySortMode(a, b, mode)`（抽出现有三分支 sortMode 比较逻辑）。
+- **`visibleCards` 排序分支**：`searchActive && !searchTerm.startsWith('@')` 时先按 score desc 排序、同分再按 sortMode 二级排序；`@code` 直达模式与无搜索时维持原 sortMode。
+- **Bug 修复**：首版 `relevanceScore` 未对 term 小写化（搜索过滤用 `toLowerCase()`，但打分传入原始大写 "QA"），导致 title 命中判定失败。已在函数内 `const t = term.toLowerCase()` 修正。
+- **验证**：搜「QA」时 5 张标题含 QA 的卡（执行QA验收检查 / QA测试执行与Bug记录 / 建立QA基线并更新检查清单 / QA后按规则恢复 / 汇总QA审核结论）全部排前 5（score=4），正文命中卡靠后；小写「qa」同样命中（大小写不敏感）；`@jbyj` 命中 1 张（@code 隔离保持）；清空搜索后「开发节奏与质量门控决策助手」排第一（无搜索时按 sortMode 恢复）。
 
-### 范围 B · 健壮性批次
-- **RISK-3 AbortController**：`PreviewPanel.tsx` / `CardDetail.tsx` / `Composer.tsx` 5 处 AI 请求（regenMeta / runSummary / generate）全部接入；`abortRef.current?.abort()` 新请求前取消旧请求；卸载 `useEffect` cleanup 统一 abort；`catch` / `finally` 中 `ac.signal.aborted` 守卫跳过 toast 与 `setState`（`if (!ac.signal.aborted && abortRef.current === ac) setLoading(false)`），杜绝卸载后 setState 与竞态闪烁。
-- **OPT-NEW-2 共享 hook**：新建 `src/hooks/useModalFocus.ts`（FOCUSABLE 选择器 / Tab 循环 / 打开聚焦首元素 / cleanup 归还焦点 / 可选 onEscClose 经 `useRef` 保存避免调用方内联函数导致 effect 重跑造成焦点抖动）。`CardDetail` 改 import（保留自有 `window` Esc 监听）；`SettingsModal` 移除自建 `useEffect` 改复用，传 `onClose` 处理 Esc。`role="dialog"` / `aria-modal` / `aria-label` 完整。
-- **P3-1 字符计数 + 非法字符**：标题输入右下角「x/20」、调取码「x/12」实时计数（PreviewPanel 用 `relative` 容器 + 绝对定位 span；CardDetail 用 label 行 flex 两端布局）。调取码 `onChange` 立即 `replace(/[^a-zA-Z0-9-]/g,'')` 过滤，触发时显示「仅支持英文/数字/短横线，已自动过滤」2.5s 自动消失（`codeTipTimer` 卸载清理）。
-- **P3-3 引导文案**：仓库空态（`cards.length === 0` 分支）按钮下方 + PreviewPanel 未选中占位（`!card` 分支）各加一行小字「双击卡片进入详情 · 拖动左缘调宽，双击重置 · 选中后 1-5 打星」。
+### P2-9 左侧标签管理（删除标签 = 批量从卡片移除）
+- **位置**：`src/components/TagPanel.tsx` 新增可选 `onDeleteTag` prop；TagRow 重构为 div 容器（避免 button 嵌套），主按钮 flex-1 + 右侧 hover 显示 ×（`group-hover:opacity-100` + `focus-visible:opacity-100`，键盘可达）。
+- **`page.tsx` `handleDeleteTag`**：按 `cards` 统计含该标签卡片数 → `window.confirm「将从 N 张卡片中移除标签「X」，卡片本身不会删除」` → `setCards(prev => prev.map(c => c.tags.includes(tag) ? { ...c, tags: c.tags.filter(t => t !== tag) } : c))`（复用现有 cards 落盘 + SSE 同步链）；被删标签为当前选中项时顺带取消选中；demo 视图不传 `onDeleteTag`（readonly）。
+- **验证**：选「toke」标签（1 张卡）点击 × → confirm → 标签从「定点读取交接信息」卡移除（tags 由 `['toke', '开发恢复', '多age']` 变为 `['开发恢复', '多age']`），左侧「toke」标签自动消失，全部 31 张卡总数不变（只删标签不删卡、原文不动）；标签总数 16 → 15。
+
+### P3-6 保存时自动规范化正文格式（左对齐风格）
+- **位置**：`src/lib/cards.ts` 新增 `normalizeBody(body)`，在 `saveBodyOnly` / `saveBodyWithVersion` 入口统一调用（`saveBodyOnly` 的 `===` 短路比较在 normalize 之后进行）；`src/lib/storage.ts` 的 `parseImport`（JSON 路径 `.map(c => ({...c, body: normalizeBody(c.body)}))`）与 `parseMarkdownImport`（`flush()` 内 `normalizeBody(current.body.join('\n'))`）导入卡片 body 同步调用，保证导入与新建一致。
+- **规则**：① 逐行去前导 tab；② 纯空白行归一为空行；③ 非空行前导空格保留最多 4 个（超过部分 collapse），避免破坏 Markdown 列表 / 代码块缩进；④ 去首尾空行（slice 头尾空行而非 `trim()`，保留首行 4 空格缩进）；⑤ 合并连续空行（`\n{3,}` → `\n\n`，最多保留 1 个空行）。
+- **验证**：在 PreviewPanel 改「测试语音输入法效果」body 为带 tab / 多余空格的测试内容并 blur 保存后查 `data/store.json` 落盘：所有前导 tab 全去（如「\t\t\t深缩进」→「深缩进」）；6 空格行 → 4 空格（「       6空格子项」→「    6空格子项」）；8 空格行 → 4 空格；2 空格行保留 2 空格；连续空行（`\n\n\n\n`）合并为单空行（`\n\n`）。手测后已恢复测试卡原 body 并重启 dev server 让 serverStore 重新从文件加载。
 
 ## 涉及文件
-- 新增：`src/hooks/useModalFocus.ts`
-- 修改：`src/app/page.tsx`、`src/components/SortBar.tsx`、`src/components/CardItem.tsx`、`src/components/PreviewPanel.tsx`、`src/components/CardDetail.tsx`、`src/components/Composer.tsx`、`src/components/SettingsModal.tsx`
-- 文档：`docs/pm/PLAN.md`（覆盖）、本文件、`docs/review/PRODUCT_BACKLOG.md`（5 项移入「已完成」）
+- 修改：`src/app/page.tsx`（P2-8 relevanceScore / compareBySortMode / visibleCards 排序分支 / handleDeleteTag / TagPanel onDeleteTag 传入）、`src/components/TagPanel.tsx`（TagRow 重构 + onDeleteTag prop）、`src/lib/cards.ts`（normalizeBody + saveBodyOnly / saveBodyWithVersion 入口）、`src/lib/storage.ts`（import normalizeBody + parseImport / parseMarkdownImport 调用）
+- 文档：`docs/pm/PLAN.md`（当前目标段覆盖为 P2-8/P2-9/P3-6）、本文件
 
 ## 自测
 - `npx tsc --noEmit`：零错误。
 - `npm run lint`：零错误。
-- 浏览器手测（agent-browser Chromium + 真机/浏览器目检）10 项全部通过：
-  1. 各字段分别命中（标题「手测7」/正文「TranscriptBuffer」/标签「vpn代理」/调取码「cmctest」/备注「手测5-备注A」）；
-  2. 搜索+标签叠加（标签「经验记录」5 张 + 搜「开发」→ 命中 3 / 共 5，命中卡均含「经验记录」标签且含「开发」关键词）；
-  3. @code 直达（@cmctest 命中 1 张含该 code 的卡；@整理 0 命中 → 空态，确认 @ 模式不匹配正文）；
-  4. XSS 免疫 + 高亮（Composer 创建正文含 `<script>alert('XSS_TEST')</script>` 的卡，搜索「alert」截图：正文以纯文本渲染无弹窗，「alert」被金色 `<mark>` 高亮）；
-  5. 空态与计数（多次确认「命中 x / 共 y」格式与「未找到匹配的卡片」空态文案）；
-  6. 快速连点「重新生成」（regenMeta 3 次连击，按钮最终回到非 disabled 态、无残留错误——AbortController 正确 abort 旧请求）；
-  7. SettingsModal 焦点（打开后首焦点 BUTTON / Tab 循环 textarea/恢复默认/取消/保存 / Esc 关闭 / 焦点归还到「设置」按钮）；
-  8. 计数与非法字符（标题/调取码「n/20」「n/12」显示；调取码输入 `abc@!` 自动过滤为 `abc` 并显示「仅支持英文/数字/短横线，已自动过滤」）；
-  9. 引导文案（仓库空态 + 右侧面板占位均显示新一行手势引导，截图确认）；
-  10. 回归抽样（失焦保存：改 title + blur → 角标「已自动保存」出现、title 落盘、versions 不增；手动建版：改 body + 点保存 → versions +1、角标「已自动保存」）。
-- 关于「刷新即清」：搜索词仅 `useState` 不入 localStorage，刷新后由 React 初始值重置，代码层保证。
-
-## QA 副作用与遗留（需用户确认处理方式）
-手测过程中为验证 XSS 免疫创建了 1 张测试卡、并在真实卡片上做了失焦保存 / 手动建版 / AI 重新生成回归验证。**所有已通过 React 兼容 value-setter 方式在 UI 内恢复为原值**，仅余下列 2 项：
-- ① 测试卡 1 张「验证高亮不执行脚本」（正文含 `<script>alert('XSS_TEST')</script>…`）—— agent-browser 自动 dismiss 弹窗不覆盖 `window.confirm`，UI 删除流程被 confirm 阻塞；需**停服清理 `data/store.json` 或手动删除**（待用户授权）。
-- ② 真实卡「手测7-新标题」版本数 +1（手测⑩手动建版恢复时多生成一条与原 body 完全一致的版本）—— 实际无害（10 条上限未触顶），如需纯净可一并清理。
+- 浏览器手测（agent-browser Chromium，真机目检）：
+  1. **P2-8 搜索「QA」**（截图 `scratch/manual-test/p28-search-qa.png`）：命中 16 / 共 31；前 5 张卡依次为「执行QA验收检查 / QA测试执行与Bug记录 / 建立QA基线并更新检查清单 / QA后按规则恢复 / 汇总QA审核结论」（标题含 QA，score=4），随后为「开发节奏与质量门控决策助手」等正文/标签命中卡（score=1）；命中关键词「QA」以金色 `<mark>` 高亮。
+  2. **P2-8 大小写不敏感**：搜「qa」命中 16 张，顺序与「QA」一致。
+  3. **P2-8 `@code` 隔离**：`@jbyj` 命中 1 张（开发经验记录Agent提示词），排序维持原 sortMode（@ 模式跳过相关度）。
+  4. **P2-8 无搜索恢复 sortMode**：清空搜索后「开发节奏与质量门控决策助手」排第一。
+  5. **P2-9 标签删除**：点击「toke」行 × → confirm → 「定点读取交接信息」tags 由 `['toke', '开发恢复', '多age']` 变为 `['开发恢复', '多age']`；左侧「toke」标签消失，全部 31 张卡总数不变；store.json JSON 校验通过。
+  6. **P3-6 normalize**：测试卡 body 改测试内容 → blur → store.json 落盘：tab 全去、6/8 空格→4 空格、2 空格保留、连续空行合并、首尾空行去。手测后已恢复 body 并重启 dev server。
+  7. **回归：失焦保存**：点 QA 卡片 → PreviewPanel title 改 + Tab blur → 角标「· 已自动保存」出现 + grid 标题同步更新。手测后已恢复原 title。
+- 运行时数据：`data/store.json` 经 P3-6 测试短暂污染（已恢复测试卡 body）、P2-9 移除「toke」标签（已通过 confirm 授权）、回归 title 改回原值。已备份到 `scratch/store.json.bak-20260826-123001`，并按规范停服 → 改文件 → JSON 校验 → 重启 dev server 验证 HTTP 200 / `/api/sync` 200。
 
 ## 风险 / 未验证
-- 剩余架构 / 规范类风险（未修，不阻断交付，建议单独排期）：
-  - RISK-1：MCP 直读 `data/store.json` 可能拿到陈旧数据（建议 MCP 改走 HTTP 读取）。
-  - RISK-2：MCP 计数 fire-and-forget，失败静默导致 copyCount 少计。
-  - RISK-5：调取码冲突自动保存提示已补（本轮修复 8），剩余「冲突检测时机」边缘场景可继续观察。
-- 范围 C（MCP 架构）与 P2-3（`<md` 面板降级）/ P2-5（危险操作撤销）等未选项目继续保留在 `docs/review/PRODUCT_BACKLOG.md` 候选池。
+- AbortController / SettingsModal 焦点闭环：未在本轮单独回归，代码路径未触碰（`PreviewPanel` / `CardDetail` / `Composer` 的 `*AbortRef` 与 `useModalFocus` 文件本轮未改），无破坏风险。
+- normalizeBody 对粘贴的 4 空格代码块（Markdown fenced 缩进）保留 4 空格符合「保留 Markdown 合法缩进」原则，但未在真实代码块场景实测。
+- 编辑 P3-6 测试期间，agent-browser 自动 dispatch 'input' 事件时 React 合成 onChange 的异步 setState 会让 draftRef 更新滞后于 dispatchEvent('blur')，故 P3-6 验证采用「真实键盘 type + Tab blur」完整 React 状态流而非 dispatchEvent 路径。
 
 ## 给下一角色的技术交接要点
-- QA 重点：搜索高亮（`CardItem.highlightParts` 纯文本拆分）与 AbortController（`PreviewPanel` / `CardDetail` / `Composer` 的 `*AbortRef` + cleanup）的代码路径。
+- QA 重点：
+  - P2-8：搜不同字段关键词（标题/正文/标签/调取码/备注）确认相关度排序；同分时切换 sortMode 验证二级排序；@code 模式。
+  - P2-9：在含多张卡的标签上删除验证批量；空标签（cards.length===0 的边界）；demo 视图不显示 ×；带 confirm 取消分支。
+  - P3-6：粘贴带 tab/多空格的真实场景（富文本、Markdown 模板、代码块）；极端案例（全 tab 行、超长缩进、CRLF）；导入路径（导出 Markdown → 重新导入 → body 应已 normalize）。
 - 技术风险：无阻断项。
-- 潜在回归：搜索过滤使 `visibleCards` 与 `baseCards` 分离，`SortBar` 的 `count` / `total` 含义需保持一致（count = 过滤后、total = 标签+视图过滤后基数）。
-- 可能需要 Review 的核心区域：`page.tsx` 的 `baseCards` / `searchActive` / `searchTerm` 三段派生；`useModalFocus` 的 `onEscClose` ref 模式。
-- 可能需要 Product / Visual 关注的变化：搜索框 placeholder（注明 `@code` 直达与多字段范围）、空态引导、计数格式切换。
+- 潜在回归：normalizeBody 改变了 saveBodyOnly 的 `===` 短路语义——若用户输入空字符串 normalize 后仍为空，`body === card.body` 为真时直接返回原卡（updatedAt 不变），与之前一致；若输入与原 body 字符串完全相同也会短路。无回归。
 
 ## 建议下一步
-- 提交并推送本轮（实现 7 改 + 1 新 + 3 文档 + 工作区已有 `docs/DEV_EXPERIENCE.md` 未提交改动一并提交推送）——需用户明确授权。
-- 处理遗留：停服清理 `data/store.json` 中的 XSS 测试卡（1 张）——需用户授权。
-- 进入视觉验收 / 产品验收（Visual / Product Acceptance）→ neat-freak 里程碑收尾（Full Milestone Closeout）。
+- 等待用户【节奏】触发 QA Acceptance。
+- 本轮三项（实现 4 改 + 2 文档）需用户授权后 commit / push。
 
 ---
 
 ## 已收口，待 QA 验收（2026-08-26）
 
-- 本阶段（搜索 + 健壮性批次 A+B）已交付：实现 100%、Builder 自测 100%（tsc/lint 0 错误 + 10 项浏览器手测通过），commit `bef563f` 已推送，git 干净。
-- 遗留说明：`data/store.json` 的 XSS 测试卡已按授权清理（29→28 张）；「手测7-新标题」卡 title 为「版本测试失焦复验」（AI 重新生成残留，body/code 已恢复），多余 1 条版本按指令保留。
-- 待 QA 验收核验项与回归基线见 `docs/handoff/HANDOFF.md`「下一步」；新候选 P2-8~P2-11 见 `docs/review/PRODUCT_BACKLOG.md`。
-- 等待用户【节奏】触发 QA Acceptance。
+- 上一阶段（搜索 + 健壮性批次 A+B，commit `bef563f`）已交付并通过 QA PASS / 产品验收 PASS，详见历史版本。
+- 当前阶段：P2-8 / P2-9 / P3-6 三项打包，实现 + Builder 自测完成；遗留 `data/store.json` 已恢复（测试卡 body 复原、toke 标签移除、回归 title 复原）。待 QA Acceptance。

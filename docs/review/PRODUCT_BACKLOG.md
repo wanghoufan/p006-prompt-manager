@@ -4,17 +4,17 @@
 
 ## 最近一次 Product 执行记录
 
-- 时间：2026-08-26（产品验收 + 视觉验收 — 搜索+健壮性批次 bef563f）
+- 时间：2026-08-26（产品验收 + 视觉验收 — P2-8/P2-9/P3-6 三项打包）
 - 模式：Product Reviewer · 产品验收 + 视觉验收
 - 结果：**PASS** — 无新增 P1 阻断项
-- 输入：`docs/progress/CURRENT_STAGE.md`（待验收含 10 项自测） / `docs/handoff/HANDOFF.md`（bef563f） / `docs/pm/PLAN.md`（搜索/健壮性验收标准） / `docs/qa/BUGS.md`（第五次 QA PASS） / `docs/qa/QA_CHECKLIST.md`（全局搜索 8 项 + 健壮性 12 项） / `docs/review/CODE_REVIEW.md`（RISK-1/2/5 未修不阻断） / `docs/review/PRODUCT_BACKLOG.md`（P2-8~11/P3-6 候选池） / 源码走查 `src/app/page.tsx:144-183`（baseCards→搜索→排序） / `src/components/SortBar.tsx:22-97`（搜索框+计数） / `src/components/CardItem.tsx:21-40`（highlightParts <mark>） / `src/hooks/useModalFocus.ts:1-56` / `src/components/SettingsModal.tsx:6-20` / `src/components/PreviewPanel.tsx:73-296` / `src/components/CardDetail.tsx:30-171`（计数/提示/引导） / `src/components/Composer.tsx:22-55`（Abort）
-- 体验方式：Vision（`docs/screenshots/home.png|detail.png|preview.png` 复核）+ 源码走查 + 实时服务探活（`curl localhost:3000` 200 + `/api/sync` 正常 + `dev-server.sh` 运行中）；未改业务代码/UI，未提交 Git
+- 输入：`docs/progress/CURRENT_STAGE.md`（P2-8 relevanceScore 权重 4/3/3/2/1 + score desc+sortMode二级 + @隔离 + 7项自测含大小写/@/清空恢复） / `docs/pm/PLAN.md`（三项打包验收标准） / `docs/qa/BUGS.md`（第六次 QA PASS） / `docs/qa/QA_CHECKLIST.md`（P2-8/P2-9/P3-6 15项已勾） / `docs/review/CODE_REVIEW.md`（RISK-1/2/5 未修不阻断） / `docs/review/PRODUCT_BACKLOG.md`（上次 2026-08-26 PASS） / 源码走查 `src/app/page.tsx:20-29`（relevanceScore `t=term.toLowerCase()`） + `32-36`（compareBySortMode） + `195-204`（score分支/@隔离） + `322-332`（handleDeleteTag） + `src/components/TagPanel.tsx:14-58`（TagRow div+主按钮+右侧× hover/focus-visible） + `src/lib/cards.ts:19-35`（normalizeBody 5步） + `66-79`（saveBodyOnly/WithVersion 入口） + `src/lib/storage.ts:119-120,260`（导入normalize） / 视觉 `docs/screenshots/home.png|detail.png|preview.png` + 实时探活 `curl localhost:3000 200` + `/api/sync 200` + `dev-server.sh` 运行中
+- 体验方式：Vision（截图复核）+ 源码走查 + 实时服务探活；未改业务代码/UI，未提交 Git
 - 覆盖维度：
-  1. P2-2 搜索：5 字段命中/叠加/@code 隔离/高亮 XSS 免疫/计数「命中 x / 共 y」/空态引导/placeholder/刷新即清
-  2. 健壮性：连点仅最后生效（Abort）、SettingsModal 焦点闭环（首焦点/TAB 循环/Esc/归还）、标题 20/调取码 12 计数与非法字符 2.5s 提示、空态与占位引导
-  3. 回归：P1-1~P1-4 已关闭无复发、既有布局（正文优先 80%、2 行预览、拖宽 320-720、3 列网格）无退化
-  4. 视觉：搜索框与 SortBar 对齐、高亮 gold/30 克制度、计数/空态排版、引导小字灰度、移动端 hidden 预期
-- 结论：P2-2 / P3-1 / P3-3 / RISK-3 / OPT-NEW-2 已验证通过，保持在「已完成」；P2-8~11/P3-6 继续留候选池；无新增 P1，阻断项：无
+  1. P2-8 搜索相关度：QA标题置顶（score 4>1）+ 同分sortMode二级 + 大小写不敏感与@code隔离 + 清空恢复 + 计数「命中 x / 共 y」与高亮 gold/30 协调
+  2. P2-9 标签管理：×可发现不喧宾（hover/focus-visible）+ confirm文案清晰 + 批量移除后计数归0自动消失/总数不变/取消无副作用 + demo隐藏× + 选中态取消
+  3. P3-6 格式规范化：富文本/tab缩进保存后全篇左对齐 + 4空格内Markdown缩进保留 + 导入路径一致性（导出再导入不回退）
+  4. 回归：P1-1~P1-4 已关闭无复发 + 既有布局（正文优先80%、2行预览、拖宽320-720、3列网格）无退化
+- 结论：P2-8 / P2-9 / P3-6 已验证通过，移入「已完成」；剩余候选 P2-10/P2-11/P2-3/P2-5/P2-7/P3-2/P3-4 等继续留池；无新增 P1，阻断项：无
 
 ---
 
@@ -123,24 +123,6 @@
 - 实现成本：低
 - 优先级：P2
 
-### P2-8 搜索结果按相关度排序（标题命中优先）
-- 问题：当前搜索命中后直接复用 `sortMode`（updated/copies/rating）排序，未按命中相关度排序——用户搜「QA」时，正文含 QA 的旧卡可能排在标题含「QA」的卡之前，体感「相关度排序不符预期」。
-- 用户场景：搜「QA」找与 QA 验收/QA 测试相关的卡，期望「标题命中 > 标签命中 > 调取码命中 > 备注命中 > 正文命中」按命中字段优先级排（相同优先级再按 sortMode）。
-- 为什么是问题：搜索的"找到目标"价值被无关最新改动稀释。
-- 建议方案：搜索激活时 `visibleCards` 在过滤后、排序前插入「相关度打分」：按命中字段给每张卡打分（如 title=4, code/tag=3, notes=2, body=1），按 score desc 排序；同分时再按 sortMode 二级排序。无搜索时维持原 sortMode。
-- 预期收益：搜索体感提升，命中目标卡一眼可见。
-- 实现成本：低
-- 优先级：P2
-
-### P2-9 左侧标签管理（删除标签=批量从卡片移除，不删卡片）
-- 问题：当前 `TagPanel` 仅展示标签 + 计数，标签只由 AI 生成或手动在卡片内填写，**无入口统一删除标签**；用户积累脏标签后无法清理。
-- 用户场景：测试期间产生「无法分类」「toke」「多aengt编程」等无意义标签，希望从左侧一键删除（语义：把所有卡片中带该标签的条目移除，**卡片原文不动**，与 Flomo 删标签的逻辑一致）。
-- 为什么是问题：信息架构只进不出，长期累积脏数据；目前只能进卡片逐个改标签清理。
-- 建议方案：每个标签行加删除按钮（小 × 放在右侧或 hover 出现），点删除 → confirm「将从 N 张卡片中移除标签「X」，卡片本身不会删除」→ 确认后批量 `updateCard(id, c => ({...c, tags: c.tags.filter(t => t !== target)}))`。被移除后若该标签下卡片数为 0，标签自动从左侧列表消失。
-- 预期收益：可清理脏标签、保持标签库干净；语义与 Flomo 等同类工具一致。
-- 实现成本：低
-- 优先级：P2
-
 ### P2-10 卡片网格直删入口（编辑键下加删除）
 - 问题：当前 `CardItem` 只暴露「编辑」按钮（hover 后才出现），删除卡片需点编辑 → 进 CardDetail 弹窗 → 点底部"删除卡片" → confirm，至少 3 步。`PreviewPanel` 有删除按钮但需先选中卡片。
 - 用户场景：用户想清理脏卡时，希望能直接从网格上删（hover 卡片→ 编辑 + 删除并排），减少点击次数。
@@ -201,18 +183,6 @@
 - 实现成本：低
 - 优先级：P3
 
-### P3-6 保存时自动规范化正文格式（去除前导空白，对齐"左对齐"风格）
-- 问题：用户粘贴补充内容到 `PreviewPanel` / `CardDetail` 正文时，若源文本带前导 tab / 空格 / HTML 样式（如从某些编辑器或富文本复制），保存后 `whitespace-pre-wrap` 会原样保留——表现为「原文紧贴左边缘 + 补充内容靠右/居中」错位（参考截图：上半「Computer Use / Browser / 上下文」靠左，下半「## 模型建议 / 推荐: / 备选: / 不确定项」明显靠右）。与 AI 刚生成卡片的整齐「左对齐」风格不一致，视觉参差。
-- 用户场景：用户在原卡片正文后粘贴补充段落、Markdown 模板或代码片段，希望保存/失焦自动保存后整体自动清理成「与最新生成卡一致的左对齐风格」。
-- 建议方案：在 `cards.ts` 出口（`saveBodyOnly` / `saveBodyWithVersion`）或统一 `commitSave` 入口加 `normalizeBody(body)` 工具：
-  1. `trim()` 首尾空白；
-  2. 合并连续空行（最多保留 1 个空行 ≈ 2 个 `\n`）；
-  3. 去除每行**前导 tab**与**前导多余空格**（保留必要 Markdown 缩进层级——例如最多保留 4 个前导空格，剩余 collapse 成单空格或按 Markdown 列表缩进规则）。
-- 权衡：完全 strip 前导空白会破坏 Markdown 列表嵌套/代码块缩进，需保留「最前 4 个空格内」的合法缩进；或只对粘贴的新增段（前 N 个非空字符含 tab 时）触发 normalize，不影响已有手写结构。`storage.ts` 的 `parseImport` / `parseMarkdownImport` 也可同步调用，保证导入卡片与新建一致。
-- 预期收益：所有卡片正文视觉风格统一，避免「上半靠左、下半靠右」的脏感。
-- 实现成本：低
-- 优先级：P3
-
 ---
 
 ## Future 后续建议（当前不做，进入未来版本候选）
@@ -256,3 +226,6 @@
 - **P3-3 关键手势与快捷键可发现性**（2026-08-26 完成：仓库空态（cards.length===0 分支）按钮下方加引导小字；PreviewPanel 未选中卡片占位（!card 分支）加同一行小字「双击卡片进入详情 · 拖动左缘调宽，双击重置 · 选中后 1-5 打星」）
 - **RISK-3 AI 请求缺 AbortController**（2026-08-26 修复：PreviewPanel / CardDetail / Composer 三个组件 5 处 AI 请求（regenMeta / runSummary / generate）全部接入 AbortController——`abortRef.current?.abort()` 新请求前取消上一个，组件卸载 `useEffect` cleanup 统一 abort；`catch`/`finally` 中 `ac.signal.aborted` 守卫跳过 toast 与 setState，杜绝卸载后 setState 与竞态闪烁）
 - **OPT-NEW-2 SettingsModal 焦点陷阱不完整**（2026-08-26 修复：`useModalFocus` 抽为共享 Hook（`src/hooks/useModalFocus.ts`，含 FOCUSABLE 选择器 / Tab 循环 / 打开聚焦首元素 / cleanup 归还 / 可选 onEscClose 经 ref 保存避免依赖抖动）；CardDetail 改 import（保留自有 window Esc 监听）；SettingsModal 移除自建 useEffect 改复用，传 onClose 处理 Esc；role="dialog" / aria-modal / aria-label 完整）
+- **P2-8 搜索结果按相关度排序**（2026-08-26 完成：`page.tsx` 新增 `relevanceScore(c,term)` title4/code3/tag3/notes2/body1 取最高分，`compareBySortMode` 抽取；`visibleCards` 在 `searchActive && !searchTerm.startsWith('@')` 时先 score desc 同分再 sortMode 二级，`@code` 直达与无搜索维持原 sortMode；大小写不敏感 `t=term.toLowerCase()` 已修正；搜 QA 前5标题置顶、搜 qa 同序、@jbyj隔离、清空恢复）
+- **P2-9 左侧标签管理**（2026-08-26 完成：`TagPanel.tsx` TagRow 重构为 div容器 主按钮flex-1 + 右侧× `group-hover:opacity-100`/`focus-visible`，`onDeleteTag`可选 demo隐藏；`page.tsx:322-332` `handleDeleteTag` 统计N→confirm「将从 N 张卡片中移除标签…卡片本身不会删除」→批量 `filter(t!==tag)` 复用落盘+SSE，选中态自动取消，计数归0自动消失，总数不变）
+- **P3-6 保存时自动规范化正文格式**（2026-08-26 完成：`cards.ts:19-35` `normalizeBody` ①去前导tab②纯空白归一③非空行保留最多4空格④去首尾空行⑤合并连续空行；`saveBodyOnly:66-70`/`saveBodyWithVersion:75-79`入口统一调用；`storage.ts:119-120`/`260` 导入两路径同步；tab全去、6/8空格→4、2空格保留、连续空行合并已验证）

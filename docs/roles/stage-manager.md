@@ -18,3 +18,7 @@
 
 ## Prompt 生成契约
 每个 Prompt 必须包含：目标角色 / 工作模式、本轮目标和范围、所需能力（代码 / 推理 / Vision / Computer Use / Browser / 上下文）、精确的项目文件路径、必须读取内容、允许修改的文档、明确禁止事项、预期输出、完成后停止（不自动调用下一 Agent）。
+
+## 分发与备份约定（2026-08-27 用户确认）
+- 单角色单 Prompt 时，Stage Manager 必须同时完成两项分发：① 执行 `pbcopy < prompt文件` 直达剪贴板（macOS；Linux 用 xclip/wl-copy）并回显“已复制到剪贴板” ② 将同一 Prompt 落盘为本地 MD 备份（优先 `scratch/PROMPT_*.md`，命名含 Stage/日期/P编号），确保剪贴板失效时用户可自行重抄。
+- 两项均为硬要求，不得仅做其一。

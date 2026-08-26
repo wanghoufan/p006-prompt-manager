@@ -1,5 +1,6 @@
 import type { Card, Settings, Version } from '@/lib/types'
 import { nowIso, uid } from '@/lib/util'
+import { normalizeBody } from '@/lib/cards'
 
 export const CARDS_KEY = 'prompt-manager:cards'
 export const SETTINGS_KEY = 'prompt-manager:settings'
@@ -115,7 +116,7 @@ function parseMarkdownImport(raw: string): ImportResult | null {
 
   function flush() {
     if (!current) return
-    const body = current.body.join('\n').trim()
+    const body = normalizeBody(current.body.join('\n'))
     if (!body) return
     cards.push({
       id: uid(),
@@ -256,7 +257,7 @@ export function parseImport(raw: string): ImportResult {
           settings.thinkingSummaryPrompt = s.thinkingSummaryPrompt
         }
       }
-      return { ok: true, cards: root.cards, settings }
+      return { ok: true, cards: root.cards.map((c) => ({ ...c, body: normalizeBody(c.body) })), settings }
     }
   }
   return parseMarkdownImport(raw) ?? { ok: false, error: '既不是有效的 JSON 备份，也不是 Markdown 备份' }

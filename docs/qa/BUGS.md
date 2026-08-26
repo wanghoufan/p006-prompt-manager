@@ -4,15 +4,39 @@
 
 ## 最近一次 QA 执行记录
 
-- **日期**：2026-08-26（第五次 - 搜索+健壮性批次回归验收）
-- **模式**：QA Acceptance（范围 A+B 增量验收 + 既有核心能力回归）
+- **日期**：2026-08-26（第六次 - P2-8/P2-9/P3-6 三项打包回归验收）
+- **模式**：QA Acceptance（三项增量验收 + 既有核心能力回归）
 - **执行者**：QA Agent
 - **结果**：**PASS**（代码走查 + API 测试通过；GUI 需人工确认）
 - **构建门禁**：tsc --noEmit ✅、npm run lint ✅
-- **commit 验证**：bef563f（搜索+健壮性批次）已推送
+- **commit 验证**：未提交（Builder 已自测通过，待用户授权 commit/push）
 - **已关闭**：无新增关闭
 - **阻断项**：无
-- **需人工确认**：GUI 视觉验证（搜索高亮、空态、计数、SettingsModal 焦点循环、非法字符提示、引导文案）
+- **需人工确认**：GUI 视觉验证（搜索相关度排序、标签删除×按钮、normalizeBody 格式效果）
+
+### 三项逐条验证
+
+**P2-8 搜索结果按相关度排序**
+- `relevanceScore` 函数（page.tsx:21-29）：`const t = term.toLowerCase()` 修正大小写敏感 bug ✅
+- 打分权重：title=4 / code=3 / tag=3 / notes=2 / body=1，命中取最高分 ✅
+- `visibleCards` 排序分支（page.tsx:195-204）：`searchActive && !searchTerm.startsWith('@')` 时先按 score desc、同分按 sortMode 二级排序 ✅
+- `@code` 直达模式（page.tsx:174-177）：仅按 code 过滤，维持原 sortMode ✅
+- 无搜索恢复（page.tsx:202-203）：清空搜索后按 sortMode 排序 ✅
+- `compareBySortMode`（page.tsx:32-36）：抽出现有三分支逻辑，二级排序正确 ✅
+
+**P2-9 左侧标签管理**
+- `handleDeleteTag`（page.tsx:322-332）：统计含该标签卡片数 → confirm → 批量移除标签条目（不删卡）✅
+- `TagRow` 重构（TagPanel.tsx:14-58）：div 容器（避免 button 嵌套），主按钮 flex-1 + 右侧 ×（hover/focus-visible 显示）✅
+- `onDeleteTag` prop（TagPanel.tsx:11）：可选，demo 视图不传（page.tsx:415 `isDemoView ? undefined : handleDeleteTag`）✅
+- 当前选中标签被删时取消选中（page.tsx:330 `if (selectedTag === tag) setSelectedTag(null)`）✅
+- 复用现有 cards 落盘 + SSE 同步链 ✅
+
+**P3-6 正文格式规范化**
+- `normalizeBody`（cards.ts:19-35）：① 逐行去前导 tab ✅ ② 纯空白行归一 ✅ ③ 非空行前导空格保留最多 4 个 ✅ ④ 去首尾空行（slice 头尾）✅ ⑤ 合并连续空行（`\n{3,}` → `\n\n`）✅
+- `saveBodyOnly`（cards.ts:66-70）：先 `normalizeBody(newBody)` 再 `===` 比较 ✅
+- `saveBodyWithVersion`（cards.ts:75-79）：先 `normalizeBody(newBody)` 再 `withVersion` ✅
+- `parseImport`（storage.ts:260）：JSON 路径 `.map(c => ({...c, body: normalizeBody(c.body)}))` ✅
+- `parseMarkdownImport`（storage.ts:119）：`flush()` 内 `normalizeBody(current.body.join('\n'))` ✅
 
 ### GUI 测试用例（需人工执行）
 
