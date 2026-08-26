@@ -53,3 +53,6 @@ scratch/
 # ===== MCP server 子包（依赖与构建产物） =====
 mcp/prompt-server/node_modules/
 mcp/prompt-server/dist/
+
+# ===== Orca worktrees（本地多工位，不进仓库） =====
+.worktrees/

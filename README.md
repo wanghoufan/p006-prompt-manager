@@ -43,8 +43,18 @@
 | 排序 | 按更新时间 / 复制次数 / 评分降序；搜索激活时按相关度（标题 4/调取码·标签 3/备注 2/正文 1）置顶，同分二级排序 |
 | 格式规范化 | 保存时自动 `normalizeBody`：逐行去前导 tab、纯空白归一、非空行前导空格最多保留 4 个、去首尾空行、合并连续空行（`\\n{3,}`→`\\n\\n`）；导入（JSON/Markdown）路径同步规范化，保证全篇左对齐 |
 | 重复去重 | 新建提交前 `normalizeBody` 全等比对，命中已有内容弹 `confirm`「检测到内容已存在（标题「X」），是否仍要添加？」— 取消不新增、确认继续；空内容/不同内容不弹，首个命中仅一次 |
-| 搜索高亮 | `--color-highlight`/`--color-highlight-text`/`--color-highlight-ring` 变量驱动，暗色 `rgba(251,191,36,.42)/#fef3c7` / 亮色 `#fde68a/#78350f` 高对比，`<mark class="bg-highlight text-highlight ring-highlight-ring">` 双主题自适应 |
+| 搜索高亮 | `--color-highlight`/`--color-highlight-text`/`--color-highlight-ring`/`--color-highlight-shadow` 变量驱动，暗色 `#fbbf24/#111111` 11.31:1 / 亮色 `#fcd34d/#451a03` 10.39:1 高对比二次优化（`rounded-[3px] px-[1px] shadow`），`<mark>` 双主题自适应 |
 | 主题切换 | `Settings.theme: 'dark'\|'light'\|'system'`，`DEFAULT_SETTINGS` + `normalizeSettings` 迁移补全；`layout.tsx` 内联脚本 + `suppressHydrationWarning` 防 FOUC；`page.tsx` `theme` useEffect 系统跟随；设置中 select 即存 |
+| 评分守卫 | 详情/设置弹窗打开时 `if (detailId \|\| showSettings) return` 屏蔽全局 `1-5` 评分，避免误触背景卡 |
+| 空/离线横幅 | `serverOnline` 三态（null 连接中 / false 离线 rust 横幅 + 重试 / true 在线），与「仓库空」文案区分可恢复 |
+| Composer 自适应 | 粘贴长文自动 `autoResize` 至 `maxRows=6`（`resize-none`），无需手动拖高 |
+| 导入详情 | `SkippedCard` + `describeCardFailure` 字段级原因，`parseMarkdownImport` 空正文入 skipped，`parseImport` JSON 部分导入；`Toast` detail 可滚动列表 6s 展示 |
+| 版本节流 | 失焦仅保存不建版（`saveBodyOnly` 全等比较），手动保存/`Ctrl+Enter` 才 `saveBodyWithVersion` 建版，节流合并避免占满 |
+| 撤销栈 | 删除/清空等 4 类危险操作 10s 内 `notifyWithUndo` + `undoRef` 撤销，`Toast`  detail 展示 |
+| 批量管理 | `bulkIds` Set + 卡片 checkbox（`role="checkbox"`）+ 顶部操作栏（打标签/打星/导出/删除/取消） |
+| 移动端抽屉 | `<md` 时预览面板为底部 `fixed` 抽屉（`max-h-[75dvh]` + `onClose` 收起），`md` 恢复侧边栏 |
+| 备注防丢 | `notesTimer` 700ms 防抖，`useEffect` cleanup + 切卡 `commitSave` flush，避免丢字/错卡 |
+| 版本 diff | `VersionDiff` + `lineDiff` LCS 行级 diff，版本历史展开高亮对比 |
 | 备注字段 | 正文上方 2 行可拖动备注，自填「何时用 / 注意事项」，非 AI 生成，失焦自动保存 |
 | 自动保存 | 标题 / 标签 / 调取码 / 备注 / 星级失焦即存；正文**手动保存或 `Ctrl/⌘+Enter` 保存并生成版本**；保存后显示「已自动保存」角标 |
 | 版本回滚 | 每次正文保存自动生成版本（最多 10 条），支持一键回滚 |

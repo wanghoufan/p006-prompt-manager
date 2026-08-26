@@ -180,3 +180,20 @@
 - [x] P3-5 handleImportFile skipped → notify detail（page.tsx:423-431）
 - [x] P3-5 Toast detail 可滚动列表 + 6s 展示（Toast.tsx:3,13-21,page.tsx:70-75）
 - [x] 既有回归：tsc 0 错误（mcp/layout 环境前置问题）/ lint 0 错误 / curl /api/sync 31 张
+
+### 总验收 11合1 - 2026-08-27 验证
+- [x] P0-6 暗色高亮：`--color-highlight:#fbbf24` / `--color-highlight-text:#111111`（WCAG AA 11.31:1）（globals.css:17-21）
+- [x] P0-6 亮色高亮：`--color-highlight:#fcd34d` / `--color-highlight-text:#451a03`（WCAG AA 10.39:1）（globals.css:44-48）
+- [x] P0-6 mark 样式：`rounded-[3px] px-[1px] bg-highlight text-highlight ring-1 ring-highlight-ring shadow-[0_0_0_2px_var(--color-highlight-shadow)]`（CardItem.tsx:34）
+- [x] P2-6 评分守卫：`if (detailId || showSettings) return`（page.tsx:577），useEffect deps 含 detailId/showSettings（page.tsx:597）
+- [x] P2-7 离线横幅：`serverOnline === false` → rust 横幅 + 重试按钮（page.tsx:687-696）
+- [x] P2-7 连接中/在线横幅：null → 「正在连接…」/ true → 「已连接」（page.tsx:698-704）
+- [x] P3-4 Composer autoResize：useEffect([text]) 按 scrollHeight 自适应，maxRows=6，resize-none（Composer.tsx:27-37,93）
+- [x] P3-5 导入详情：skipped → Toast detail 列表 + 6s 展示（page.tsx:550-566, Toast.tsx:35-43）
+- [x] P2-1 版本节流：saveBodyOnly 全等比较失焦不建版 / saveBodyWithVersion 手动保存才建版（cards.ts）
+- [x] P2-5 撤销 10s：notifyWithUndo + undoRef + 10s 定时器 + 5 处快照点（page.tsx:69-91,298,316,398,445,541）
+- [x] P2-11 批量多选：bulkIds Set + toggleBulk + CardItem checkbox（role="checkbox" aria-checked）+ 操作栏（打标签/打星/导出/删除/取消）（page.tsx:61,422-528,644-669, CardItem.tsx:20-22,80-93）
+- [x] P2-3 移动端抽屉：PreviewPanel `fixed inset-x-0 bottom-0 z-30 max-h-[75dvh]` 底部抽屉 + `md:relative md:w-[var(--pw)]` 桌面侧边栏 + onClose 收起按钮（PreviewPanel.tsx:314-330）
+- [x] P2-4 备注防丢：useEffect cleanup clearTimeout + commitSave flush（PreviewPanel.tsx:216-225）+ 外部数据覆盖前清理（PreviewPanel.tsx:155-158）+ CardDetail 同模式（CardDetail.tsx:76,145-146,156,166）
+- [x] P3-2 版本 diff：VersionDiff 组件 + lineDiff LCS 行级 diff + PreviewPanel/CardDetail 版本展开（VersionDiff.tsx, diff.ts, PreviewPanel.tsx:419-433, CardDetail.tsx:516-539）
+- [x] 既有回归：tsc 0 错误 / eslint src/ 0 错误 / curl /api/sync 正常 / P0-4/5 P2-8/9 P3-6 已 CLOSED

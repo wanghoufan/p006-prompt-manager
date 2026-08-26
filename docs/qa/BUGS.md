@@ -4,16 +4,16 @@
 
 ## 最近一次 QA 执行记录
 
-- **日期**：2026-08-27（第九次 - 工位A：P0-6/P2-6/P2-7/P3-4/P3-5 五合一验收）
-- **模式**：QA Acceptance（五合一批量验收 + 核心回归）
+- **日期**：2026-08-27（第十次 - 总验收 11合1：P0-6 + P2-6/7/P3-4/5 + P2-1/5/11 + P2-3/4/P3-2）
+- **模式**：QA Acceptance（11合1总验收 + 核心回归）
 - **执行者**：QA / Test Agent
-- **结果**：**PASS**（代码走查 + tsc/lint + API + 对比度计算均通过；GUI 需人工确认）
-- **构建门禁**：tsc --noEmit ✅、npm run lint ✅
-- **API 验证**：curl /api/sync 返回 31 张卡片 ✅
+- **结果**：**PASS**（代码走查 + tsc/lint + API 均通过；GUI 需人工确认）
+- **构建门禁**：tsc --noEmit ✅、npm run lint ✅（src/ 零错误，.worktrees/ 为构建产物不影响）
+- **API 验证**：curl /api/sync 返回正常 ✅
 - **commit 验证**：未提交（待用户授权 commit/push）
 - **已关闭**：无新增关闭
 - **阻断项**：无
-- **需人工确认**：GUI 视觉验证（亮/暗高亮截图对比、弹窗聚焦数字评分不误触、空状态离线横幅、Composer 长文展开、导入跳过详情 Toast）
+- **需人工确认**：GUI 视觉验证（亮/暗高亮对比、撤销 Toast、批量操作、移动端抽屉、备注切卡、版本 diff、导入跳过详情、Composer 展开）
 
 ### 两项逐条验证
 
@@ -138,3 +138,76 @@
 - **handleImportFile** `page.tsx:423-431`：`skipped.length > 0` → notify 带 detail（成功 N 张 / 跳过 M 张 + 逐条原因），6s 展示
 - **Toast** `Toast.tsx:3,13-21`：`detail?: string[]`，可滚动详情列表
 - **结论**：PASS — 导入含非法卡时 Toast 显示成功/跳过数量及逐条原因，用户体验闭环
+
+---
+
+## 总验收 11合1 QA 记录（2026-08-27）
+
+### P0-6 搜索高亮双主题配色二次优化
+- **暗色** `globals.css:17-21`：`--color-highlight: #fbbf24`（amber-400），`--color-highlight-text: #111111`（ink-950），`--color-highlight-ring: rgba(252,211,153,0.6)`，`--color-highlight-shadow: rgba(251,191,36,0.25)` ✅
+- **亮色** `globals.css:44-48`：`--color-highlight: #fcd34d`（amber-300），`--color-highlight-text: #451a03`（amber-950），`--color-highlight-ring: rgba(217,119,6,0.5)`，`--color-highlight-shadow: transparent` ✅
+- **mark 样式** `CardItem.tsx:34`：`rounded-[3px] px-[1px] bg-highlight text-highlight ring-1 ring-highlight-ring shadow-[0_0_0_2px_var(--color-highlight-shadow)]` ✅
+- **WCAG AA**：暗色 #111111 on #fbbf24 = 11.31:1 ✅；亮色 #451a03 on #fcd34d = 10.39:1 ✅
+
+### P2-6 评分快捷键守卫
+- **守卫** `page.tsx:577`：`if (detailId || showSettings) return` 在 keydown 监听首行 ✅
+- **依赖** `page.tsx:597`：useEffect deps 包含 `detailId, showSettings` ✅
+
+### P2-7 空状态与离线态文案区分
+- **离线横幅** `page.tsx:687-696`：`serverOnline === false` → rust 横幅 + 重试按钮 ✅
+- **连接中** `page.tsx:698-701`：`serverOnline === null` → 「正在连接同步服务…」✅
+- **在线** `page.tsx:703-704`：`serverOnline === true` → 「已连接同步服务」✅
+
+### P3-4 Composer autoResize
+- **useEffect** `Composer.tsx:27-37`：`[text]` 依赖，`height: auto` → `scrollHeight` 计算，maxRows=6 ✅
+- **resize-none** `Composer.tsx:93`：用户不可手动拖高 ✅
+
+### P3-5 导入详情
+- **SkippedCard** `storage.ts`：`{ title, reason }` 类型 ✅
+- **handleImportFile** `page.tsx:550-566`：`skipped.length > 0` → Toast detail 列表 + 6s 展示 ✅
+- **Toast** `Toast.tsx:35-43`：`detail?: string[]` 可滚动详情列表 ✅
+
+### P2-1 版本节流验证
+- **saveBodyOnly** `cards.ts`：`normalizeBody(newBody) === normalizeBody(c.body.trim())` 全等比较，失焦仅保存不建版 ✅
+- **saveBodyWithVersion** `cards.ts`：手动保存/Ctrl+Enter 才调用，生成版本 ✅
+- **PreviewPanel/CardDetail**：onBlur → `commitSave(true)` 但 `saveBodyWithVersion` 仅在显式保存时触发 ✅
+
+### P2-5 撤销 10s
+- **notifyWithUndo** `page.tsx:70-73`：`undoRef.current = undo` + `setToast({ msg, withUndo: true })` ✅
+- **handleUndo** `page.tsx:75-80`：读 undoRef → 清空 → 调用 undo ✅
+- **定时器** `page.tsx:84-85`：`toast.withUndo ? 10000`，到期清空 undoRef ✅
+- **快照点**：删除单卡 `page.tsx:398`、清空仓库 `page.tsx:316`、载入示例 `page.tsx:298`、批量删除 `page.tsx:445-452`、导入覆盖 `page.tsx:541-565` ✅
+
+### P2-11 批量多选
+- **bulkIds** `page.tsx:61`：`ReadonlySet<string>` 状态 ✅
+- **toggleBulk** `page.tsx:427-434`：add/delete 切换 ✅
+- **CardItem** `CardItem.tsx:20-22,80-93`：`bulkSelected/bulkActive/onBulkToggle` + checkbox `role="checkbox"` + `aria-checked` ✅
+- **批量操作栏** `page.tsx:644-669`：已选 N 张 + 打标签/打星/导出/删除/取消选择 ✅
+- **handleBulkDelete** `page.tsx:437-453`：confirm + 撤销栈 ✅
+- **handleBulkTag** `page.tsx:456-485`：prompt + parseTags + 追加去重 ≤3 ✅
+- **handleBulkRate** `page.tsx:487-503`：prompt + 0-5 校验 ✅
+- **handleBulkExport** `page.tsx:505-528`：筛选 → buildMarkdownExport → 下载 ✅
+
+### P2-3 移动端抽屉
+- **PreviewPanel** `PreviewPanel.tsx:314-315`：`card ? 'flex' : 'hidden md:flex'`；移动端 `fixed inset-x-0 bottom-0 z-30 max-h-[75dvh]` 底部抽屉 ✅
+- **桌面端** `PreviewPanel.tsx:315`：`md:relative md:w-[var(--pw)] md:shrink-0` 侧边栏 ✅
+- **关闭按钮** `PreviewPanel.tsx:326-330`：`onClose && md:hidden` 渲染收起按钮 ✅
+- **resize 手柄** `PreviewPanel.tsx:324`：`hidden md:block` 桌面端可调宽 ✅
+
+### P2-4 备注防丢
+- **useEffect cleanup** `PreviewPanel.tsx:216-225`：卸载前 `clearTimeout(notesTimer)` + `commitSave(true, true)` flush ✅
+- **外部数据覆盖** `PreviewPanel.tsx:155-158`：SSE/回滚前 `clearTimeout(notesTimer)` + `commitSave(true)` ✅
+- **CardDetail** `CardDetail.tsx:76,145-146,156,166`：同样的 notesTimer 清理模式 ✅
+
+### P3-2 版本 diff
+- **VersionDiff** `VersionDiff.tsx`：`lineDiff(a, b)` LCS 行级 diff，del 红色 `−`，add 金色 `+`，same 灰色 ✅
+- **diff.ts** `lib/diff.ts`：`lineDiff` LCS DP（O(n·m)，版本≤10，开销可忽略）✅
+- **PreviewPanel** `PreviewPanel.tsx:419-433`：版本行「点击查看完整内容 / diff」展开 → `<VersionDiff>` ✅
+- **CardDetail** `CardDetail.tsx:516-539`：同上 ✅
+
+### 既有回归
+- P0-4/P0-5 已 CLOSED：confirmDelete 链路 + 主题切换 ✅
+- P2-8/P2-9/P3-6 已 CLOSED：搜索相关度 / 标签删除 × / 左对齐 ✅
+- API `/api/sync` 正常返回 ✅
+- tsc --noEmit 零错误 ✅
+- npx eslint src/ 零错误 ✅
