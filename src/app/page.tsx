@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Card, Settings, SortMode } from '@/lib/types'
 import { loadCards, loadSettings, parseImport, saveCards, saveSettings, buildMarkdownExport, isServerAvailable, loadFromServer, pushToServer, subscribeSync } from '@/lib/storage'
-import { createCard, normalizeBody, rollbackToVersion, saveBodyOnly, saveBodyWithVersion } from '@/lib/cards'
+import { createCard, normalizeBody, parseTags, rollbackToVersion, saveBodyOnly, saveBodyWithVersion } from '@/lib/cards'
 import { DEMO_CARDS } from '@/lib/demo'
 import { nowIso } from '@/lib/util'
 import { TopBar } from '@/components/TopBar'
@@ -53,29 +53,42 @@ export default function Home() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [detailId, setDetailId] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
-  const [toast, setToast] = useState<string | null>(null)
-  const [toastDetail, setToastDetail] = useState<string[] | null>(null)
+  const [toast, setToast] = useState<{ msg: string; detail?: string[] | null; withUndo?: boolean } | null>(null)
   const [serverOnline, setServerOnline] = useState<boolean | null>(null)
   // P2-7：实时同步订阅句柄，重连前先关闭旧订阅，避免 EventSource 叠加
   const syncUnsubRef = useRef<(() => void) | null>(null)
+  // P2-11 批量多选：选中卡片 id 集合（demo 视图不启用）
+  const [bulkIds, setBulkIds] = useState<ReadonlySet<string>>(new Set())
+  const undoRef = useRef<(() => void) | null>(null)
 
   const notify = useCallback((msg: string, detail?: string[]) => {
-    setToast(msg)
-    setToastDetail(detail && detail.length > 0 ? detail : null)
+    undoRef.current = null
+    setToast({ msg, detail: detail && detail.length > 0 ? detail : null })
   }, [])
+
+  // P2-5 撤销栈：缓存操作前快照，Toast 内 10s「撤销」可回退
+  const notifyWithUndo = useCallback((msg: string, undo: () => void) => {
+    undoRef.current = undo
+    setToast({ msg, withUndo: true })
+  }, [])
+
+  function handleUndo() {
+    const undo = undoRef.current
+    undoRef.current = null
+    setToast(null)
+    undo?.()
+  }
 
   useEffect(() => {
     if (!toast) return
-    // 带详情列表（如导入跳过项）时延长展示，便于阅读
-    const timer = window.setTimeout(
-      () => {
-        setToast(null)
-        setToastDetail(null)
-      },
-      toastDetail && toastDetail.length > 0 ? 6000 : 2200,
-    )
+    // 详情列表延长至 6s，撤销 Toast 给 10s，普通 2.2s
+    const duration = toast.withUndo ? 10000 : toast.detail && toast.detail.length > 0 ? 6000 : 2200
+    const timer = window.setTimeout(() => {
+      setToast(null)
+      undoRef.current = null
+    }, duration)
     return () => window.clearTimeout(timer)
-  }, [toast, toastDetail])
+  }, [toast])
 
   // 全局搜索 300ms 防抖（纯前端过滤，无依赖）
   useEffect(() => {
@@ -274,12 +287,15 @@ export default function Home() {
     if (cards.length > 0 && !window.confirm(`载入示例将【替换】当前 ${cards.length} 张卡片（非追加），确定继续？`)) {
       return
     }
+    // P2-5：缓存替换前快照，10s 内可撤销回退
+    const snapshot = cards
     setCards(DEMO_CARDS.map((c) => ({ ...c })))
     setView('mine')
     setSelectedTag(null)
     setSelectedId(null)
     setDetailId(null)
-    notify(`已载入 ${DEMO_CARDS.length} 张示例卡片`)
+    clearBulk()
+    notifyWithUndo(`已载入 ${DEMO_CARDS.length} 张示例卡片`, () => setCards(snapshot))
   }
 
   function handleClearRepo() {
@@ -290,11 +306,14 @@ export default function Home() {
     if (!window.confirm(`确定清空我的仓库（共 ${cards.length} 张卡片）？此操作不可撤销。`)) {
       return
     }
+    // P2-5：缓存清空前快照，10s 内可撤销回退
+    const snapshot = cards
     setCards([])
     setSelectedTag(null)
     setSelectedId(null)
     setDetailId(null)
-    notify('仓库已清空')
+    clearBulk()
+    notifyWithUndo('仓库已清空', () => setCards(snapshot))
   }
 
   function handleSwitchView(next: ViewMode) {
@@ -302,11 +321,13 @@ export default function Home() {
     setSelectedTag(null)
     setSelectedId(null)
     setDetailId(null)
+    clearBulk()
   }
 
   function handleSelectTag(tag: string | null) {
     setSelectedTag(tag)
     setSelectedId(null)
+    clearBulk()
   }
 
   async function handleCopy(id: string) {
@@ -373,10 +394,17 @@ export default function Home() {
     const card = cards.find((c) => c.id === id)
     if (!card) return
     if (settings.confirmDelete && !window.confirm(`确定删除「${card.title}」？此操作不可撤销。`)) return
+    // P2-5：缓存删除前快照，10s 内可撤销回退
+    const snapshot = cards
     setCards((prev) => prev.filter((c) => c.id !== id))
     setDetailId(null)
     if (selectedId === id) setSelectedId(null)
-    notify('卡片已删除')
+    setBulkIds((prev) => {
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
+    notifyWithUndo('卡片已删除', () => setCards(snapshot))
   }
 
   // P2-9 删除标签 = 批量从卡片移除该标签条目（不删卡片，语义与 Flomo 一致）
@@ -391,17 +419,112 @@ export default function Home() {
     notify(`已从 ${count} 张卡片移除标签「${tag}」`)
   }
 
-  function handleExport() {
-    const md = buildMarkdownExport(cards)
-    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
+  // ===== P2-11 批量管理 =====
+  function clearBulk() {
+    setBulkIds(new Set())
+  }
+
+  function toggleBulk(id: string) {
+    setBulkIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  // 批量删除：confirm + 复用 P2-5 撤销栈（10s 内一键恢复）
+  function handleBulkDelete() {
+    if (bulkIds.size === 0) return
+    if (
+      settings.confirmDelete &&
+      !window.confirm(`确定删除选中的 ${bulkIds.size} 张卡片？此操作不可撤销。`)
+    ) {
+      return
+    }
+    const snapshot = cards
+    const ids = bulkIds
+    const count = ids.size
+    setCards((prev) => prev.filter((c) => !ids.has(c.id)))
+    if (selectedId && ids.has(selectedId)) setSelectedId(null)
+    if (detailId && ids.has(detailId)) setDetailId(null)
+    clearBulk()
+    notifyWithUndo(`已删除 ${count} 张卡片`, () => setCards(snapshot))
+  }
+
+  // 批量打标签：追加去重（不覆盖卡片已有标签），单卡最多 3 个
+  function handleBulkTag() {
+    if (bulkIds.size === 0) return
+    const input = window.prompt(
+      `为选中的 ${bulkIds.size} 张卡片添加标签（多个用逗号/顿号分隔，单卡最多保留 3 个）`,
+    )
+    if (input === null) return
+    const tags = parseTags(input)
+    if (tags.length === 0) {
+      notify('未输入有效标签')
+      return
+    }
+    const ids = bulkIds
+    // 基于当前 cards 计算实际变更数（不能写在 setCards updater 内——updater 渲染期才执行，
+    // 同步读出的 changed 恒为 0），再统一应用
+    let changed = 0
+    const updated = cards.map((c) => {
+      if (!ids.has(c.id)) return c
+      const merged = Array.from(new Set([...c.tags, ...tags])).slice(0, 3)
+      if (merged.join('|') === c.tags.join('|')) return c // 未变化（已达 3 个上限或已含该标签）
+      changed++
+      return { ...c, tags: merged, updatedAt: nowIso() }
+    })
+    setCards(updated)
+    if (changed === 0) {
+      notify('选中的卡片标签数均已达上限（3 个）或已含该标签，未做修改')
+    } else {
+      notify(`已为 ${changed} 张卡片添加标签：${tags.join('、')}`)
+    }
+  }
+
+  // 批量打星：0-5 整数，0 表示清零
+  function handleBulkRate() {
+    if (bulkIds.size === 0) return
+    const input = window.prompt(
+      `为选中的 ${bulkIds.size} 张卡片设置评分（0-5 整数，0 表示清零）`,
+    )
+    if (input === null) return
+    const n = Number(input)
+    if (!Number.isInteger(n) || n < 0 || n > 5) {
+      notify('评分需为 0-5 的整数')
+      return
+    }
+    const ids = bulkIds
+    const count = ids.size
+    setCards((prev) => prev.map((c) => (ids.has(c.id) ? { ...c, rating: n, updatedAt: nowIso() } : c)))
+    notify(n === 0 ? `已清空 ${count} 张卡片的评分` : `已为 ${count} 张卡片设置 ${n} 星`)
+  }
+
+  // 批量导出：选中卡片生成 Markdown 备份
+  function handleBulkExport() {
+    if (bulkIds.size === 0) return
+    const ids = bulkIds
+    const selected = cards.filter((c) => ids.has(c.id))
+    const md = buildMarkdownExport(selected)
+    downloadTextFile(md, `提示词批量导出-${ids.size}张-${new Date().toISOString().slice(0, 10)}.md`)
+    notify(`已导出 ${ids.size} 张卡片`)
+  }
+
+  function downloadTextFile(content: string, filename: string) {
+    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `提示词库备份-${new Date().toISOString().slice(0, 10)}.md`
+    a.download = filename
     document.body.appendChild(a)
     a.click()
     a.remove()
     URL.revokeObjectURL(url)
+  }
+
+  function handleExport() {
+    downloadTextFile(buildMarkdownExport(cards), `提示词库备份-${new Date().toISOString().slice(0, 10)}.md`)
     notify('已导出 Markdown 备份文件')
   }
 
@@ -414,21 +537,33 @@ export default function Home() {
         return
       }
       if (!window.confirm(`导入将覆盖当前全部 ${cards.length} 张卡片，确定继续？`)) return
+      // P2-5：缓存覆盖前快照（卡片 + 设置），10s 内可撤销回退
+      const snapshotCards = cards
+      const snapshotSettings = settings
       setCards(result.cards)
       if (result.settings) setSettings(result.settings)
       setView('mine')
       setSelectedTag(null)
       setSelectedId(null)
       setDetailId(null)
-      // P3-5：导入结果 Toast + 跳过原因详情列表
-      const skipped = result.skipped ?? []
-      if (skipped.length > 0) {
-        notify(
-          `导入成功 ${result.cards.length} 张，跳过 ${skipped.length} 张`,
-          skipped.map((s) => `· ${s.title}：${s.reason}`),
-        )
-      } else {
-        notify(`导入成功：${result.cards.length} 张卡片`)
+      clearBulk()
+      // P3-5 + P2-5 合并：导入结果带详情列表 + 10s 撤销
+      {
+        const skipped = result.skipped ?? []
+        const undo = () => {
+          setCards(snapshotCards)
+          setSettings(snapshotSettings)
+        }
+        if (skipped.length > 0) {
+          undoRef.current = undo
+          setToast({
+            msg: `导入成功 ${result.cards.length} 张，跳过 ${skipped.length} 张`,
+            detail: skipped.map((s) => `· ${s.title}：${s.reason}`),
+            withUndo: true,
+          })
+        } else {
+          notifyWithUndo(`导入成功：${result.cards.length} 张卡片`, undo)
+        }
       }
     }
     reader.onerror = () => notify('读取文件失败')
@@ -506,6 +641,33 @@ export default function Home() {
             ) : (
               <Composer existingTags={existingTags} onCreate={handleCreate} notify={notify} />
             )}
+            {!isDemoView && bulkIds.size > 0 && (
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gold/40 bg-gold/10 px-3 py-2">
+                <span className="text-sm text-gold-bright">已选 {bulkIds.size} 张</span>
+                <div className="flex items-center gap-1.5">
+                  <button type="button" className="btn px-2.5 py-1 text-xs" onClick={handleBulkTag}>
+                    打标签
+                  </button>
+                  <button type="button" className="btn px-2.5 py-1 text-xs" onClick={handleBulkRate}>
+                    打星
+                  </button>
+                  <button type="button" className="btn px-2.5 py-1 text-xs" onClick={handleBulkExport}>
+                    导出
+                  </button>
+                  <button
+                    type="button"
+                    className="btn px-2.5 py-1 text-xs text-rust hover:bg-rust/10"
+                    onClick={handleBulkDelete}
+                  >
+                    删除
+                  </button>
+                </div>
+                <span className="flex-1" />
+                <button type="button" className="btn-ghost text-xs" onClick={clearBulk}>
+                  取消选择
+                </button>
+              </div>
+            )}
             {visibleCards.length === 0 ? (
               isDemoView ? (
                 <div className="flex items-center justify-center rounded-xl border border-dashed border-line bg-ink-900/40 px-6 py-16 text-center text-sm text-muted">
@@ -571,6 +733,9 @@ export default function Home() {
                     onCopy={() => handleCopy(card.id)}
                     onRate={(r) => handleRate(card.id, r)}
                     onDelete={isDemoView ? undefined : handleDeleteCard}
+                    bulkSelected={bulkIds.has(card.id)}
+                    bulkActive={bulkIds.size > 0}
+                    onBulkToggle={isDemoView ? undefined : toggleBulk}
                   />
                 ))}
               </div>
@@ -626,7 +791,11 @@ export default function Home() {
           onClose={() => setShowSettings(false)}
         />
       )}
-      <Toast message={toast} detail={toastDetail} />
+      <Toast
+        message={toast?.msg ?? null}
+        detail={toast?.detail ?? null}
+        action={toast?.withUndo ? { label: '撤销', onClick: handleUndo } : null}
+      />
     </div>
   )
 }

@@ -16,6 +16,10 @@ interface CardItemProps {
   onRate: (rating: number) => void
   /** P0-4 网格直删：readonly/demo 视图不传（不显示删除按钮） */
   onDelete?: (id: string) => void
+  /** P2-11 批量多选：readonly/demo 视图不传（不显示多选框） */
+  bulkSelected?: boolean
+  bulkActive?: boolean
+  onBulkToggle?: (id: string) => void
 }
 
 /** 把文本按关键词拆分为片段数组：非命中片段为纯文本节点，命中片段包 <mark>。
@@ -42,7 +46,7 @@ function highlightParts(text: string, query: string): ReactNode[] {
   return parts
 }
 
-export function CardItem({ card, selected, readonly = false, query = '', onSelect, onOpen, onCopy, onRate, onDelete }: CardItemProps) {
+export function CardItem({ card, selected, readonly = false, query = '', onSelect, onOpen, onCopy, onRate, onDelete, bulkSelected = false, bulkActive = false, onBulkToggle }: CardItemProps) {
   // @code 直达模式：高亮词去掉 @ 前缀，命中片段落在调取码徽标上
   const match = query.replace(/^@/, '').trim()
   return (
@@ -73,6 +77,25 @@ export function CardItem({ card, selected, readonly = false, query = '', onSelec
         )}
         {!readonly && (
           <div className="flex shrink-0 flex-col items-end gap-0.5">
+            {onBulkToggle && (
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked={bulkSelected}
+                title={bulkSelected ? '取消多选' : '加入多选'}
+                className={`flex h-4 w-4 items-center justify-center rounded border text-[10px] leading-none transition-opacity focus-visible:opacity-100 ${
+                  bulkSelected
+                    ? 'border-gold bg-gold text-ink-950'
+                    : 'border-ink-700 bg-ink-900 text-transparent hover:border-gold/60'
+                } ${bulkSelected || bulkActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onBulkToggle(card.id)
+                }}
+              >
+                ✓
+              </button>
+            )}
             <button
               type="button"
               className="btn-ghost opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
