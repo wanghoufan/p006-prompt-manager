@@ -5,6 +5,7 @@ import type { Card, Version } from '@/lib/types'
 import { cardDraftChanges, cardDraftFrom, normalizeCode, parseTags } from '@/lib/cards'
 import { Stars } from '@/components/Stars'
 import { Spinner } from '@/components/Spinner'
+import { VersionDiff } from '@/components/VersionDiff'
 import { formatTime } from '@/lib/util'
 import { useModalFocus } from '@/hooks/useModalFocus'
 
@@ -46,6 +47,8 @@ export function CardDetail(props: CardDetailProps) {
   const bodyDirtyRef = useRef(false)
   const [summaryLoading, setSummaryLoading] = useState(false)
   const [metaLoading, setMetaLoading] = useState(false)
+  // P3-2：当前展开完整内容/diff 的版本 id（单开，再点收起）
+  const [expandedVersionId, setExpandedVersionId] = useState<string | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const firstSync = useRef(true)
   // RISK-3：AI 请求取消控制器（新请求前 abort 上一个，卸载时 abort）
@@ -68,8 +71,13 @@ export function CardDetail(props: CardDetailProps) {
       firstSync.current = false
       return
     }
+    // P2-4：外部数据更新（SSE / 回滚 / 弹窗内切换卡片）覆盖草稿前，先清理备注定时器并 flush 未落库修改，
+    // 避免覆盖正在输入的备注造成丢失
+    if (notesTimer.current) window.clearTimeout(notesTimer.current)
+    commitSave(true)
     const timer = window.setTimeout(() => setDraft(cardDraftFrom(card)), 0)
     return () => window.clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [card, readonly])
 
   useEffect(() => {
@@ -387,7 +395,11 @@ export function CardDetail(props: CardDetailProps) {
                     setDraft((d) => ({ ...d, notes: e.target.value }))
                     scheduleNotesSave()
                   }}
-                  onBlur={() => commitSave(true)}
+                  onBlur={() => {
+                    // P2-4：失焦即存时清掉待触发的防抖定时器，避免 700ms 后重复提交
+                    if (notesTimer.current) window.clearTimeout(notesTimer.current)
+                    commitSave(true)
+                  }}
                 />
               </div>
               <div className="space-y-1.5">
@@ -493,26 +505,46 @@ export function CardDetail(props: CardDetailProps) {
               </p>
             ) : (
               <ul className="mt-3 space-y-2">
-                {[...card.versions].reverse().map((v) => (
-                  <li
-                    key={v.id}
-                    className="flex items-center gap-3 rounded-md border border-line bg-ink-900 px-3 py-2"
-                  >
-                    <span className="shrink-0 font-mono text-[11px] text-muted">{formatTime(v.createdAt)}</span>
-                    <span className="min-w-0 flex-1 truncate text-xs text-paper-dim" title={v.body}>
-                      {v.body}
-                    </span>
-                    {!readonly && (
-                      <button
-                        type="button"
-                        className="btn-ghost shrink-0"
-                        onClick={() => handleRollback(v)}
-                      >
-                        回滚
-                      </button>
-                    )}
-                  </li>
-                ))}
+                {[...card.versions].reverse().map((v) => {
+                  const expanded = expandedVersionId === v.id
+                  return (
+                    <li key={v.id} className="rounded-md border border-line bg-ink-900 px-3 py-2">
+                      <div className="flex items-center gap-3">
+                        <span className="shrink-0 font-mono text-[11px] text-muted">{formatTime(v.createdAt)}</span>
+                        <span
+                          className="min-w-0 flex-1 cursor-pointer truncate text-xs text-paper-dim"
+                          title="点击查看完整内容 / diff"
+                          onClick={() => setExpandedVersionId(expanded ? null : v.id)}
+                        >
+                          {v.body}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn-ghost shrink-0"
+                          onClick={() => setExpandedVersionId(expanded ? null : v.id)}
+                        >
+                          {expanded ? '收起' : '查看完整内容'}
+                        </button>
+                        {!readonly && (
+                          <button
+                            type="button"
+                            className="btn-ghost shrink-0"
+                            onClick={() => handleRollback(v)}
+                          >
+                            回滚
+                          </button>
+                        )}
+                      </div>
+                      {expanded && (
+                        <VersionDiff
+                          body={v.body}
+                          currentBody={card.body}
+                          className="mt-2 border-t border-line pt-2"
+                        />
+                      )}
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </div>

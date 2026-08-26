@@ -6,6 +6,7 @@ import { cardDraftChanges, cardDraftFrom, normalizeCode, parseTags } from '@/lib
 import type { CardDraft } from '@/lib/cards'
 import { Stars } from '@/components/Stars'
 import { Spinner } from '@/components/Spinner'
+import { VersionDiff } from '@/components/VersionDiff'
 import { formatTime } from '@/lib/util'
 
 interface PreviewPanelProps {
@@ -26,6 +27,8 @@ interface PreviewPanelProps {
   onRollback: (id: string, versionId: string) => void
   onSetSummary: (id: string, summary: string) => void
   onDelete?: (id: string) => void
+  /** P2-3 移动端底部抽屉：收起抽屉时回调（桌面侧边栏不渲染该按钮） */
+  onClose?: () => void
   notify: (msg: string) => void
 }
 
@@ -65,6 +68,7 @@ export function PreviewPanel({
   onRollback,
   onSetSummary,
   onDelete,
+  onClose,
   notify,
 }: PreviewPanelProps) {
   const [draft, setDraft] = useState<CardDraft>(() =>
@@ -87,6 +91,8 @@ export function PreviewPanel({
   const [metaLoading, setMetaLoading] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
   const [showVersions, setShowVersions] = useState(false)
+  // P3-2：当前展开完整内容/diff 的版本 id（单开，再点收起）
+  const [expandedVersionId, setExpandedVersionId] = useState<string | null>(null)
   const [width, setWidth] = useState<number>(() => readSavedWidth(defaultWidth))
   const dragState = useRef<{ startX: number; startW: number } | null>(null)
   const firstSync = useRef(true)
@@ -146,8 +152,13 @@ export function PreviewPanel({
       firstSync.current = false
       return
     }
+    // P2-4：外部数据更新（SSE / 回滚 / 保存回写）覆盖草稿前，先清理备注定时器并 flush 未落库修改，
+    // 避免多设备同步或回滚时把正在输入的备注直接覆盖丢失
+    if (notesTimer.current) window.clearTimeout(notesTimer.current)
+    commitSave(true)
     const timer = window.setTimeout(() => setDraft(cardDraftFrom(card)), 0)
     return () => window.clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [card])
 
   // silent=true 用于失焦/防抖自动保存：静默落地，不弹 toast，仅更新「已自动保存」角标
@@ -297,8 +308,12 @@ export function PreviewPanel({
 
   return (
     <aside
-      className="relative hidden shrink-0 flex-col overflow-hidden rounded-xl border border-line bg-ink-900 md:flex"
-      style={{ width }}
+      // P2-3：<md 降为底部抽屉（仅选中卡片时出现，fixed 全宽 + 收起按钮）；
+      // md+ 保持右侧可拖宽侧边栏（宽度由 --pw CSS 变量驱动，移动端忽略）
+      className={`${
+        card ? 'flex' : 'hidden md:flex'
+      } fixed inset-x-0 bottom-0 z-30 max-h-[75dvh] w-full flex-col overflow-hidden rounded-t-xl border border-line bg-ink-900 md:relative md:inset-auto md:bottom-auto md:z-auto md:max-h-none md:w-[var(--pw)] md:shrink-0 md:rounded-xl`}
+      style={{ '--pw': `${width}px` } as React.CSSProperties}
     >
       <div
         onPointerDown={handleDragStart}
@@ -306,8 +321,16 @@ export function PreviewPanel({
         role="separator"
         aria-orientation="vertical"
         title="拖动调整宽度 · 双击重置"
-        className="absolute left-0 top-0 z-10 h-full w-2 cursor-ew-resize bg-transparent transition-colors hover:bg-gold/10 active:bg-gold/20"
+        className="absolute left-0 top-0 z-10 hidden h-full w-2 cursor-ew-resize bg-transparent transition-colors hover:bg-gold/10 active:bg-gold/20 md:block"
       />
+      {card && onClose && (
+        <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-1.5 md:hidden">
+          <span className="min-w-0 flex-1 truncate text-xs text-paper">{card.title}</span>
+          <button type="button" className="btn-ghost shrink-0 text-[10px]" onClick={onClose}>
+            收起
+          </button>
+        </div>
+      )}
       {!card ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
           <span className="text-2xl">⚡</span>
@@ -385,14 +408,33 @@ export function PreviewPanel({
               <p className="border-t border-line px-3 py-2 text-xs leading-relaxed text-muted">该示例卡片暂无版本记录。</p>
             ) : (
               <ul className="max-h-44 space-y-1.5 overflow-y-auto border-t border-line px-3 py-2">
-                {[...card.versions].reverse().map((v) => (
-                  <li key={v.id} className="flex items-center gap-2 rounded-md border border-line bg-ink-850 px-2 py-1.5">
-                    <span className="shrink-0 font-mono text-[10px] text-muted">{formatTime(v.createdAt)}</span>
-                    <span className="min-w-0 flex-1 truncate text-[11px] text-paper-dim" title={v.body}>
-                      {v.body}
-                    </span>
-                  </li>
-                ))}
+                {[...card.versions].reverse().map((v) => {
+                  const expanded = expandedVersionId === v.id
+                  return (
+                    <li key={v.id} className="rounded-md border border-line bg-ink-850 px-2 py-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="shrink-0 font-mono text-[10px] text-muted">{formatTime(v.createdAt)}</span>
+                        <span
+                          className="min-w-0 flex-1 cursor-pointer truncate text-[11px] text-paper-dim"
+                          title="点击查看完整内容 / diff"
+                          onClick={() => setExpandedVersionId(expanded ? null : v.id)}
+                        >
+                          {v.body}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn-ghost shrink-0 text-[10px]"
+                          onClick={() => setExpandedVersionId(expanded ? null : v.id)}
+                        >
+                          {expanded ? '收起' : '查看完整内容'}
+                        </button>
+                      </div>
+                      {expanded && (
+                        <VersionDiff body={v.body} currentBody={card.body} className="mt-1.5 border-t border-line pt-1.5" />
+                      )}
+                    </li>
+                  )
+                })}
               </ul>
             ))}
           <footer className="flex items-center justify-between gap-2 border-t border-line px-3 py-1.5">
@@ -474,7 +516,11 @@ export function PreviewPanel({
                 setDraft((d) => ({ ...d, notes: e.target.value }))
                 scheduleNotesSave()
               }}
-              onBlur={() => commitSave(true)}
+              onBlur={() => {
+                // P2-4：失焦即存时清掉待触发的防抖定时器，避免 700ms 后重复提交
+                if (notesTimer.current) window.clearTimeout(notesTimer.current)
+                commitSave(true)
+              }}
             />
           </header>
           <div className="flex min-h-0 flex-1 flex-col border-t border-line px-3 py-2">
@@ -551,24 +597,43 @@ export function PreviewPanel({
               </p>
             ) : (
               <ul className="max-h-44 space-y-1.5 overflow-y-auto border-t border-line px-3 py-2">
-                {[...card.versions].reverse().map((v) => (
-                  <li
-                    key={v.id}
-                    className="flex items-center gap-2 rounded-md border border-line bg-ink-850 px-2 py-1.5"
-                  >
-                    <span className="shrink-0 font-mono text-[10px] text-muted">{formatTime(v.createdAt)}</span>
-                    <span className="min-w-0 flex-1 truncate text-[11px] text-paper-dim" title={v.body}>
-                      {v.body}
-                    </span>
-                    <button
-                      type="button"
-                      className="btn-ghost shrink-0 text-[10px]"
-                      onClick={() => handleRollback(v)}
+                {[...card.versions].reverse().map((v) => {
+                  const expanded = expandedVersionId === v.id
+                  return (
+                    <li
+                      key={v.id}
+                      className="rounded-md border border-line bg-ink-850 px-2 py-1.5"
                     >
-                      回滚
-                    </button>
-                  </li>
-                ))}
+                      <div className="flex items-center gap-2">
+                        <span className="shrink-0 font-mono text-[10px] text-muted">{formatTime(v.createdAt)}</span>
+                        <span
+                          className="min-w-0 flex-1 cursor-pointer truncate text-[11px] text-paper-dim"
+                          title="点击查看完整内容 / diff"
+                          onClick={() => setExpandedVersionId(expanded ? null : v.id)}
+                        >
+                          {v.body}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn-ghost shrink-0 text-[10px]"
+                          onClick={() => setExpandedVersionId(expanded ? null : v.id)}
+                        >
+                          {expanded ? '收起' : '查看完整内容'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-ghost shrink-0 text-[10px]"
+                          onClick={() => handleRollback(v)}
+                        >
+                          回滚
+                        </button>
+                      </div>
+                      {expanded && (
+                        <VersionDiff body={v.body} currentBody={card.body} className="mt-1.5 border-t border-line pt-1.5" />
+                      )}
+                    </li>
+                  )
+                })}
               </ul>
             ))}
           <footer className="flex items-center justify-between gap-2 border-t border-line px-3 py-1">

@@ -759,6 +759,7 @@ export default function Home() {
             defaultWidth={420}
             onSetSummary={handleSetSummary}
             onDelete={isDemoView ? undefined : handleDeleteCard}
+            onClose={() => setSelectedId(null)}
             notify={notify}
           />
         </main>
