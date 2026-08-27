@@ -243,4 +243,11 @@
 - [x] 3a. 移动标签：「代码检查」移至「编程」下，层级结构正确，API 持久化 ✅
 - [x] 3b. 环路检测：「编程」→「代码检查」被拒绝，Toast 提示正确 ✅
 - [x] 4. 同级重名拒绝：重命名到已存在名称被拒绝 ✅
-- [ ] 5. Card chip × 移除标签：count 生效但 card.tags 未同步（BUG-NEW-1）❌
+- [x] 5. Card chip × 移除标签：BUG-NEW-1 已修复，card.tags 与 promptTags 双写一致 ✅
+
+### Fix QA 验证 - 2026-08-28（第十四次）
+
+- [x] 1. chip × 移除同步：BUG-NEW-1 已修复，card.tags 与 promptTags 双写一致 ✅
+- [x] 2. 重命名回滚：handleRenameTag 调用 syncCardsToPromptTags，card.tags 与 promptTags 双写一致 ✅
+- [x] 3. 新建标签父校验：page.tsx:508-509 已修复，返回「父标签不存在」（非环检测） ✅
+- [x] 构建门禁：tsc --noEmit ✅、npm run lint ✅

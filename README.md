@@ -39,6 +39,7 @@
 | 星级评分 | 点击 `1`~`5` 打星、`0` 清除 |
 | 标签筛选 | 左侧标签面板单选筛选（再点取消），按数量排序；筛选态下新建卡片默认携带当前选中标签（强制首位，其余 AI 标签去重补充，最多 3 个；「全部」与 demo 视图不强制） |
 | 标签系统（ID 解耦） | `tags` 11 + `promptTags` 55（多age×3/多aengt×1→多agent编程，无法分类删除，0孤儿），`Tag`/`PromptTag` ID 解耦，`src/lib/tags.ts` 纯函数 11/55迁移（守卫+树构建+循环/重名检测+8 mutation + `syncCardsToPromptTags`），`TagPanel` 树+展开记忆+完整路径搜索+无标签+`⋯` 重命名/移动/删除（双模式级联不删 Prompt，确认），当前标签下新建继承，多标签上限3保持，`cards.ts:50字` 根因修复，`scripts/migrate-tags.mjs` 一键迁移  |
+| 标签 chip 双写 | 编辑卡片标签 chip `×` 移除时 `handleUpdateMeta` 双写 `card.tags` 与 `promptTags`（`resolveTagIds→setCardTags→syncCardsToPromptTags`），重命名回滚修复（宏任务 `schedulePush` 合并避免 SSE 回声回滚），新建标签父校验 `parentId` 存在性检查；`BUG-NEW-1 CLOSED` |
 | 标签管理 | 标签行 hover 显示 ×（键盘 focus-visible 可达），点击 confirm「将从 N 张卡片中移除标签…卡片本身不会删除」→ 批量从所有含该标签的卡片移除该条目（原文不动），计数归 0 自动消失；demo 视图隐藏 × |
 | 网格直删 | 卡片 hover 时悬浮胶囊 `absolute top-2 right-2 bg-ink-900/80 backdrop-blur`（`group-hover`/`focus-within`/`bulkActive` 显隐）内含多选/编辑/删除，`text-rust` 删除按 `Settings.confirmDelete` 决定是否 `window.confirm`「确定删除「{title}」？此操作不可撤销。」；标题 `pr-16` 预留位 code 徽标不被盖，正文 `line-clamp-3` 空白回收；demo 隐藏；设置中 Switch 即存 |
 | 排序 | 按更新时间 / 复制次数 / 评分降序；搜索激活时按相关度（标题 4/调取码·标签 3/备注 2/正文 1）置顶，同分二级排序 |

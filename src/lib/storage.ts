@@ -389,17 +389,30 @@ function trySave(key: string, value: unknown): boolean {
   }
 }
 
-// 合并推送：把最近一次的 cards/settings 推到服务端。
+// 合并推送：把「同一渲染批次」内多次 save 合并为一次推送，保证每次推送快照内部一致。
+// 背景（P0 重命名根因）：rename/delete 等操作会同时变更 cards + tags（+ promptTags），
+// page.tsx 四个持久化 effect 在同一 flush 内依次执行（saveCards 先于 saveTags）；
+// 若每个 save 都立即发推送，先执行的 saveCards 会用「新 cards + 旧 cacheTags」的混合
+// 快照推上去，服务端落盘后 SSE 回声早于 POST 响应到达（lastPushedVersion 未更新、
+// 回声过滤失效），客户端 loadFromServer 把旧 tags 拉回 → 重命名被回滚（实测全部未生效）。
+// 解法：schedulePush 延迟到宏任务（setTimeout 0）真正发推送，同一 flush 的所有 save
+// 在首次触发前已全部写完模块级 cache，任何一次推送都是四集合一致的快照。
 // 串行化：上一次推送尚未完成时，新变更只标记 pending，完成后立即补推一次最新状态，
 // 保证高频改动最终一致、不丢中间态（原实现用 pushScheduled 防重入，异步期间新变更会被吞掉）。
+let pushTimer: ReturnType<typeof setTimeout> | null = null
+
 function schedulePush() {
   if (!serverMode) return
-  if (pushInFlight) {
-    pushPending = true
-    return
-  }
-  pushInFlight = true
-  void doPush()
+  if (pushTimer) return
+  pushTimer = setTimeout(() => {
+    pushTimer = null
+    if (pushInFlight) {
+      pushPending = true
+      return
+    }
+    pushInFlight = true
+    void doPush()
+  }, 0)
 }
 
 async function doPush() {

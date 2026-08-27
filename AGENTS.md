@@ -47,7 +47,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ### 当前进展与产物索引
 
-- 当前状态：实时同步、UI 优化、调取码、MCP 集成、调用计数、失焦自动保存、P0/P1 8 项修复、全局搜索（P2-2）+ 健壮性批次（RISK-3/OPT-NEW-2/P3-1/P3-3）、P2-8/P2-9/P3-6 三项打包、P0-1~P0-7（含 11合1 总验收）均已完成；P0 标签系统核心 22项已完成并通过 QA/产品验收（待提交，QA 第十二次、产品 2026-08-28 PASS，tags 11/promptTags 55/0孤儿）
+- 当前状态：实时同步、UI 优化、调取码、MCP 集成、调用计数、失焦自动保存、P0/P1 8 项修复、全局搜索（P2-2）+ 健壮性批次（RISK-3/OPT-NEW-2/P3-1/P3-3）、P2-8/P2-9/P3-6 三项打包、P0-1~P0-7（含 11合1 总验收）、P0 标签系统核心 22项均已完成；Fix chip 双写+重命名回滚+父校验已完成并通过 QA/产品验收（待提交，QA 第十四次、产品 2026-08-28 PASS，BUG-NEW-1 CLOSED）
 - 需求文档：`docs/pm/提示词管理工具-需求文档.md`
 - 产品报告：`docs/pm/产品报告.md`
 - 实施计划：`docs/pm/PLAN.md`

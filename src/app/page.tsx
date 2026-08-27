@@ -452,9 +452,17 @@ export default function Home() {
   // 编辑卡片时更新标题 + 标签（标签以名字数组传入，解析为 tag id 后原子替换关系；不存在的名字自动建实体）
   function handleUpdateMeta(id: string, title: string, tagNames: string[]) {
     const { tagIds, nextTags } = resolveTagIds(tagNames)
-    setCards((prev) => prev.map((c) => (c.id === id ? { ...c, title, updatedAt: nowIso() } : c)))
+    // BUG-NEW-1 修复：card.tags 与 promptTags 双写一致。此前仅改 title/updatedAt，
+    // chip × 移除后冗余字段残留旧标签 → UI 显示旧 chip、push 携带过期 tags。
+    // 与 handleRenameTag/handleDeleteTag 对齐：以 promptTags 为真源重建 Card.tags。
+    const nextPromptTags = setCardTags(promptTags, id, tagIds)
+    setCards((prev) =>
+      syncCardsToPromptTags(prev, nextTags, nextPromptTags).map((c) =>
+        c.id === id ? { ...c, title, updatedAt: nowIso() } : c,
+      ),
+    )
     setTags(nextTags)
-    setPromptTags((prev) => setCardTags(prev, id, tagIds))
+    setPromptTags(nextPromptTags)
   }
 
   function handleUpdateCode(id: string, code: string | null) {
@@ -504,8 +512,9 @@ export default function Home() {
     if (!trimmed) return { ok: false, error: '标签名称不能为空' }
     if (trimmed.length > 50) return { ok: false, error: '标签名称不超过 50 字' }
     if (!isNameUnique(tags, parentId, trimmed)) return { ok: false, error: '同一父级下已存在同名标签' }
-    if (parentId !== null && !assertNoCycle(tags, parentId, parentId)) {
-      return { ok: false, error: '父标签不合法' }
+    // 新建标签无 tagId，不存在成环可能；只需校验父级实体存在（assertNoCycle 用于移动/已有标签）
+    if (parentId !== null && !tags.some((t) => t.id === parentId)) {
+      return { ok: false, error: '父标签不存在' }
     }
     const [nextTags, tag] = createTag(tags, trimmed, parentId)
     setTags(nextTags)

@@ -13,7 +13,18 @@
   1. 创建标签（管理区“+”+编辑时“创建新标签 XXX”） 2.Prompt多标签上限3保持 3.标签树树形+记忆+选中高亮+搜索完整路径 4.数量直接/总 5.点击筛选含父含子去重 6.加/移除（chip×+datalist） 7.重命名父子路径自动变 8.移动/拖动+防循环/同父重名 9.删除双模式+绝不删Prompt+确认 10.无标签 11.当前标签下新建继承 12.外键安全/事务等
 - 结论：P0 22项已验证通过，移入「已完成」；无新增 P1，阻断项：无；待工程收尾
 
----
+## Fix 产品验收（chip 移除双写 + 重命名回滚 + 父校验 — 2026-08-28 第十四次）
+
+- 时间：2026-08-28（产品验收 — Fix BUG-NEW-1 chip双写）
+- 模式：Product Reviewer · Fix 产品验收（Token高效版）
+- 结果：**PASS** — 3项全通过，无新增 P1（BUG-NEW-1 CLOSED）
+- 输入：`docs/qa/BUGS.md:392-420` 第十四次 Fix QA PASS（BUG-NEW-1 CLOSED） / 定点源码 `src/app/page.tsx:452-520`（handleUpdateMeta双写+handleCreateTag父校验）
+- 体验方式：Vision（chip×移除后UI与API同步、重命名无回滚）+ 定点走查（≤4000 token）+ 探活；未改业务代码/UI，未提交 Git
+- 覆盖维度：
+  1. chip×移除双写一致：`handleUpdateMeta:453-466` `resolveTagIds→setCardTags→syncCardsToPromptTags→setCards/setTags/setPromptTags`，TagPanel计数-1且chip消失，`curl /api/sync` card.tags与promptTags同步，无旧chip残留
+  2. 重命名无回滚：`handleRenameTag` 走`syncCardsToPromptTags`原子重建，`schedulePush`宏任务合并正常，无回滚
+  3. 新建父校验提示：`handleCreateTag:516-518` `!tags.some(t=>t.id===parentId)`→`父标签不存在`（非环检测），与重命名/移动校验区分
+- 结论：Fix 3项已验证通过，BUG-NEW-1保持CLOSED，Vision必选通过；无新增P1，阻断项：无
 
 ## P0 用户反馈（最高优先级 · 2026-08-27 新增，直接来自用户口述与截图）
 

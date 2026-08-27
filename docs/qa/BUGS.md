@@ -385,4 +385,36 @@
   - `src/components/CardDetail.tsx:363-367` — chip × onClick
   - `src/components/PreviewPanel.tsx:522-526` — chip × onClick
   - `src/lib/tags.ts:234-240` — setCardTags
-- **状态**：OPEN
+- **状态**：CLOSED（已修复 2026-08-28，第十四次 Fix QA 验证通过）
+
+---
+
+## Fix QA 记录
+
+### 第十四次 Fix QA（2026-08-28 - chip 移除同步 + 重命名回滚 + 新建父校验）
+
+- **模式**：QA Acceptance（真机 Orca Computer Use + 代码走查 + API 校验）
+- **执行者**：QA / Test Agent
+- **结果**：**PASS**（3 项验证全部通过）
+- **构建门禁**：tsc --noEmit ✅、npm run lint ✅
+
+#### 验证结果
+
+| # | 测试项 | 结果 | 说明 |
+|---|---|---|---|
+| 1 | chip × 移除同步 | ✅ PASS | BUG-NEW-1 已修复：card.tags 与 promptTags 双写一致，chip 消失 + API 同步 |
+| 2 | 重命名回滚 | ✅ PASS | handleRenameTag 调用 syncCardsToPromptTags，无回滚，schedulePush 宏任务合并正常 |
+| 3 | 新建标签父校验 | ✅ PASS | page.tsx:508-509 返回「父标签不存在」（非环检测） |
+
+#### BUG-NEW-1 状态更新
+
+- **状态**：**CLOSED**（已修复）
+- **修复内容**：`handleUpdateMeta`（page.tsx:453-466）改为调用 `syncCardsToPromptTags` 重建 card.tags，确保与 promptTags 双写一致
+- **真机验证**：chip × 移除后 TagPanel count -1 + chip 消失 + API card.tags 同步 + promptTags 同步
+
+#### handleCreateTag 修复确认
+
+- **状态**：已修复 ✅
+- **变更**：page.tsx:508-509 从 `assertNoCycle` 改为 `tags.some((t) => t.id === parentId)`
+- **错误提示**：「父标签不存在」（非「父标签不合法」或环检测错误）
+- **真机验证**：代码走查确认，UI 路径无法触发非法父 ID
