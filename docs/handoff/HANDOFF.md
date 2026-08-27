@@ -5,12 +5,13 @@
 ## 当前状态
 
 - 项目：提示词管理工具（Prompt Manager），Next.js 16（App Router）+ React 19 + TypeScript 5 + Tailwind v4。
-- 阶段：功能开发期。已完成主体：跨设备实时同步、UI 优化（含正文优先布局重构）、调取码字段、MCP 集成、MCP 调用计数、备注字段、失焦自动保存、回滚 bug 修复、**全局搜索 + 健壮性批次（范围 A+B）+ P2-8/P2-9/P3-6 三项打包 + P0-1~P0-7（含 11合1 总验收 + 2合1）+ P0 标签系统核心 22项 + Fix chip 双写**。
-- **最新提交（待提交，Fix）**：「Fix chip 双写+重命名回滚+父校验」：
-  - chip 双写：`page.tsx:452-466` `handleUpdateMeta` `resolveTagIds→setCardTags→syncCardsToPromptTags` 双写 `card.tags` 与 `promptTags`，`BUG-NEW-1` chip 移除后计数/ chip / API 同步修复；
-  - 重命名回滚：`storage.ts` `schedulePush` 宏任务延迟合并（`pushTimer setTimeout 0`），同批次 `saveCards/saveTags` 先写 cache 再统一推送，避免 SSE 回声抢先回滚；
-  - 父校验：`page.tsx:516-518` `handleCreateTag` 父校验由 `assertNoCycle`（环检测）改为 `tags.some(t=>t.id===parentId)` → 「父标签不存在」。
-- 上一提交（31b1322）：P0 标签系统核心 22项（QA 第十二次、产品 2026-08-28 PASS）；再上一提交 20eabcc：P0-6/P0-7 2合1（QA 第十一次、产品 2026-08-28 PASS）。
+- 阶段：功能开发期。已完成主体：跨设备实时同步、UI 优化（含正文优先布局重构）、调取码字段、MCP 集成、MCP 调用计数、备注字段、失焦自动保存、回滚 bug 修复、**全局搜索 + 健壮性批次（范围 A+B）+ P2-8/P2-9/P3-6 三项打包 + P0-1~P0-7（含 11合1 总验收 + 2合1）+ P0 标签系统核心 22项 + Fix chip 双写 + **P0-9 标签添加交互重构（flomo 风格 #标签+回车/空格自动添加，禁止逗号分隔，QA 第十五次/产品 2026-08-28 PASS）**`。
+- **最新提交（待提交，P0-9）**：「P0-9 标签添加交互重构（#标签+回车/空格自动添加，禁止逗号分隔）」：
+  - 新增 `src/components/TagEditor.tsx`：flomo 风格 chip 列表 + # 前缀 input + 下拉补全（existingTags）；回车/空格即添加单标签，chip × 移除，atMax=3 上限红色提示，失焦兜底提交；与 `handleUpdateMeta` 的 `tagsText` 链路兼容（`parseTags`/`join('、')`）。
+  - `CardDetail.tsx` / `PreviewPanel.tsx` 标签输入区重构为 `TagEditor`，onChange 双轨写入 `setDraft(tagsText)` + `onUpdateMeta(id, title, nextTags)`。
+  - QA 第十五次（2026-08-27）ALL PASS 6 项 + 产品验收（2026-08-28）PASS，无新增 Bug/P1。
+- 上一提交（已推送 ad5b64e）：Fix chip 双写+重命名回滚+父校验（QA 第十四次、产品 2026-08-28 PASS，BUG-NEW-1 CLOSED）。
+- 再上一提交（31b1322）：P0 标签系统核心 22项（QA 第十二次、产品 2026-08-28 PASS）；20eabcc：P0-6/P0-7 2合1（QA 第十一次、产品 2026-08-28 PASS）。
 - 远程仓库：https://github.com/wanghoufan/prompt-manager.git（master，已配置）。
 - dev 服务：`./dev-server.sh` watchdog 管理（start/stop/restart/status/logs），监听 `*:3000`。
 
@@ -69,7 +70,7 @@
 
 ## 下一步
 
-- **里程碑已收口（待提交）：Fix chip 双写+重命名回滚+父校验已通过 QA 第十四次与产品验收 PASS（2026-08-28，BUG-NEW-1 CLOSED，无新增 P1），待下轮按 `docs/review/PRODUCT_BACKLOG.md` P0-8 标签重命名调研后择机排期。**
+- **里程碑已收口（待提交）：P0-9 标签添加交互重构已通过 QA 第十五次（2026-08-27）与产品验收（2026-08-28）PASS，无新增 Bug/P1，待本仓库一次性提交；收口下一步为「待 P0-8 标签重命名调研后」择机排期，无 Fix 遗留。**
 - 剩余风险（不阻断）：RISK-1/2 MCP 陈旧/静默、RISK-5 调取码冲突、P0-3 Composer toast 已记录，详见 `CODE_REVIEW.md` 与 `CURRENT_STAGE.md`。
 - 待办候选：P0-8 标签重命名调研 + 剩余 P1/P2 未完成项择机排期，无 Fix 遗留。
 - 若 WorkBuddy 调取仍不自动按角色执行，用户可在 WorkBuddy 全局系统提示词加入工具触发说明。

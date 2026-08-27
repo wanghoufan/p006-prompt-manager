@@ -41,6 +41,7 @@
 | 标签系统（ID 解耦） | `tags` 11 + `promptTags` 55（多age×3/多aengt×1→多agent编程，无法分类删除，0孤儿），`Tag`/`PromptTag` ID 解耦，`src/lib/tags.ts` 纯函数 11/55迁移（守卫+树构建+循环/重名检测+8 mutation + `syncCardsToPromptTags`），`TagPanel` 树+展开记忆+完整路径搜索+无标签+`⋯` 重命名/移动/删除（双模式级联不删 Prompt，确认），当前标签下新建继承，多标签上限3保持，`cards.ts:50字` 根因修复，`scripts/migrate-tags.mjs` 一键迁移  |
 | 标签 chip 双写 | 编辑卡片标签 chip `×` 移除时 `handleUpdateMeta` 双写 `card.tags` 与 `promptTags`（`resolveTagIds→setCardTags→syncCardsToPromptTags`），重命名回滚修复（宏任务 `schedulePush` 合并避免 SSE 回声回滚），新建标签父校验 `parentId` 存在性检查；`BUG-NEW-1 CLOSED` |
 | 标签管理 | 标签行 hover 显示 ×（键盘 focus-visible 可达），点击 confirm「将从 N 张卡片中移除标签…卡片本身不会删除」→ 批量从所有含该标签的卡片移除该条目（原文不动），计数归 0 自动消失；demo 视图隐藏 × |
+| 标签添加交互（P0-9） | 详情/预览面板标签区重构为 flomo 风格 `TagEditor`：输入 `#标签名` 后**回车或空格**即自动添加为 chip（禁止逗号/顿号分隔），每次只加一个标签互不干扰；输入时弹出已有标签下拉补全（点选/回车即加）；chip 上 × 移除单个；已达上限（默认 3 个）红色提示；失焦兜底提交未写完标签；与 `handleUpdateMeta` 的 `tagsText` 编辑链路双向兼容（`parseTags`/`join('、')`） |
 | 网格直删 | 卡片 hover 时悬浮胶囊 `absolute top-2 right-2 bg-ink-900/80 backdrop-blur`（`group-hover`/`focus-within`/`bulkActive` 显隐）内含多选/编辑/删除，`text-rust` 删除按 `Settings.confirmDelete` 决定是否 `window.confirm`「确定删除「{title}」？此操作不可撤销。」；标题 `pr-16` 预留位 code 徽标不被盖，正文 `line-clamp-3` 空白回收；demo 隐藏；设置中 Switch 即存 |
 | 排序 | 按更新时间 / 复制次数 / 评分降序；搜索激活时按相关度（标题 4/调取码·标签 3/备注 2/正文 1）置顶，同分二级排序 |
 | 格式规范化 | 保存时自动 `normalizeBody`：逐行去前导 tab、纯空白归一、非空行前导空格最多保留 4 个、去首尾空行、合并连续空行（`\\n{3,}`→`\\n\\n`）；导入（JSON/Markdown）路径同步规范化，保证全篇左对齐 |
@@ -146,6 +147,7 @@ npm run start        # 默认 3000 端口
 - **打星**：点击卡片选中后按 `1`~`5` 打星、`0` 清除；也可直接点星标。
 - **搜索**：SortBar 搜索框输入即时过滤（300ms 防抖），支持标题/正文/标签/调取码/备注大小写不敏感匹配；`@` 开头仅按调取码匹配直达；命中片段在卡片标题/正文/标签/调取码徽标以 `<mark class="bg-highlight text-highlight ring-1 ring-highlight-ring">` 高亮高对比（暗色琥珀 42% + 亮色荧光笔，变量驱动双主题，防 XSS）；**搜索激活时按相关度置顶（标题 4 > 调取码/标签 3 > 备注 2 > 正文 1，同分再按排序二级），`@code` 隔离保持原排序**；有值时显示「命中 x / 共 y 张」，0 命中显示空态引导；刷新即清。
 - **标签管理**：左侧标签行 hover（或键盘聚焦）显示 ×，点击 confirm 批量从所有含该标签的卡片移除该条目（卡片原文不动，计数归 0 自动消失）；demo 视图不显示 ×。
+- **添加标签**：详情/预览面板标签区输入 `#标签名` 后按**回车或空格**即自动添加为 chip（不再用逗号分隔多个标签）；输入时弹出已有标签下拉补全，点选或回车即加；chip 上 × 移除单个；达上限（默认 3 个）时输入框下方显示红色「已达上限」提示。
 - **网格直删**：网格卡片 hover 时「编辑」下出现红色「删除」，按 `confirmDelete` 是否二次确认后删除；设置 →「删除前二次确认」Switch 可关闭确认（即点即删）。
 - **主题**：设置 →「外观主题」跟随系统 / 暗色 / 亮色即时切换并持久化（刷新保持、服务端同步），首屏无闪烁，system 实时跟随系统偏好。
 - **排序/筛选**：排序栏以「排序方式」标签明确标识，提供「最近更新 / 复制次数 / 评分」三档（悬浮可看说明），作用于当前集合；左侧标签面板单选筛选，与搜索 AND 叠加。

@@ -418,3 +418,53 @@
 - **变更**：page.tsx:508-509 从 `assertNoCycle` 改为 `tags.some((t) => t.id === parentId)`
 - **错误提示**：「父标签不存在」（非「父标签不合法」或环检测错误）
 - **真机验证**：代码走查确认，UI 路径无法触发非法父 ID
+
+---
+
+### 第十五次 QA - P0-9 标签添加交互重构（#标签+回车/空格自动添加，禁止逗号分隔，2026-08-27 真机验收）
+
+- **日期**：2026-08-27
+- **模式**：QA Acceptance（Token 高效版，真机 agent-browser GUI）
+- **执行者**：QA / Test Agent
+- **范围**：P0-9 标签添加交互重构（PRODUCT_BACKLOG.md P0-9，2026-08-28 用户截图反馈的子项）
+- **结果**：**ALL PASS**（6 项功能点 + 2 条构建门禁全过，无新增 Bug）
+- **构建门禁**：`npx tsc --noEmit` ✅ 0 错误、`npm run lint` ✅ 0 错误
+- **API 验证**：未单独 curl（本次仅 UI 交互，侧边栏全局标签计数实时同步已隐式证明 onUpdateMeta 链路 + SSE 落盘正常）
+- **commit 验证**：未提交（验收完成后停止，等待【节奏】触发产品验收）
+- **已关闭**：无新增关闭
+- **阻断项**：无
+- **真机截图**：`/Users/zzymima0000/.agent-browser/tmp/screenshots/screenshot-1787842880209.png`（详情面板"添加标签"标题样式 + chip 区域）
+- **定点读取**（不扫全仓）：`docs/review/PRODUCT_BACKLOG.md:33-44` P0-9 段 + `src/components/TagEditor.tsx`（174 行，全读）+ `src/components/CardDetail.tsx` line 8/123/200/348-361（TagEditor 使用处 + onChange 链路）+ `src/components/PreviewPanel.tsx` line 9/196/268/477-490（同上）+ `src/lib/cards.ts:100-114`（`parseTags` `[,，、\s]+` 分割与 `join('、')` 兼容）
+
+#### 6 项验证逐条
+
+| # | 测试项 | 结果 | 证据 |
+|---|---|---|---|
+| 1 | 输入 `#标签名` + 回车 → 自动添加为 chip（不依赖逗号） | ✅ PASS | CardDetail 输入 `#qa验收` + Enter → chip 立即出现，侧边栏新增"qa验收 1"（全局同步） |
+| 2 | 输入时弹出已有标签下拉补全，点选即添加 | ✅ PASS | 输入 `#qa` → 下拉出现"qa基线"建议项（"qa验收"因已在 chips 被正确过滤），点选即添加 |
+| 3 | 每次只添加一个标签，多标签独立 | ✅ PASS | 经验记录 + sop 初始 → 添加 qa验收（sop 保留）→ 移除 sop → 添加 qa基线（经验记录+qa验收 保留）→ 共 3 chip 互不影响 |
+| 4 | chip 可点击 × 移除单个标签 | ✅ PASS | `aria-label="移除标签 sop"` 按钮点击后移除按钮数 3→2，侧边栏"qa基线"从 7→8 反向验证持久化 |
+| 5 | 标题"添加标签"样式：居中、加粗/加大、与其他区域区分 | ✅ PASS | 截图确认：`<div className="text-center">` + `font-serif text-sm font-semibold text-paper` 与上下"标题""调取码"label（左对齐 text-xs text-muted）对比明显区分 |
+| 6 | 与 `handleUpdateMeta` 的 `tagsText` 编辑链路兼容 | ✅ PASS | 关闭详情重开 → 3 个 chip 全部保留；`parseTags(/[,，、\s]+/)` 与 `join('、')` 双向兼容；侧边栏全局统计实时同步证明 `onUpdateMeta(id, title, parseTags(tagsText))` 路径正常 |
+
+#### 补充验证
+
+- **CardDetail 路径**：`CardDetail.tsx:356-359` onChange 同时 `setDraft(tagsText=join('、'))` + `onUpdateMeta(id, title, nextTags)`，双轨写入与 `commitSave` 路径（line 123 `parseTags(d.tagsText)`）格式一致 ✅
+- **PreviewPanel 路径**：`PreviewPanel.tsx:485-488` 同款 onChange 双轨写入；PreviewPanel 实测空格键添加：输入 `#新标签` + Space → chip 立即出现（侧边栏新增"新标签 1"）✅
+- **atMax 行为**：3 chip 时 input 区显示"已达上限（最多 3 个）"红色提示，下拉 `!atMax` 不渲染（TagEditor.tsx:144），行为合理 ✅
+- **失焦兜底**：`onBlur`（TagEditor.tsx:113-117）有未输入完的 input 时 `addTag(input)`，避免残留文字，符合 flomo 风格 ✅
+- **下拉键盘导航**：Enter（高亮项或 input）/ Space / ArrowUp / ArrowDown / Escape 全部实现（TagEditor.tsx:118-139），高亮态用 `bg-ink-800 text-paper` 视觉反馈 ✅
+- **下拉 mousedown preventDefault**（TagEditor.tsx:147）：防止 suggestion 点击触发 input blur 抢先提交，回退走 `addTag(s)` ✅
+
+#### 观察项（不阻断，建议 P2/Future 评估）
+
+- **输入法兼容性**：中文拼音输入法确认候选词时按空格，部分浏览器/输入法下可能触发 `onKeyDown` `e.key === ' '` 且 `e.nativeEvent.isComposing === true`，当前代码未加 `if (e.nativeEvent.isComposing) return` 守卫，可能误触发 addTag 提早锁定。Chrome 主流组合下 key 为 `'Process'` 不会命中空格分支，但稳妥做法应加守卫。**不阻断验收**（极端边界场景）。
+- **onBlur 兜底** 残留文字提交：用户输入"标签"后未按回车/空格直接失焦也会 addTag，符合 flomo 风格但需用户留意；可接受。
+- **"添加标签"标题字号**：当前 `text-sm`（14px），对比其他 label `text-xs`（12px）已区分明显但仅大一档；如用户希望更夸张可升 `text-base`（16px）— 依赖用户偏好确认。**不阻断验收**。
+
+#### 既有回归
+
+- P0-1~P0-7（含 11合1 总验收 + 2合1）：本轮未触碰相关代码，路径不变 ✅
+- 失焦自动保存：测试过程中"已自动保存"角标持续显示，未出现丢稿 ✅
+- 同步链路：sop 计数从 3→2、qa基线 7→8、qa验收 0→1、+新标签 1，均为失焦即落库并 SSE 推送，无回声刷新现象 ✅
+- 新增 BUG：无

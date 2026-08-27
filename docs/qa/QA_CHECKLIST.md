@@ -251,3 +251,26 @@
 - [x] 2. 重命名回滚：handleRenameTag 调用 syncCardsToPromptTags，card.tags 与 promptTags 双写一致 ✅
 - [x] 3. 新建标签父校验：page.tsx:508-509 已修复，返回「父标签不存在」（非环检测） ✅
 - [x] 构建门禁：tsc --noEmit ✅、npm run lint ✅
+
+### P0-9 标签添加交互重构 - 2026-08-27 验证（第十五次）
+
+- [x] 1. `#标签名` + 回车 → 自动添加为 chip（不依赖逗号分隔） ✅
+- [x] 2. 输入时弹出已有标签下拉补全，点选即添加 ✅
+- [x] 3. 每次只添加一个标签，多标签独立（chip 列表独立维护） ✅
+- [x] 4. chip 可点击 × 移除单个标签 ✅
+- [x] 5. 标题"添加标签"样式：居中 + `font-serif font-semibold text-paper`，与其他 label（`text-xs text-muted`）明显区分 ✅
+- [x] 6. 与 `handleUpdateMeta` 的 `tagsText` 编辑链路兼容（`parseTags` `[,，、\s]+` 与 `join('、')` 双向兼容） ✅
+- [x] CardDetail 路径：onChange 同时 `setDraft(tagsText)` + `onUpdateMeta(id, title, nextTags)`，与 `commitSave` 路径一致 ✅
+- [x] PreviewPanel 路径：同款 onChange 双轨写入；空格键添加验证通过 ✅
+- [x] atMax 行为：3 chip 时显示"已达上限"红色提示 + 下拉不渲染 ✅
+- [x] 失焦自动保存：右下角"已自动保存"角标持续显示，未出现丢稿 ✅
+- [x] 关闭重开持久化：3 chip 全部保留，tagsText 链路完整 ✅
+- [x] 侧边栏全局标签计数实时同步（sop 3→2、qa基线 7→8、qa验收 0→1、+新标签 1），证明 onUpdateMeta + SSE 链路正常 ✅
+- [x] 下拉键盘导航：Enter / Space / ArrowUp / ArrowDown / Escape 全部实现 ✅
+- [x] 下拉 mousedown preventDefault：避免点击建议项时 input blur 抢先提交 ✅
+- [x] 构建门禁：tsc --noEmit ✅ 0 错误、npm run lint ✅ 0 错误（2026-08-27 第四次验证通过） ✅
+
+#### 观察项（不阻断，建议 P2/Future 评估）
+
+- 输入法兼容性：中文拼音确认候选词按空格时，部分浏览器/输入法可能误触 `addTag`，建议未来加 `if (e.nativeEvent.isComposing) return` 守卫
+- "添加标签"标题当前 `text-sm`（14px），如希望更夸张可升 `text-base`（16px），依赖用户偏好确认

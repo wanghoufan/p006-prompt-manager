@@ -5,6 +5,7 @@ import type { Card, Version } from '@/lib/types'
 import { cardDraftChanges, cardDraftFrom, normalizeCode, parseTags } from '@/lib/cards'
 import { Stars } from '@/components/Stars'
 import { Spinner } from '@/components/Spinner'
+import { TagEditor } from '@/components/TagEditor'
 import { VersionDiff } from '@/components/VersionDiff'
 import { formatTime } from '@/lib/util'
 import { useModalFocus } from '@/hooks/useModalFocus'
@@ -345,49 +346,18 @@ export function CardDetail(props: CardDetailProps) {
                 />
               </div>
               <div className="space-y-1.5">
-                <label htmlFor="detail-tags" className="text-xs text-muted">
-                  标签（点击 × 移除，输入新名称自动创建，最多 3 个）
-                </label>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {card.tags.map((t) => (
-                    <span
-                      key={t}
-                      className="inline-flex items-center gap-1 rounded-full border border-gold/25 bg-gold/5 px-2 py-0.5 text-[11px] text-gold-bright"
-                    >
-                      {t}
-                      <button
-                        type="button"
-                        aria-label={`移除标签 ${t}`}
-                        title={`从本条移除标签「${t}」`}
-                        className="rounded-full p-0.5 text-muted transition-colors hover:bg-gold/20 hover:text-rust"
-                        onClick={() => {
-                          const next = card.tags.filter((n) => n !== t)
-                          props.onUpdateMeta(card.id, card.title, next)
-                          setDraft((d) => ({ ...d, tagsText: next.join('、') }))
-                        }}
-                      >
-                        <svg viewBox="0 0 16 16" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="1.5">
-                          <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
-                        </svg>
-                      </button>
-                    </span>
-                  ))}
-                  {card.tags.length === 0 && <span className="text-xs text-muted">暂无标签</span>}
+                <div className="text-center">
+                  <span className="font-serif text-sm font-semibold text-paper">添加标签</span>
                 </div>
-                <input
-                  id="detail-tags"
-                  className="field"
-                  list="detail-tags-list"
+                <TagEditor
                   value={draft.tagsText}
-                  onChange={(e) => setDraft((d) => ({ ...d, tagsText: e.target.value }))}
-                  onBlur={() => commitSave(true)}
-                  placeholder="如：角色扮演、任务拆解"
+                  existingTags={props.existingTags}
+                  inputId="detail-tags"
+                  onChange={(nextTags) => {
+                    setDraft((d) => ({ ...d, tagsText: nextTags.join('、') }))
+                    props.onUpdateMeta(card.id, draftRef.current.title.trim() || card.title, nextTags)
+                  }}
                 />
-                <datalist id="detail-tags-list">
-                  {props.existingTags.map((t) => (
-                    <option key={t} value={t} />
-                  ))}
-                </datalist>
               </div>
               <div className="space-y-1.5">
                 <label htmlFor="detail-code" className="flex items-center justify-between gap-2 text-xs text-muted">
