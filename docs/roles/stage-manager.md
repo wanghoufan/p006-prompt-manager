@@ -44,3 +44,9 @@
 ## 对话生命周期建议（2026-08-27 用户确认）
 - 凡向开发者分发「下一步开发」Prompt 时，Stage Manager 必须在输出中**明确给出对话生命周期建议**：是在上一会话继续，还是重开新会话更省 Token、更高效率，并说明判断依据（跨 Stage/历史失效/上下文污染/Token 定性）。
 - 判定原则：Full Milestone 结束或跨主题新 Stage 优先建议重开；同 Stage 内连续门控（QA→产品→收尾）可建议继续。无真实指标时仅定性，不虚构数字。
+
+## QA 真机必测多重保障（2026-08-28 用户确认，三重）
+
+- **Stage Manager 生成 QA Prompt 时必须显式要求**：若任务为 `P0 核心功能`（标签重命名/移动/删除等），Prompt 的「约束」与「执行」段必须写明 **Vision + Computer Use 真机操作 `http://localhost:3000` 必选，截图存 `scratch/qa-real-device/*.png` 为据，`tsc/lint` 仅作门禁不算 GUI 通过**
+- 此为 **第三重保障**，与 `Skill qa-real-device`（第一重，隐式加载）+ `docs/roles/qa.md: 真机必测硬约束`（第二重，角色模板）形成三重兜底
+- 未满足真机逐项点过（选中→重命名→输入→确认→观察树/芯片/子路径）前，不得判 `QA PASS`，不得进入 `neat-freak` 收尾

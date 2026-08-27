@@ -193,3 +193,9 @@ UI 状态 = 内存状态 = 持久化数据状态
 只有完成关键功能生命周期、异常场景和回归测试后，才能判断测试通过。
 
 默认不直接修改业务代码。
+
+## 真机必测硬约束（2026-08-28 沉淀，仅 P0 核心）
+
+- **P0 必真机**：`P0 标签系统` 等核心功能（重命名/父重命名/移动/删除等）必须用 **Vision + Computer Use** 真机操作 `http://localhost:3000`，截图存 `scratch/qa-real-device/*.png` 为据；`tsc/lint/curl` 仅作门禁，不算 GUI 通过
+- 任何 `P0 可复现` 未经真机逐项点过（选中→重命名→输入→确认→观察树/芯片/子路径），不得判 `QA PASS`，不得进入 `neat-freak` 收尾
+- 详见 Skill `qa-real-device`（`/.opencode/skills/qa-real-device/SKILL.md`）

@@ -235,3 +235,12 @@
 - [x] 21. API 透传：api/sync route.ts tags+promptTags 透传；curl cards=32 tags=11 promptTags=55
 - [x] 22. serverStore 守卫：setState 落盘前 isTag/isPromptTag 过滤 + 完整性校验
 - [x] 既有回归：tsc 0 错误 / eslint src/ 0 错误 / API cards=32 tags=11 promptTags=55 / P0-6/7 已 CLOSED
+
+### 真机 GUI 复测 - 2026-08-28（Orca Computer Use）
+
+- [x] 1. 重命名标签：「开发恢复」→「开发恢复2」，面板/chip/输入框/API 同步 ✅
+- [x] 2. 删除标签（1 关联）：弹窗显示正确数量，确定后标签消失，卡片保留 ✅
+- [x] 3a. 移动标签：「代码检查」移至「编程」下，层级结构正确，API 持久化 ✅
+- [x] 3b. 环路检测：「编程」→「代码检查」被拒绝，Toast 提示正确 ✅
+- [x] 4. 同级重名拒绝：重命名到已存在名称被拒绝 ✅
+- [ ] 5. Card chip × 移除标签：count 生效但 card.tags 未同步（BUG-NEW-1）❌

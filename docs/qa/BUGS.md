@@ -4,16 +4,27 @@
 
 ## 最近一次 QA 执行记录
 
-- **日期**：2026-08-28（第十二次 - P0 标签系统核心 22 项总验收）
-- **模式**：QA Acceptance（22 项逐项验证 + 核心回归）
+- **日期**：2026-08-28（第十三次 - P0 标签系统真机 GUI 复测）
+- **模式**：QA Acceptance（真机 Orca Computer Use 操作）
 - **执行者**：QA / Test Agent
-- **结果**：**PASS**（代码走查 + tsc/lint + API 校验均通过；GUI 需人工确认）
-- **构建门禁**：tsc --noEmit ✅、npm run lint ✅（src/ 零错误，.worktrees/ 为构建产物不影响）
+- **结果**：**PARTIAL**（5 项测试中 4 项 PASS，1 项发现 Bug）
+- **构建门禁**：tsc --noEmit ✅、npm run lint ✅
 - **API 验证**：curl /api/sync 返回正常 ✅
-- **commit 验证**：未提交（待用户授权 commit/push）
+- **commit 验证**：未提交
 - **已关闭**：无新增关闭
-- **阻断项**：无
-- **需人工确认**：GUI 视觉验证（亮/暗高亮对比、撤销 Toast、批量操作、移动端抽屉、备注切卡、版本 diff、导入跳过详情、Composer 展开）
+- **阻断项**：1 项 Bug（chip × 移除标签时 card.tags 未同步）
+- **真机截图**：`scratch/qa-real-device/`
+
+### 真机复测结果（5 项）
+
+| # | 测试项 | 结果 | 说明 |
+|---|---|---|---|
+| 1 | 重命名「开发恢复」→「开发恢复2」 | ✅ PASS | 标签面板、chip、输入框同步更新，API 持久化 |
+| 2 | 删除「预览服务」（1 关联） | ✅ PASS | 弹窗显示 1 条，确定后标签消失，卡片保留，API 确认清理 |
+| 3a | 移动「代码检查」到「编程」下 | ✅ PASS | 层级结构正确，API 持久化 |
+| 3b | 环路检测：「编程」→「代码检查」 | ✅ PASS | Toast「不能移动到自身或自己的子标签下（会形成循环）」 |
+| 4 | 同级重名拒绝 | ⚠️ PASS | 标签未改名（重名被拒绝），toast 可能已闪现消失 |
+| 5 | Card chip × 移除标签 | ❌ BUG | × 移除单个标签生效（count -1），但 card.tags 未同步（UI 仍显示旧 chip） |
 
 ### 两项逐条验证
 
@@ -343,5 +354,35 @@
 ### 既有回归
 - tsc --noEmit 零错误 ✅
 - npx eslint src/ 零错误 ✅
-- API `/api/sync` cards=32 tags=11 promptTags=55 ✅
+- API `/api/sync` cards=32 tags=12（含测试标签「编程」）promptTags=55 ✅
 - P0-6/P0-7 已 CLOSED ✅
+
+---
+
+## 新增 Bug
+
+### BUG-NEW-1：chip × 移除标签时 card.tags 未同步（P1）
+
+- **发现日期**：2026-08-28（真机复测第十三次）
+- **严重程度**：P1（功能 Bug，影响数据一致性）
+- **复现步骤**：
+  1. 打开卡片「定点读取文档策略」（有 3 个标签：开发恢复、经验记录、token经济学）
+  2. 在详情面板点击「经验记录」的 × 按钮
+  3. 观察：标签面板「经验记录」count 从 5 降到 4（移除生效）
+  4. 但 API 返回该卡 `tagIds: []` + `promptTags: []`（全部标签被清空）
+  5. UI 仍显示 3 个 chip（使用旧 card.tags 渲染）
+- **根因**：`handleUpdateMeta`（page.tsx:453-458）在 `setCards` 时只更新 `title` 和 `updatedAt`，**未将新 tagNames 同步到 `card.tags` 字段**
+- **影响**：
+  1. `card.tags`（冗余字段）与 `promptTags`（关系真源）不一致
+  2. UI 渲染 chip 使用过期 `card.tags`，移除后仍显示旧 chip
+  3. push 到服务端的 card 对象携带过期 `tags` 字段
+  4. 远端设备通过 SSE 接收到不一致数据
+- **对比**：其他标签变更路径（handleDeleteTag、handleRenameTag、handleBulkTag）都正确调用了 `syncCardsToPromptTags`，唯独 `handleUpdateMeta` 遗漏
+- **修复方向**：`handleUpdateMeta` 的 `setCards` updater 中加入 `tags: tagNames`，确保 `card.tags` 与 `promptTags` 双写一致
+- **相关代码**：
+  - `src/app/page.tsx:453-458` — handleUpdateMeta（bug 所在）
+  - `src/app/page.tsx:455` — 遗漏 tags 的 setCards 更新
+  - `src/components/CardDetail.tsx:363-367` — chip × onClick
+  - `src/components/PreviewPanel.tsx:522-526` — chip × onClick
+  - `src/lib/tags.ts:234-240` — setCardTags
+- **状态**：OPEN

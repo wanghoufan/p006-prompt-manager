@@ -41,3 +41,13 @@
 - 技术处理：Stage Manager 在生成下一轮 Builder Prompt 时，必须基于上下文重量做判断：已完成大里程碑/刚切换最高优先级包（P0-1~3）→ 建议重开新会话；仅小修补/上下文轻 → 建议原会话继续。给出明确结论 + 2-3 条理由（上下文重量、聚焦度、Token 效率）+ 接力方式（新会话直接粘贴剪贴板 Prompt，本地 `scratch/PROMPT_*.md:1` 备份）。截图结论：建议重开新会话，理由是上下文已重、下一轮是新 P0 包、干净会话利于自测。
 - 可直接给 Agent 的规则：`以后凡是给开发者的提示词/开始下一步开发，末尾必须追加一行会话建议：【会话建议：重开新会话 | 原会话继续】+ 理由（上下文重量/优先级切换/Token效率），并给出接力方式（pbcopy 已复制，新会话粘贴即可）。不得遗漏。`
 - 候选升级位置：`docs/roles/stage-manager.md §Prompt 生成契约` 新增“会话策略”必填项（待授权）；`AGENTS.md §五 Agent 启动规则` 补充上下文管理条目
+
+## 4. QA 必须真机 GUI 验证，禁止仅代码走查就判 PASS — 三重保障防走过场
+
+- 成熟度：B 候选升级项目规范（需用户授权后写入 `docs/roles/qa.md` / `docs/workflow/QUALITY_GATES.md` / `docs/roles/stage-manager.md`）
+- 时间：2026-08-27（2026-08-28 补充三重保障）
+- 现象：重命名标签全链路失败这类“用户一用就发现”的 P0 阻断，未被 QA 拦截。QA 第十二次 PASS 仅为 `代码走查 + tsc/lint + curl /api/sync 11/55` 校验，`BUGS.md: 需人工确认` 仅列“未真机点过 TagPanel →重命名→输入→确认 全链路”；`QA_CHECKLIST` 对 P0-13 重命名只有 `renameTag 纯函数/handleRenameTag 重名检测` 走查项，无 GUI 必测项（选中→重命名→新名显隐→关联卡 chip 自动更新→子路径变）；工程收尾 `31b1322` 在 QA GUI 空档期直接提交，门控未拦住。
+- 小白解释：就像只看菜谱没尝菜就说菜熟了。看代码觉得逻辑对，不等于在真机上点一点就真能用——用户一点重命名就失败，说明必须亲手在界面上点过才算测过。单靠一条规定容易“走过场”，要用三道锁一起兜底。
+- 技术处理：按 `QUALITY_GATES.md` 本应 `P0 可复现 → QA 必 GUI`，但本轮 QA 为 B 档代码走查（`gpt-5.4-mini` 等）未强制 `Vision + Computer Use` 真机。本次已补为三重保障：① Skill `qa-real-device` 隐式加载（第一重，能力层兜底）② 角色模板 `docs/roles/qa.md` 写入“真机必测硬约束”（第二重，角色层）③ `Stage Manager` 生成 QA Prompt 时在“约束”首条显式要求 `Vision + Computer Use 真机操作 http://localhost:3000 必选，截图为据`（第三重，刚写入 `docs/roles/stage-manager.md: QA 真机必测多重保障`）。后续任何 P0 的 QA Prompt 都在约束首条显式要求真机，三重缺一不可，未真机逐项点过不得判 QA PASS。补救已入本次 Fix Prompt：Fix 后 QA 必须真机复测 4 项 GUI（单标签重命名 / 父重命名 / 重名拒绝 / 移动后子路径），`QA_CHECKLIST` 追加 P0 重命名 GUI 必测，`BUGS.md` 记 P0 阻断项，下次 `neat-freak` 前必须 GUI PASS 才能合。
+- 可直接给 Agent 的规则：`QA 对 P0 功能必须 Vision + Computer Use 真机点过全链路（选中→操作→显隐→关联数据更新）并截图留证，仅 tsc/lint/走查不得判 PASS；Stage Manager 的 QA Prompt 约束首条必须显式写明真机必选；三重保障（Skill+角色模板+Prompt约束）缺一不可，P0 GUI 未 PASS 禁止 neat-freak 合入与提交。`
+- 候选升级位置：`docs/roles/qa.md` 增加“P0 必真机”条目 + `docs/workflow/QUALITY_GATES.md` 硬门控 + `docs/qa/QA_CHECKLIST.md` 为 P0-13 追加 GUI 必测项 + `docs/roles/stage-manager.md` 增加 QA 真机多重保障（均待授权，已部分写入）
