@@ -5,40 +5,53 @@
 > 基线：ORCA V2.1 §3
 
 ## 当前阶段
-- Stage：2 合 1（P0-6 高亮重开整改 + P0-7 卡片空白回收），2026-08-28 用户最新反馈
-- 完成度：实现 100%；自测 100%（tsc 0 / lint 0 / 浏览器亮暗双主题实测通过）
-- 风险等级：L0（无阻断）；纯前端 / 轻量逻辑，无新依赖
-- 基线：上一阶段 11 合 1（2e7b635，QA 总验收 / 产品 PASS）
+- Stage：P0 标签系统核心实现（22 项），2026-08-27 用户最新指令
+- 完成度：实现 100%；自测 100%（tsc 0 / lint 0 / 浏览器树/筛选/计数/删除安全实测通过）
+- 风险等级：L0（无阻断）；纯前端 / 服务端 schema 扩展，无新依赖
+- 基线：上一阶段 P0-6/P0-7 2 合 1（2e7b635 后已 PASS）
 
 ## 本轮已完成
-- **P0-6**：mark 类名根因修复（text-highlight → CSS var --color-highlight-text）+ 亮色半透明浅黄+深棕字 + 暗色 amber-400 实底+黑字外发光
-- **P0-7**：操作列改 absolute top-2 right-2 悬浮胶囊（bg-ink-900/80 backdrop-blur，group-hover/focus-within/bulkActive 显隐）+ 正文 line-clamp 3 + 标题行 pr-16 让位
-- 涉及文件：src/components/CardItem.tsx、src/app/globals.css、eslint.config.mjs（.worktrees/** 加入 ignore 让 lint 干净）
-- 文档：docs/pm/PLAN.md（本轮 2 合 1 段）、本文件
-- 浏览器实测截图（亮/暗 qa 双主题）：scratch/p06-light-qa-v2.png、scratch/p06-dark-qa-final.png
+- **数据层**：types.ts 新增 Tag/PromptTag；新建 src/lib/tags.ts（守卫 + 树构建 + 循环/重名检测 + mutation 纯函数 + syncCardsToPromptTags 冗余同步）；serverStore.ts ServerState 加 tags/promptTags + isTag/isPromptTag 守卫；storage.ts 新增 TAGS_KEY/PROMPT_TAGS_KEY + load/save + push/load 透传；api/sync 透传
+- **迁移脚本**：scripts/migrate-tags.mjs（dry-run → --apply + 自动 .bak 备份 + validate）。脏数据合并（多age×3、多aengt编程×1 → 多agent编程，无法分类删除），结果 tags=11 / promptTags=55 / 0 孤儿
+- **TagPanel 树形 UI**：树渲染 + 展开/收起（localStorage 记忆 `pm:tag-expanded`）+ 选中高亮 + 直接/总数量 + 标签搜索（完整路径匹配）+ 无标签入口 + "+" 新建 + ⋯ 菜单（新建子标签 / 重命名 / 移动 / 删除）
+- **page.tsx 核心交互**：tags/promptTags 状态 + 父含子筛选 + 无标签筛选 + 当前标签下新建继承 + 重名检测 + 删除确认 + 5 个标签 CRUD handler（createTag/renameTag/moveTag/deleteTag/setCardTags 通过 resolveTagIds 复用/新建）
+- **编辑 UI**：CardDetail/PreviewPanel 标签 chip × 移除 + datalist 自动补全 + 创建新标签（输入即建）
+- **根因修复**：cards.ts:107 原 `slice(0, 4)` 是「多age」碎片的根因（AI 生成路径截断 4 字），改为 50 字上限（对齐交接 §31），根治脏数据复发
+
+## 涉及文件
+- 新增：`src/lib/tags.ts`、`scripts/migrate-tags.mjs`
+- 修改：`src/lib/types.ts`、`src/lib/cards.ts`、`src/lib/serverStore.ts`、`src/lib/storage.ts`、`src/app/api/sync/route.ts`、`src/app/page.tsx`、`src/components/TagPanel.tsx`、`src/components/CardDetail.tsx`、`src/components/PreviewPanel.tsx`
+- 文档：`docs/pm/PLAN.md`（本轮段）、`docs/progress/CURRENT_STAGE.md`（本文件）
 
 ## 自测
 - `npx tsc --noEmit`：零错误
-- `npm run lint`：零错误（修复 `.worktrees/**` 被 lint 扫的存量问题）
-- 浏览器手测（agent-browser Chromium @ localhost:3000）：
-  - 亮色搜「qa」→ 16 命中，mark「qa/QA」深棕字+半透明浅黄底清晰可读，对比 ≈12.5:1
-  - 暗色搜「qa」→ 16 命中，mark「qa/QA」黑字+amber-400 实底+外发光极清晰，对比 ≈11.3:1
-  - 卡片正文 2→3 行可见，操作胶囊 hover/focus 显示（实测 ✓ 编辑 删除）
-  - code 徽标不被胶囊盖住（pr-16 预留位生效）
+- `npm run lint`：零错误零警告
+- **迁移脚本 dry-run**：`tags=11 / promptTags=55 / 0 孤儿`（合并多age×3+多aengt编程→多agent编程，删除无法分类）
+- **迁移脚本 --apply**：自动备份 `data/store.json.bak-20260827-133433`，校验全过
+- **服务端 API**：`curl /api/sync` 返回 `cards:32 tags:11 promptTags:55 version:529`，孤儿校验通过
+- **浏览器手测**（agent-browser Chromium @ localhost:3000）：
+  - 标签树渲染：11 标签按频次+名称排序，全部/各标签计数正确
+  - 点击「开发恢复」筛选 → 显示 11 张卡 ✓（与该标签频次一致）
+  - 点击「无标签」筛选 → 显示 2 张卡（迁移预期：原本 1 张无标签「无有效信息」 + 「无法分类」被删后新增 1 张「测试语音输入法效果」）✓
+  - **P0-15 安全约束验证**：删除「预览服务」标签（mock confirm=true）后，标签从 11→10，卡片总数 32→32 不变，原关联卡「预览链接获取与代码检查」仍存在（仅失去「预览服务」标签，其他标签保留）✓ 绝不删 Prompt 核心安全约束通过
+  - 测试结束后从 `.bak` 恢复并重跑迁移，确保 store.json 回到迁移完成态
 
-## 风险 / 未验证
-
-- 取舍说明：暗色 mark 用 amber-400 实底（非 50% 半透明），因 50% 半透明叠深卡会让黑字对比仅 ≈3.7:1 不达 WCAG AA。此取舍在 globals.css 与 PLAN.md 注释中明确标注，符合「暗色黑字在深底最突出」的硬验收
-- QA 待总验收
+## 架构决策（与原方案的偏差说明）
+- **「服务端 mutation 封装」落地方式**：迁移方案 §六 提议 mutation 封装在 serverStore，调用方经 API。但本项目现有架构是「客户端全量推 cards/settings 到服务端（serverStore 进程内单例）」（incrementCopy 是唯一的独立服务端 mutation）。为了最小改动且复用现有 writeChain/SSE 同步链路，标签操作统一为：客户端调用 `src/lib/tags.ts` 纯函数（createTag/renameTag/moveTag/deleteTag/setCardTags/addCardTag/removeCardTag/syncCardsToPromptTags）保证安全语义（级联不删 Prompt、防循环、重名检测、原子替换），然后随 cards 一起全量推送到服务端。服务端 serverStore 在 `setState` 落盘前用 `isTag/isPromptTag` 守卫过滤非法数据 + 完整性校验（无孤儿/唯一约束/环）做纵深防御。这是符合「最小改动、不破坏现有同步模型」的合理适配；如未来需要「服务端权威 mutation API」供 MCP 等直接调用，可基于现有 tags.ts 纯函数 + serverStore 接口扩展，不阻塞当前 P0 落地。
+- **多标签上限 3 个保持不变**：审计 §四 P0-2 标注「上限 3 与交接 §4 冲突（交接未限 3）」，建议「迁移后放开上限（或明确产品决策）」。本轮产品决策待定，保留现有 3 个上限（不动 parseTags/normalizeTags/handleBulkTag 等多处 slice(0,3)），注释里已记录「待产品决策」，后续若放开只需同步放开 handleCreate/resolveTagIds/handleBulkTag 的 slice 限制即可。
+- **Card.tags 保留（方案 A 双写）**：迁移后 Card.tags 字段保留为合并后标签名数组，与 promptTags+tags 同步维护（syncCardsToPromptTags 统一重建）。优点：isCard 校验不变、旧客户端/导出/离线兜底兼容。同步时机：每次 tags/promptTags 变更后整体重建（32 卡性能无压力）。
+- **demo 视图无 tag 实体**：用 deriveTagsFromCards(DEMO_CARDS) 派生临时 tags/promptTags（id 稳定 tag_derive_N），TagPanel 只读无管理入口，筛选逻辑统一。
 
 ## 给下一角色的技术交接要点
+- QA 重点：
+  - P0-1~P0-22 逐项手测（覆盖树/展开/搜索/补全/数量/筛选/父含子/加/移除/重命名/移动/删除/无标签/继承/重名/确认）
+  - 验证「删除含子标签的父标签」两种模式（仅自身 / 整棵子树）
+  - 验证「编辑时输入不存在的标签名」自动创建实体（resolveTagIds 隐式触发）
+  - 验证 CardDetail/PreviewPanel chip × 移除走 tagsText 编辑链路，不污染全局
+  - 验证 Card.tags 冗余与 promptTags 一致（rename 后 chip 自动更新）
+  - 浏览器实测「重命名后 UI 一致」「移动后子路径正确」「循环检测拒绝」「重名检测拒绝」「多设备同步」
+- 浏览器截图：`scratch/p0-tags-tree.png`（已附）、`scratch/p0-tags-untagged.png`（已附）
+- 风险：本次代码改动量大（page.tsx ~120 行新增/修改），QA 重点回归多标签关联、父子层级、删除安全
 
-- QA 重点：① P0-6 双主题搜「qa」截图对比，确认文字清晰可读不被遮挡；② P0-7 卡片正文行数 + 操作胶囊 hover 显隐 + code 徽标不被盖
-- 验收参考截图：scratch/p06-light-qa-v2.png、scratch/p06-dark-qa-final.png、scratch/p07-dark-grid.png
-- 建议下一步：等待 QA Acceptance（2 合 1 总验收）→ 产品验收 → Closeout
-
-## 已收口，待 QA 验收（2026-08-28，P0-6 重开 + P0-7 打包）
-- 本轮 2 项已交付，待总验收。
-
-## 已收口，待 QA 验收（2026-08-27，11 合 1，commit 2e7b635）
-- 上一阶段 11 项已交付并通过 QA / 产品 PASS。
+## 已收口，待 QA 验收（2026-08-27，P0 标签系统 22 项）
+- 本轮已交付，待总验收。

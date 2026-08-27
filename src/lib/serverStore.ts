@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs'
 import path from 'path'
 import { EventEmitter } from 'events'
+import { isTag, isPromptTag } from './tags'
 
 // 服务端共享存储：进程内单例 + JSON 文件持久化。
 // 两台电脑访问同一份 Next.js 服务，因此读写的是同一个文件，天然共享。
@@ -9,6 +10,8 @@ import { EventEmitter } from 'events'
 export interface ServerState {
   cards: unknown[]
   settings: unknown
+  tags: unknown[]
+  promptTags: unknown[]
   version: number
 }
 
@@ -29,10 +32,13 @@ async function ensureLoaded(): Promise<ServerState> {
     state = {
       cards: Array.isArray(parsed.cards) ? parsed.cards : [],
       settings: parsed.settings ?? null,
+      // 迁移后新增集合：旧文件缺省时为空数组；守卫过滤非法结构（isTag/isPromptTag）
+      tags: Array.isArray(parsed.tags) ? parsed.tags.filter(isTag) : [],
+      promptTags: Array.isArray(parsed.promptTags) ? parsed.promptTags.filter(isPromptTag) : [],
       version: typeof parsed.version === 'number' ? parsed.version : 1,
     }
   } catch {
-    state = { cards: [], settings: null, version: 1 }
+    state = { cards: [], settings: null, tags: [], promptTags: [], version: 1 }
   }
   return state
 }
@@ -40,19 +46,38 @@ async function ensureLoaded(): Promise<ServerState> {
 export async function getState(): Promise<ServerState> {
   const s = await ensureLoaded()
   // 返回副本，避免调用方意外修改内存中的单例
-  return { cards: s.cards, settings: s.settings, version: s.version }
+  return { cards: s.cards, settings: s.settings, tags: s.tags, promptTags: s.promptTags, version: s.version }
 }
 
-export async function setState(next: { cards: unknown[]; settings: unknown }): Promise<number> {
+export async function setState(next: {
+  cards: unknown[]
+  settings: unknown
+  tags?: unknown[]
+  promptTags?: unknown[]
+}): Promise<number> {
   const s = await ensureLoaded()
-  const current = JSON.stringify({ cards: s.cards, settings: s.settings })
-  const incoming = JSON.stringify({ cards: next.cards, settings: next.settings })
+  const nextTags = Array.isArray(next.tags) ? next.tags.filter(isTag) : s.tags
+  const nextPromptTags = Array.isArray(next.promptTags) ? next.promptTags.filter(isPromptTag) : s.promptTags
+  const current = JSON.stringify({
+    cards: s.cards,
+    settings: s.settings,
+    tags: s.tags,
+    promptTags: s.promptTags,
+  })
+  const incoming = JSON.stringify({
+    cards: next.cards,
+    settings: next.settings,
+    tags: nextTags,
+    promptTags: nextPromptTags,
+  })
   if (current === incoming) {
     // 内容无变化：保持版本号、不落盘、不广播，避免远程回写导致的推送死循环
     return s.version
   }
   s.cards = next.cards
   s.settings = next.settings
+  s.tags = nextTags
+  s.promptTags = nextPromptTags
   s.version += 1
   const snapshot = JSON.stringify(s, null, 2)
   writeChain = writeChain

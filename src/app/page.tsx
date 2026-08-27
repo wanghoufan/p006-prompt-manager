@@ -1,14 +1,14 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Card, Settings, SortMode } from '@/lib/types'
-import { loadCards, loadSettings, parseImport, saveCards, saveSettings, buildMarkdownExport, isServerAvailable, loadFromServer, pushToServer, subscribeSync } from '@/lib/storage'
+import type { Card, Settings, SortMode, Tag, PromptTag } from '@/lib/types'
+import { loadCards, loadSettings, loadTags, loadPromptTags, parseImport, saveCards, saveSettings, saveTags, savePromptTags, buildMarkdownExport, isServerAvailable, loadFromServer, pushToServer, subscribeSync } from '@/lib/storage'
 import { createCard, normalizeBody, parseTags, rollbackToVersion, saveBodyOnly, saveBodyWithVersion } from '@/lib/cards'
 import { DEMO_CARDS } from '@/lib/demo'
 import { nowIso } from '@/lib/util'
 import { TopBar } from '@/components/TopBar'
 import type { ViewMode } from '@/components/DemoMenu'
-import { TagPanel } from '@/components/TagPanel'
+import { TagPanel, UNTAGGED } from '@/components/TagPanel'
 import { Composer } from '@/components/Composer'
 import { SortBar } from '@/components/SortBar'
 import { CardItem } from '@/components/CardItem'
@@ -16,6 +16,20 @@ import { PreviewPanel } from '@/components/PreviewPanel'
 import { CardDetail } from '@/components/CardDetail'
 import { SettingsModal } from '@/components/SettingsModal'
 import { Toast } from '@/components/Toast'
+import {
+  createTag,
+  renameTag,
+  moveTag,
+  deleteTag,
+  setCardTags,
+  addCardTag,
+  collectDescendantIds,
+  collectTagPromptIds,
+  isNameUnique,
+  assertNoCycle,
+  deriveTagsFromCards,
+  syncCardsToPromptTags,
+} from '@/lib/tags'
 
 // P2-8 搜索相关度打分：命中字段优先级 title=4 / code=3 / tag=3 / notes=2 / body=1，取最高分
 function relevanceScore(c: Card, term: string): number {
@@ -45,6 +59,8 @@ export default function Home() {
   const [hydrated, setHydrated] = useState(false)
   const [view, setView] = useState<ViewMode>('mine')
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
+  const [tags, setTags] = useState<Tag[]>([])
+  const [promptTags, setPromptTags] = useState<PromptTag[]>([])
   const [sortMode, setSortMode] = useState<SortMode>('updated')
   // 全局搜索（范围 A）：searchQuery 为受控输入即时值，debouncedQuery 为 300ms 防抖后的过滤依据；
   // 搜索词不持久化（刷新即清，仅 useState）
@@ -129,6 +145,8 @@ export default function Home() {
       setServerOnline(false)
       setCards(loadCards())
       setSettings(loadSettings())
+      setTags(loadTags())
+      setPromptTags(loadPromptTags())
       setHydrated(true)
       notify('未连接同步服务，已使用本机本地数据（不同步）')
       return
@@ -144,18 +162,24 @@ export default function Home() {
     if (remote.cards.length === 0) {
       const local = loadCards()
       if (local.length > 0) {
-        await pushToServer(local, loadSettings())
+        await pushToServer(local, loadSettings(), loadTags(), loadPromptTags())
         setCards(local)
         setSettings(loadSettings())
+        setTags(loadTags())
+        setPromptTags(loadPromptTags())
       }
     } else {
       setCards(remote.cards)
       setSettings(remote.settings)
+      setTags(remote.tags)
+      setPromptTags(remote.promptTags)
     }
     // 订阅实时同步：另一台电脑改动时自动拉取最新数据
-    syncUnsubRef.current = subscribeSync((rc, rs) => {
+    syncUnsubRef.current = subscribeSync((rc, rs, rt, rpt) => {
       setCards(rc)
       setSettings(rs)
+      setTags(rt)
+      setPromptTags(rpt)
     })
     setHydrated(true)
   }, [notify])
@@ -189,6 +213,14 @@ export default function Home() {
     if (hydrated) saveSettings(settings)
   }, [settings, hydrated])
 
+  useEffect(() => {
+    if (hydrated) saveTags(tags)
+  }, [tags, hydrated])
+
+  useEffect(() => {
+    if (hydrated) savePromptTags(promptTags)
+  }, [promptTags, hydrated])
+
   const updateCard = useCallback((id: string, patch: (c: Card) => Card) => {
     setCards((prev) => prev.map((c) => (c.id === id ? patch(c) : c)))
   }, [])
@@ -197,15 +229,26 @@ export default function Home() {
     updateCard(id, (c) => ({ ...c, rating }))
   }, [updateCard])
 
-  const tagEntries = useMemo(() => {
-    const map = new Map<string, number>()
-    for (const c of sourceCards) {
-      for (const t of c.tags) map.set(t, (map.get(t) ?? 0) + 1)
+  // 活跃的 tags/promptTags 真源：demo 视图从 DEMO_CARDS 派生；mine 视图用服务端/本地 state；
+  // 若 mine 视图 tags 为空但卡片仍有字符串标签（未迁移旧数据），兜底派生避免标签消失。
+  const activeTagData = useMemo(() => {
+    if (isDemoView) return deriveTagsFromCards(DEMO_CARDS)
+    if (tags.length === 0 && cards.some((c) => c.tags.length > 0)) {
+      return deriveTagsFromCards(cards)
     }
-    return [...map.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh'))
-  }, [sourceCards])
+    return { tags, promptTags }
+  }, [isDemoView, tags, promptTags, cards])
+  const activeTags = activeTagData.tags
+  const activePromptTags = activeTagData.promptTags
 
-  const existingTags = useMemo(() => tagEntries.map(([t]) => t), [tagEntries])
+  // AI 生成接口用的标签名列表（供补全候选 / 避免生成重复标签）
+  const existingTags = useMemo(() => activeTags.map((t) => t.name), [activeTags])
+
+  // 无标签卡片数（未与任何标签建立关联的卡片）
+  const untaggedCount = useMemo(() => {
+    const linked = new Set(activePromptTags.map((rt) => rt.prompt_id))
+    return sourceCards.filter((c) => !linked.has(c.id)).length
+  }, [sourceCards, activePromptTags])
 
   const allCodes = useMemo(
     () => cards.map((c) => c.code).filter((c): c is string => Boolean(c)),
@@ -213,9 +256,17 @@ export default function Home() {
   )
 
   // 过滤链三段：baseCards（视图 + 标签）→ 搜索过滤（AND 叠加）→ 排序
+  // 标签筛选：父标签含子标签内容（交接 §10）；无标签筛选用 UNTAGGED 虚拟 id
   const baseCards = useMemo(() => {
-    return selectedTag ? sourceCards.filter((c) => c.tags.includes(selectedTag)) : sourceCards
-  }, [sourceCards, selectedTag])
+    if (selectedTag === null) return sourceCards
+    if (selectedTag === UNTAGGED) {
+      const linked = new Set(activePromptTags.map((rt) => rt.prompt_id))
+      return sourceCards.filter((c) => !linked.has(c.id))
+    }
+    const subIds = new Set([selectedTag, ...collectDescendantIds(activeTags, selectedTag)])
+    const matched = collectTagPromptIds(activePromptTags, subIds)
+    return sourceCards.filter((c) => matched.has(c.id))
+  }, [sourceCards, selectedTag, activeTags, activePromptTags])
 
   const searchActive = debouncedQuery.trim().length > 0
   const searchTerm = debouncedQuery.trim()
@@ -261,6 +312,35 @@ export default function Home() {
   const detailCard = detailId ? sourceCards.find((c) => c.id === detailId) ?? null : null
   const previewCard = selectedId ? sourceCards.find((c) => c.id === selectedId) ?? null : null
 
+  /** 把标签名列表解析为 tag id：同名（任意父级，优先顶级）复用，不存在则新建顶级标签实体。
+   *  返回最终 tagIds（去重、保持顺序、trim）与可能扩展后的 tags。 */
+  function resolveTagIds(names: string[]): { tagIds: string[]; nextTags: Tag[] } {
+    let nextTags = tags
+    const tagIds: string[] = []
+    const seen = new Set<string>()
+    for (const raw of names) {
+      const name = raw.trim()
+      if (!name || seen.has(name)) continue
+      seen.add(name)
+      // 优先匹配顶级同名标签，其次任意父级同名
+      let found = nextTags.find((t) => t.parent_id === null && t.name === name) ?? nextTags.find((t) => t.name === name)
+      if (!found) {
+        const [updated, created] = createTag(nextTags, name, null)
+        nextTags = updated
+        found = created
+      }
+      tagIds.push(found.id)
+    }
+    return { tagIds, nextTags }
+  }
+
+  /** 标签集合原子落盘：更新 tags + promptTags 后，同步重建所有卡片的 Card.tags 冗余字段 */
+  function applyTags(nextTags: Tag[], nextPromptTags: PromptTag[]) {
+    setTags(nextTags)
+    setPromptTags(nextPromptTags)
+    setCards((prev) => syncCardsToPromptTags(prev, nextTags, nextPromptTags))
+  }
+
   function handleCreate(body: string, title: string, aiTags: string[]) {
     // P0-3 重复内容去重：normalizeBody 全等比对（大小写敏感、空白归一后），命中首个提示二次确认；
     // 空内容（bodyNorm 为空）不触发
@@ -274,13 +354,18 @@ export default function Home() {
         return
       }
     }
-    // P0-2 标签筛选态下新建强制携带当前选中标签（首位），其余 AI 标签去重补充，最多 3 个；
-    // 「全部」（selectedTag 为空）时维持原 AI 1~3 个；demo 只读视图不继承
-    let tags = aiTags
-    if (selectedTag && !isDemoView && selectedTag !== '') {
-      tags = Array.from(new Set([selectedTag, ...aiTags])).slice(0, 3)
+    // P0-2 标签筛选态下新建强制携带当前选中标签（首位），其余 AI 标签去重补充；
+    // 「全部」（selectedTag 为空）时维持原 AI 标签；demo 只读视图不继承
+    let names = aiTags
+    if (selectedTag && selectedTag !== UNTAGGED && !isDemoView) {
+      const selName = activeTags.find((t) => t.id === selectedTag)?.name
+      if (selName) names = Array.from(new Set([selName, ...aiTags]))
     }
-    setCards((prev) => [createCard(body, title, tags), ...prev])
+    const { tagIds, nextTags } = resolveTagIds(names)
+    const card = createCard(body, title, names)
+    setCards((prev) => [card, ...prev])
+    setTags(nextTags)
+    setPromptTags((prev) => setCardTags(prev, card.id, tagIds))
   }
 
   function handleLoadDemo() {
@@ -364,8 +449,12 @@ export default function Home() {
     updateCard(id, (c) => (createVersion ? saveBodyWithVersion(c, body) : saveBodyOnly(c, body)))
   }
 
-  function handleUpdateMeta(id: string, title: string, tags: string[]) {
-    updateCard(id, (c) => ({ ...c, title, tags, updatedAt: nowIso() }))
+  // 编辑卡片时更新标题 + 标签（标签以名字数组传入，解析为 tag id 后原子替换关系；不存在的名字自动建实体）
+  function handleUpdateMeta(id: string, title: string, tagNames: string[]) {
+    const { tagIds, nextTags } = resolveTagIds(tagNames)
+    setCards((prev) => prev.map((c) => (c.id === id ? { ...c, title, updatedAt: nowIso() } : c)))
+    setTags(nextTags)
+    setPromptTags((prev) => setCardTags(prev, id, tagIds))
   }
 
   function handleUpdateCode(id: string, code: string | null) {
@@ -407,16 +496,67 @@ export default function Home() {
     notifyWithUndo('卡片已删除', () => setCards(snapshot))
   }
 
-  // P2-9 删除标签 = 批量从卡片移除该标签条目（不删卡片，语义与 Flomo 一致）
-  function handleDeleteTag(tag: string) {
-    const count = cards.filter((c) => c.tags.includes(tag)).length
-    if (count === 0) return
-    if (!window.confirm(`将从 ${count} 张卡片中移除标签「${tag}」，卡片本身不会删除，确定继续？`)) return
-    setCards((prev) =>
-      prev.map((c) => (c.tags.includes(tag) ? { ...c, tags: c.tags.filter((t) => t !== tag) } : c)),
-    )
-    if (selectedTag === tag) setSelectedTag(null)
-    notify(`已从 ${count} 张卡片移除标签「${tag}」`)
+  // ===== 标签实体 CRUD（ID 解耦，绝不删 Prompt）=====
+
+  /** 创建标签（管理区 + 编辑时「创建新标签」）。返回 {ok,error} 供 TagPanel 显示校验错误。 */
+  function handleCreateTag(name: string, parentId: string | null): { ok: boolean; error?: string } {
+    const trimmed = name.trim()
+    if (!trimmed) return { ok: false, error: '标签名称不能为空' }
+    if (trimmed.length > 50) return { ok: false, error: '标签名称不超过 50 字' }
+    if (!isNameUnique(tags, parentId, trimmed)) return { ok: false, error: '同一父级下已存在同名标签' }
+    if (parentId !== null && !assertNoCycle(tags, parentId, parentId)) {
+      return { ok: false, error: '父标签不合法' }
+    }
+    const [nextTags, tag] = createTag(tags, trimmed, parentId)
+    setTags(nextTags)
+    notify(`已创建标签「${tag.name}」`)
+    return { ok: true }
+  }
+
+  /** 全局重命名标签（交接 §7）：仅改 Tag.name，Prompt 与关系不动。 */
+  function handleRenameTag(id: string, name: string): { ok: boolean; error?: string } {
+    const trimmed = name.trim()
+    const tag = tags.find((t) => t.id === id)
+    if (!tag) return { ok: false, error: '标签不存在' }
+    if (!trimmed) return { ok: false, error: '标签名称不能为空' }
+    if (trimmed.length > 50) return { ok: false, error: '标签名称不超过 50 字' }
+    if (trimmed === tag.name) return { ok: true }
+    if (!isNameUnique(tags, tag.parent_id, trimmed, id)) {
+      return { ok: false, error: `同一父级下已存在标签「${trimmed}」` }
+    }
+    const nextTags = renameTag(tags, id, trimmed)
+    setTags(nextTags)
+    // 同步卡片冗余字段（方案 A 双写）：旧名 → 新名
+    setCards((prev) => syncCardsToPromptTags(prev, nextTags, promptTags))
+    notify(`标签已重命名为「${trimmed}」`)
+    return { ok: true }
+  }
+
+  /** 移动标签（交接 §9）：仅改 parent_id；防循环（自/子/环）。 */
+  function handleMoveTag(id: string, newParentId: string | null): { ok: boolean; error?: string } {
+    const tag = tags.find((t) => t.id === id)
+    if (!tag) return { ok: false, error: '标签不存在' }
+    if (newParentId === tag.parent_id) return { ok: true }
+    if (!assertNoCycle(tags, id, newParentId)) {
+      return { ok: false, error: '不能移动到自身或自己的子标签下（会形成循环）' }
+    }
+    if (newParentId !== null && !isNameUnique(tags, newParentId, tag.name, id)) {
+      return { ok: false, error: `目标父级下已存在标签「${tag.name}」` }
+    }
+    setTags(moveTag(tags, id, newParentId))
+    notify('标签已移动')
+    return { ok: true }
+  }
+
+  /** 删除标签（交接 §40）：级联删关系、删实体，绝不删 Prompt。
+   *  @param mode self=仅删自身（子标签提升一级）/ subtree=删除整棵子树（交接 §12 模式 A/B） */
+  function handleDeleteTag(id: string, mode: 'self' | 'subtree' = 'self') {
+    const tag = tags.find((t) => t.id === id)
+    if (!tag) return
+    const { tags: nextTags, promptTags: nextPromptTags } = deleteTag(tags, promptTags, id, mode === 'subtree')
+    applyTags(nextTags, nextPromptTags)
+    if (selectedTag === id) setSelectedTag(null)
+    notify(`已删除标签「${tag.name}」（提示词未受影响）`)
   }
 
   // ===== P2-11 批量管理 =====
@@ -452,34 +592,36 @@ export default function Home() {
     notifyWithUndo(`已删除 ${count} 张卡片`, () => setCards(snapshot))
   }
 
-  // 批量打标签：追加去重（不覆盖卡片已有标签），单卡最多 3 个
+  // 批量打标签：追加去重（不覆盖卡片已有标签），走标签实体关系
   function handleBulkTag() {
     if (bulkIds.size === 0) return
-    const input = window.prompt(
-      `为选中的 ${bulkIds.size} 张卡片添加标签（多个用逗号/顿号分隔，单卡最多保留 3 个）`,
-    )
+    const input = window.prompt(`为选中的 ${bulkIds.size} 张卡片添加标签（多个用逗号/顿号分隔）`)
     if (input === null) return
-    const tags = parseTags(input)
-    if (tags.length === 0) {
+    const tagNames = parseTags(input)
+    if (tagNames.length === 0) {
       notify('未输入有效标签')
       return
     }
+    const { tagIds, nextTags } = resolveTagIds(tagNames)
     const ids = bulkIds
-    // 基于当前 cards 计算实际变更数（不能写在 setCards updater 内——updater 渲染期才执行，
-    // 同步读出的 changed 恒为 0），再统一应用
+    // 基于当前 promptTags 计算实际变更数，再统一应用
     let changed = 0
-    const updated = cards.map((c) => {
-      if (!ids.has(c.id)) return c
-      const merged = Array.from(new Set([...c.tags, ...tags])).slice(0, 3)
-      if (merged.join('|') === c.tags.join('|')) return c // 未变化（已达 3 个上限或已含该标签）
-      changed++
-      return { ...c, tags: merged, updatedAt: nowIso() }
-    })
-    setCards(updated)
+    let nextPromptTags = promptTags
+    for (const c of cards) {
+      if (!ids.has(c.id)) continue
+      const before = nextPromptTags.length
+      for (const tid of tagIds) {
+        nextPromptTags = addCardTag(nextPromptTags, c.id, tid)
+      }
+      if (nextPromptTags.length !== before) changed++
+    }
+    setTags(nextTags)
+    setPromptTags(nextPromptTags)
+    setCards((prev) => syncCardsToPromptTags(prev, nextTags, nextPromptTags))
     if (changed === 0) {
-      notify('选中的卡片标签数均已达上限（3 个）或已含该标签，未做修改')
+      notify('选中的卡片均已含这些标签，未做修改')
     } else {
-      notify(`已为 ${changed} 张卡片添加标签：${tags.join('、')}`)
+      notify(`已为 ${changed} 张卡片添加标签：${tagNames.join('、')}`)
     }
   }
 
@@ -611,11 +753,16 @@ export default function Home() {
       />
       <div className="flex min-h-0 flex-1">
         <TagPanel
-          entries={tagEntries}
+          tags={activeTags}
+          promptTags={activePromptTags}
           total={sourceCards.length}
+          untaggedCount={untaggedCount}
           selected={selectedTag}
           onSelect={handleSelectTag}
           offline={serverOnline === false}
+          onCreateTag={isDemoView ? undefined : handleCreateTag}
+          onRenameTag={isDemoView ? undefined : handleRenameTag}
+          onMoveTag={isDemoView ? undefined : handleMoveTag}
           onDeleteTag={isDemoView ? undefined : handleDeleteTag}
         />
         <main className="flex min-w-0 flex-1 gap-4 overflow-hidden px-5 py-4">
@@ -625,7 +772,15 @@ export default function Home() {
               onChange={setSortMode}
               count={visibleCards.length}
               total={baseCards.length}
-              scopeLabel={selectedTag ?? (isDemoView ? '示例知识库' : '全部')}
+              scopeLabel={
+                selectedTag === null
+                  ? isDemoView
+                    ? '示例知识库'
+                    : '全部'
+                  : selectedTag === UNTAGGED
+                    ? '无标签'
+                    : (activeTags.find((t) => t.id === selectedTag)?.name ?? '全部')
+              }
               search={searchQuery}
               onSearchChange={setSearchQuery}
             />

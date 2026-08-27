@@ -1,9 +1,12 @@
-import type { Card, Settings, Version } from '@/lib/types'
+import type { Card, Settings, Version, Tag, PromptTag } from '@/lib/types'
 import { nowIso, uid } from '@/lib/util'
 import { normalizeBody } from '@/lib/cards'
+import { isTag, isPromptTag, normalizeTag } from '@/lib/tags'
 
 export const CARDS_KEY = 'prompt-manager:cards'
 export const SETTINGS_KEY = 'prompt-manager:settings'
+export const TAGS_KEY = 'prompt-manager:tags'
+export const PROMPT_TAGS_KEY = 'prompt-manager:promptTags'
 
 function isString(v: unknown): v is string {
   return typeof v === 'string'
@@ -113,6 +116,53 @@ export function saveSettings(settings: Settings): void {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
   } catch {
     // ignore quota errors for settings
+  }
+  schedulePush()
+}
+
+// ===================== 标签集合（tags / promptTags）本地持久化 =====================
+// 与 cards/settings 同走「localStorage 兜底 + 推送到服务端」链路。
+
+export function loadTags(): Tag[] {
+  try {
+    const raw = localStorage.getItem(TAGS_KEY)
+    if (!raw) return []
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(isTag).map(normalizeTag)
+  } catch {
+    return []
+  }
+}
+
+export function saveTags(tags: Tag[]): void {
+  cacheTags = tags
+  try {
+    localStorage.setItem(TAGS_KEY, JSON.stringify(tags))
+  } catch {
+    // ignore quota errors
+  }
+  schedulePush()
+}
+
+export function loadPromptTags(): PromptTag[] {
+  try {
+    const raw = localStorage.getItem(PROMPT_TAGS_KEY)
+    if (!raw) return []
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(isPromptTag)
+  } catch {
+    return []
+  }
+}
+
+export function savePromptTags(promptTags: PromptTag[]): void {
+  cachePromptTags = promptTags
+  try {
+    localStorage.setItem(PROMPT_TAGS_KEY, JSON.stringify(promptTags))
+  } catch {
+    // ignore quota errors
   }
   schedulePush()
 }
@@ -325,6 +375,8 @@ let serverMode = false
 let lastPushedVersion: number | null = null
 let cacheCards: Card[] = []
 let cacheSettings: Settings = { ...DEFAULT_SETTINGS }
+let cacheTags: Tag[] = []
+let cachePromptTags: PromptTag[] = []
 let pushInFlight = false
 let pushPending = false
 
@@ -352,7 +404,7 @@ function schedulePush() {
 
 async function doPush() {
   try {
-    await pushToServer(cacheCards, cacheSettings)
+    await pushToServer(cacheCards, cacheSettings, cacheTags, cachePromptTags)
   } finally {
     pushInFlight = false
     if (pushPending) {
@@ -372,30 +424,42 @@ export async function isServerAvailable(): Promise<boolean> {
   return serverMode
 }
 
-export async function loadFromServer(): Promise<{ cards: Card[]; settings: Settings } | null> {
+export async function loadFromServer(): Promise<{ cards: Card[]; settings: Settings; tags: Tag[]; promptTags: PromptTag[] } | null> {
   try {
     const res = await fetch(SYNC_URL, { cache: 'no-store' })
     if (!res.ok) return null
-    const data = (await res.json()) as { cards?: unknown; settings?: unknown }
+    const data = (await res.json()) as { cards?: unknown; settings?: unknown; tags?: unknown; promptTags?: unknown }
     const cards = Array.isArray(data.cards)
       ? (data.cards.filter(isCard).map(normalizeCard) as Card[])
       : []
     const settings: Settings = normalizeSettings(data.settings)
+    const tags = Array.isArray(data.tags) ? (data.tags.filter(isTag).map(normalizeTag) as Tag[]) : []
+    const promptTags = Array.isArray(data.promptTags) ? (data.promptTags.filter(isPromptTag) as PromptTag[]) : []
     serverMode = true
-    return { cards, settings }
+    // 同步 push 缓存为服务端权威数据，避免后续 doPush 把空/旧 tags 覆盖回服务端
+    cacheCards = cards
+    cacheSettings = settings
+    cacheTags = tags
+    cachePromptTags = promptTags
+    return { cards, settings, tags, promptTags }
   } catch {
     serverMode = false
     return null
   }
 }
 
-export async function pushToServer(cards: Card[], settings: Settings): Promise<boolean> {
+export async function pushToServer(
+  cards: Card[],
+  settings: Settings,
+  tags: Tag[] = [],
+  promptTags: PromptTag[] = [],
+): Promise<boolean> {
   if (!serverMode) return false
   try {
     const res = await fetch(SYNC_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cards, settings }),
+      body: JSON.stringify({ cards, settings, tags, promptTags }),
     })
     if (!res.ok) return false
     const data = (await res.json()) as { version?: number }
@@ -409,7 +473,9 @@ export async function pushToServer(cards: Card[], settings: Settings): Promise<b
 
 // 订阅服务端变更；远程有更新时通过 onRemote 回调把最新数据交回页面。
 // 通过 lastPushedVersion 滤掉「自己刚推送」产生的回声，避免推送死循环。
-export function subscribeSync(onRemote: (cards: Card[], settings: Settings) => void): () => void {
+export function subscribeSync(
+  onRemote: (cards: Card[], settings: Settings, tags: Tag[], promptTags: PromptTag[]) => void,
+): () => void {
   if (typeof window === 'undefined' || typeof EventSource === 'undefined') return () => {}
   const es = new EventSource(STREAM_URL)
   es.onmessage = (ev) => {
@@ -423,7 +489,7 @@ export function subscribeSync(onRemote: (cards: Card[], settings: Settings) => v
     if (version === null) return
     if (lastPushedVersion !== null && version === lastPushedVersion) return // 自己的回声，忽略
     void loadFromServer().then((r) => {
-      if (r) onRemote(r.cards, r.settings)
+      if (r) onRemote(r.cards, r.settings, r.tags, r.promptTags)
     })
   }
   es.onerror = () => {

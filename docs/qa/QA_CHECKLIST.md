@@ -210,3 +210,28 @@
 - [x] P0-7 标题 pr-16：预留胶囊位，code 徽标不被盖（CardItem.tsx:58）
 - [x] P0-7 胶囊内容：checkbox + 编辑 + 删除，readonly 不渲染（CardItem.tsx:77-126）
 - [x] 既有回归：tsc 0 错误 / eslint src/ 0 错误 / 11合1 已 CLOSED
+
+### P0 标签系统 22 项 - 2026-08-28 验证
+- [x] 1. 创建标签：handleCreateTag 管理区（page.tsx:502-514）+ resolveTagIds 隐式创建（page.tsx:317-335）+ TagPanel「+」/菜单入口
+- [x] 2. Prompt 多标签：Card.tags string[] + setCardTags 原子替换 + resolveTagIds 多名称；上限 3 保持
+- [x] 3. 标签树：TreeNode 递归渲染 + expand/collapse + localStorage pm:tag-expanded 记忆 + selected 高亮 + searchTerm name/path 搜索
+- [x] 4. 数量：directCount 直接 + totalCount 含子（TagPanel.tsx:155-157）；direct !== total 时显示「直接 X · 含子 Y」
+- [x] 5. 父含子筛选：collectDescendantIds 递归 + collectTagPromptIds 去重 Set（page.tsx:266-268）
+- [x] 6. chip × 移除 + datalist 补全：CardDetail/PreviewPanel chip 移除 + datalist existingTags 补全
+- [x] 7. 重命名：handleRenameTag 重名检测 + renameTag 仅改 Tag.name + syncCardsToPromptTags 冗余同步 + tagPath 子路径自动变
+- [x] 8. 移动防循环：assertNoCycle 三重检测（自/子/环）+ isNameUnique 同父重名 + moveTag 仅改 parent_id
+- [x] 9. 删除两种模式：self（子标签提升一级）/ subtree（删除整棵子树）+ 双重 confirm + 绝不删 Prompt（deleteTag 级联删关系）
+- [x] 10. 无标签：UNTAGGED 虚拟 id + untaggedCount + baseCards filter + TagPanel 底部入口
+- [x] 11. 当前标签下新建继承：selectedTag → selName 强制首位（page.tsx:360-362）；全部/demo 不继承
+- [x] 12. 外键安全：deleteTag 级联删 promptTags（tags.ts:229）+ 卡片总数不变
+- [x] 13. 事务原子：applyTags setTags+setPromptTags+syncCardsToPromptTags 一次性替换
+- [x] 14. isTag/isPromptTag 守卫：tags.ts:14-33 字段级校验
+- [x] 15. buildTagTree：parent_id 分组 + 递归 walk + sort_order/locale 排序 + 环引用孤儿兜底
+- [x] 16. deriveTagsFromCards：demo/未迁移兜底，从 Card.tags 派生临时 tags+promptTags
+- [x] 17. tagPath：parent_id 链向上收集 → join(' / ')
+- [x] 18. syncCardsToPromptTags：promptTags 为真源重建 Card.tags，仅变化时生成新对象
+- [x] 19. normalizeTag：老数据缺 icon/is_pinned/sort_order 补默认值
+- [x] 20. 迁移脚本：dry-run + --apply + .bak 备份 + validate；脏数据合并 11/55/0 孤儿
+- [x] 21. API 透传：api/sync route.ts tags+promptTags 透传；curl cards=32 tags=11 promptTags=55
+- [x] 22. serverStore 守卫：setState 落盘前 isTag/isPromptTag 过滤 + 完整性校验
+- [x] 既有回归：tsc 0 错误 / eslint src/ 0 错误 / API cards=32 tags=11 promptTags=55 / P0-6/7 已 CLOSED

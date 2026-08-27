@@ -4,10 +4,10 @@
 
 ## 最近一次 QA 执行记录
 
-- **日期**：2026-08-28（第十一次 - P0-6 高亮重开 + P0-7 卡片空白回收 2合1）
-- **模式**：QA Acceptance（2合1验收 + 核心回归）
+- **日期**：2026-08-28（第十二次 - P0 标签系统核心 22 项总验收）
+- **模式**：QA Acceptance（22 项逐项验证 + 核心回归）
 - **执行者**：QA / Test Agent
-- **结果**：**PASS**（代码走查 + tsc/lint 均通过；GUI 需人工确认）
+- **结果**：**PASS**（代码走查 + tsc/lint + API 校验均通过；GUI 需人工确认）
 - **构建门禁**：tsc --noEmit ✅、npm run lint ✅（src/ 零错误，.worktrees/ 为构建产物不影响）
 - **API 验证**：curl /api/sync 返回正常 ✅
 - **commit 验证**：未提交（待用户授权 commit/push）
@@ -239,3 +239,109 @@
 - tsc --noEmit 零错误 ✅
 - npx eslint src/ 零错误 ✅
 - P0-4/P0-5/P2-6/P2-7/P3-4/P3-5/P2-1/P2-5/P2-11/P2-3/P2-4/P3-2 已 CLOSED ✅
+
+---
+
+## P0 标签系统 22 项 QA 记录（2026-08-28）
+
+### 1. 创建标签（管理区+编辑时隐式创建）
+- **管理区** `page.tsx:502-514`：`handleCreateTag(name, parentId)` → 空名校验 + 50 字上限 + `isNameUnique` 同父重名检测 + `assertNoCycle` + `createTag` ✅
+- **隐式创建** `page.tsx:317-335`：`resolveTagIds(names)` → 未找到时 `createTag(nextTags, name, null)` 自动新建顶级标签 ✅
+- **TagPanel 新建入口** `TagPanel.tsx:417-429`：「+」按钮 → `handleCreate(null)`；菜单「＋ 新建子标签」→ `handleCreate(tag.id)` ✅
+
+### 2. Prompt 多标签
+- `Card.tags: string[]`（types.ts:11）+ `setCardTags` 原子替换（tags.ts:234-240）+ resolveTagIds 支持多名称 ✅
+- 上限 3 个保持（`cards.ts:108` slice(0,3)），待产品决策放开 ✅
+
+### 3. 标签树（展开/记忆/选中/搜索）
+- **树渲染** `TagPanel.tsx:135-257`：`TreeNode` 递归渲染 + `childrenOf` 子级获取 ✅
+- **展开/收起** `TagPanel.tsx:276-284`：`toggle(id)` + `localStorage[pm:tag-expanded]` 记忆（`readExpanded`/`writeExpanded`） ✅
+- **选中高亮** `TagPanel.tsx:154,162-163`：`active = selected === tag.id` + `bg-gold/10` ✅
+- **搜索** `TagPanel.tsx:290-300`：匹配 name 或完整路径（`tagPath`），命中平铺展示完整路径 ✅
+
+### 4. 数量（直接/总）
+- **TreeNode** `TagPanel.tsx:155-157`：`direct = directCount(promptTags, tag.id)` + `totalCount(promptTags, subIds)` ✅
+- **标题提示** `TagPanel.tsx:201`：`direct !== total` 时显示「直接 X · 含子 Y」 ✅
+
+### 5. 点击筛选（含父含子去重）
+- `page.tsx:266-268`：`subIds = [selectedTag, ...collectDescendantIds]` → `collectTagPromptIds` 去重 → `matched.has(c.id)` ✅
+- 含子标签：`collectDescendantIds` 递归收集所有后代 id ✅
+- 去重：`collectTagPromptIds` 用 `Set<prompt_id>` 去重 ✅
+
+### 6. 加/移除标签（chip × + datalist 补全）
+- **CardDetail** `CardDetail.tsx:366`：chip × → `setDraft(tagsText: next.join('、'))` 移除 ✅
+- **CardDetail** `CardDetail.tsx:386-390`：`<datalist id="detail-tags-list">` + `existingTags` 补全 ✅
+- **PreviewPanel** `PreviewPanel.tsx:486-490`：同上 datalist ✅
+- **PreviewPanel** `PreviewPanel.tsx:525`：chip × 移除 ✅
+
+### 7. 重命名（含父重命名子路径自动变）
+- `handleRenameTag`（page.tsx:517-533）：空名校验 + 50 字上限 + `isNameUnique` 重名检测 + `renameTag` 仅改 Tag.name ✅
+- `syncCardsToPromptTags`（page.tsx:530）：重命名后同步重建 Card.tags 冗余字段 ✅
+- 子路径自动变：`tagPath`（tags.ts:111-124）动态计算，父名变 → 所有子路径自动更新 ✅
+
+### 8. 移动/拖动 + 防循环/同父重名
+- `handleMoveTag`（page.tsx:536-549）：`assertNoCycle` 三重检测 + `isNameUnique` 同父重名检测 ✅
+- `assertNoCycle`（tags.ts:94-108）：① 不能成为自己的父 ② 不能移到自己的子节点 ③ 成环检测 + visited 兜底 ✅
+- `moveTag`（tags.ts:196-199）：仅改 parent_id，关系不动 ✅
+
+### 9. 删除（两种模式 + 绝不删 Prompt + 确认）
+- `handleDeleteTag`（page.tsx:553-560）：`deleteTag(tags, promptTags, id, mode === 'subtree')` + `applyTags` 原子落盘 ✅
+- **两种模式** `TagPanel.tsx:400-408`：`hasKids` 时二次 confirm → `'self'`（子标签提升一级）或 `'subtree'`（删除整棵子树） ✅
+- **绝不删 Prompt** `deleteTag`（tags.ts:229）：`nextPromptTags = promptTags.filter(rt => !removedIds.has(rt.tag_id))` — 只删关系不删卡 ✅
+- **确认** `TagPanel.tsx:388-398`：首次 confirm 含使用数量 + 删除后果说明 ✅
+
+### 10. 无标签
+- `UNTAGGED` 虚拟 id（TagPanel.tsx:8）+ `untaggedCount`（page.tsx:248-251）：`sourceCards.filter(c => !linked.has(c.id)).length` ✅
+- `baseCards`（page.tsx:262-264）：`selectedTag === UNTAGGED` → 无关联 prompt 的卡片 ✅
+- TagPanel 渲染（TagPanel.tsx:512-526）：底部「无标签」入口 ✅
+
+### 11. 当前标签下新建继承
+- `page.tsx:360-362`：`selectedTag && selectedTag !== UNTAGGED && !isDemoView` → `selName` 强制首位 → `resolveTagIds` ✅
+- 「全部」下不强制：条件 false 时维持原 AI tags ✅
+- demo 视图不继承：`!isDemoView` ✅
+
+### 12. 外键安全（Tag 删→PromptTag 级联，绝不删卡）
+- `deleteTag`（tags.ts:229）：`nextPromptTags = promptTags.filter(rt => !removedIds.has(rt.tag_id))` — 级联删关系 ✅
+- 卡片总数 32→32 不变（CURRENT_STAGE 手测验证） ✅
+
+### 13. 事务/原子操作
+- `applyTags`（page.tsx:338-342）：`setTags` + `setPromptTags` + `syncCardsToPromptTags` 一次性原子替换 ✅
+- `setCardTags`（tags.ts:234-240）：`[...filtered, ...unique]` 原子替换某 prompt 全部标签关系 ✅
+
+### 14. isTag/isPromptTag 守卫
+- `isTag`（tags.ts:14-27）：校验 id/name/parent_id/icon/is_pinned/sort_order/created_at/updated_at ✅
+- `isPromptTag`（tags.ts:29-33）：校验 prompt_id/tag_id ✅
+
+### 15. buildTagTree 树构建
+- `buildTagTree`（tags.ts:264-320）：按 parent_id 分组 → 递归 walk → sort_order + locale 排序 → 环引用兜底孤儿追加 ✅
+- `TagNode`（tags.ts:255-261）：extends Tag + total/direct/depth ✅
+
+### 16. deriveTagsFromCards 兜底派生
+- `deriveTagsFromCards`（tags.ts:331-361）：从 Card.tags 去重派生临时 tags + promptTags（id = tag_derive_N） ✅
+- demo 视图 + 未迁移旧数据兜底 ✅
+
+### 17. tagPath 完整路径
+- `tagPath`（tags.ts:111-124）：从 tagId 沿 parent_id 链向上收集 → `unshift` → `join(' / ')` ✅
+
+### 18. syncCardsToPromptTags 冗余同步
+- `syncCardsToPromptTags`（tags.ts:174-180）：以 promptTags 为真源重建 Card.tags，仅变化时生成新对象 ✅
+
+### 19. normalizeTag 归一化
+- `normalizeTag`（tags.ts:36-44）：老数据缺 icon/is_pinned/sort_order 时补默认值 ✅
+
+### 20. 迁移脚本
+- `scripts/migrate-tags.mjs`：dry-run + --apply + 自动 .bak 备份 + validate ✅
+- 脏数据合并：多age×3 + 多aengt编程×1 → 多agent编程；删除无法分类 ✅
+
+### 21. API 透传
+- `api/sync/route.ts:27`：`tags` + `promptTags` 字段透传 ✅
+- `curl /api/sync`：`cards=32 tags=11 promptTags=55 version=529` ✅
+
+### 22. serverStore 守卫
+- `serverStore.ts`：`setState` 落盘前 `isTag/isPromptTag` 过滤非法数据 + 完整性校验（无孤儿/唯一约束/环） ✅
+
+### 既有回归
+- tsc --noEmit 零错误 ✅
+- npx eslint src/ 零错误 ✅
+- API `/api/sync` cards=32 tags=11 promptTags=55 ✅
+- P0-6/P0-7 已 CLOSED ✅

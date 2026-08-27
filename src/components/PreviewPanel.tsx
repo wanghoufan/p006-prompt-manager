@@ -477,11 +477,17 @@ export function PreviewPanel({
               <input
                 id="preview-tags"
                 className="field min-w-0 flex-1 text-[12px]"
+                list="preview-tags-list"
                 value={draft.tagsText}
                 onChange={(e) => setDraft((d) => ({ ...d, tagsText: e.target.value }))}
                 onBlur={() => commitSave(true)}
                 placeholder="标签（逗号分隔，1~3 个）"
               />
+              <datalist id="preview-tags-list">
+                {existingTags.map((t) => (
+                  <option key={t} value={t} />
+                ))}
+              </datalist>
               <div className="flex shrink-0 items-center gap-1">
                 <span className="font-mono text-xs text-gold-bright">@</span>
                 <div className="relative">
@@ -500,6 +506,33 @@ export function PreviewPanel({
                 </div>
               </div>
             </div>
+            {card.tags.length > 0 && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                {card.tags.map((t) => (
+                  <span
+                    key={t}
+                    className="inline-flex items-center gap-1 rounded-full border border-gold/25 bg-gold/5 px-2 py-0.5 text-[11px] text-gold-bright"
+                  >
+                    {t}
+                    <button
+                      type="button"
+                      aria-label={`移除标签 ${t}`}
+                      title={`从本条移除标签「${t}」`}
+                      className="rounded-full p-0.5 text-muted transition-colors hover:bg-gold/20 hover:text-rust"
+                      onClick={() => {
+                        const next = card.tags.filter((n) => n !== t)
+                        onUpdateMeta(card.id, card.title, next)
+                        setDraft((d) => ({ ...d, tagsText: next.join('、') }))
+                      }}
+                    >
+                      <svg viewBox="0 0 16 16" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
+                      </svg>
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
             {codeConflict && (
               <p className="pt-1 text-[10px] text-rust">该调取码已被其他卡片使用，请更换</p>
             )}

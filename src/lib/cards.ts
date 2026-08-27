@@ -91,9 +91,11 @@ export const DISCARD_TAGS = new Set(['无法分类', '未分类', '其他', '无
 
 /**
  * 标签数组归一（P0-1）：trim → 丢弃 DISCARD_TAGS 脏标签（大小写不敏感）→ 去空 → 去重
- * → 单标签截断 4 字 → 最多 3 个；过滤后为空则保持 []（无标签状态正常展示，无标签徽标）。
- * 供 AI 标签路径（ai.ts generateMeta）与新建卡片合并标签使用；手动编辑标签（parseTags）不过滤，
- * 避免对存量脏标签误判变更导致隐性清理（存量污染由 P2-9 标签管理手动删）。
+ * → 单标签截断 50 字（对齐交接 §31，1~50 字符）→ 最多 3 个；过滤后为空则保持 []（无标签状态正常展示）。
+ * 供 AI 标签路径（ai.ts generateMeta）与新建卡片合并标签使用。
+ *
+ * 2026-08-28 修复：原 slice(0, 4) 会把「多agent编程」截成「多age」，是存量碎片标签的根因；
+ * 现改为 50 字上限（与手动 parseTags 一致），根治「两套规则并存」导致的碎片重名（审计 §五 高风险）。
  */
 export function normalizeTags(tags: string[]): string[] {
   return [
@@ -104,7 +106,7 @@ export function normalizeTags(tags: string[]): string[] {
         .filter((t) => !DISCARD_TAGS.has(t.toLowerCase())),
     ),
   ]
-    .map((t) => t.slice(0, 4))
+    .map((t) => t.slice(0, 50))
     .slice(0, 3)
 }
 

@@ -29,6 +29,29 @@ export interface Settings {
   theme: 'dark' | 'light' | 'system'
 }
 
+/** 标签实体：与 Prompt 完全解耦，通过稳定 id 关联（交接 §38）。
+ *  重命名/移动只改 Tag 自身字段，不改任何 Prompt；删除 Tag 级联删关系但不删 Prompt。 */
+export interface Tag {
+  id: string
+  name: string
+  /** 父标签 id；null = 顶级标签 */
+  parent_id: string | null
+  /** 可选 emoji / 图标名（P1 启用，默认 null） */
+  icon: string | null
+  /** 置顶（P1 启用，默认 false） */
+  is_pinned: boolean
+  /** 同级排序（P1 启用，默认 0） */
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+/** Prompt 与 Tag 的多对多关联（交接 §38）。应用层强制 (prompt_id, tag_id) 唯一。 */
+export interface PromptTag {
+  prompt_id: string
+  tag_id: string
+}
+
 export type SortMode = 'updated' | 'copies' | 'rating'
 
 export interface GenerateMetaResult {

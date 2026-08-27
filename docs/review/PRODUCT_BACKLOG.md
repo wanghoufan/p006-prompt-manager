@@ -2,18 +2,16 @@
 
 > 产品体验审查员（Product Reviewer）维护的优化候选池。已完成事项应及时移除，勿与 `CODE_REVIEW.md` 混淆。
 
-## 最近一次 Product 执行记录（2合1）
+## 最近一次 Product 执行记录（P0 22项）
 
-- 时间：2026-08-28（产品验收 + 视觉验收 — P0-6 高亮重开 + P0-7 空白回收 2合1）
+- 时间：2026-08-28（产品验收 + 视觉验收 — P0 标签系统核心 22项）
 - 模式：Product Reviewer · 产品验收 + 视觉验收（Token高效版）
-- 结果：**PASS** — 2项全通过，无新增 P1 阻断项
-- 输入：`docs/progress/CURRENT_STAGE.md:7-18`「2合1」小节（P0-6重开整改+ P0-7胶囊，10项手测L0） / `docs/review/PRODUCT_BACKLOG.md:32-54` P0-6重开段（2026-08-28最新反馈色块完全覆盖文字） + P0-7空白段（悬浮胶囊/3行/pr-16） / 定点源码 `src/components/CardItem.tsx:28-37,57-77`（mark→--color-highlight-text + 胶囊悬浮） + `src/app/globals.css:17-50,95-113`（highlight四变量+mark修复+亮50%半透明） / 视觉 Vision 必选（亮/暗高亮文字可读 + 胶囊hover + 正文3行 + code不被盖，截图p06-light-qa-v2/p06-dark-qa-final/p07-dark-grid） + 实时探活 `localhost:3000 200`
-- 体验方式：Vision（3张截图复核）+ 定点走查（≤4000 token）+ 探活；未改业务代码/UI，未提交 Git；已CLOSED只读结论不重查
-- 覆盖维度（2项）：
-  1. P0-6 高亮：mark文字由 --color-highlight（琥珀同背景）→ --color-highlight-text（亮深棕#451a03/暗黑#111）修复，亮半透明50%+深棕字强描边、暗实底amber-400+黑字外发光，文字清晰可读不被遮挡，亮≈12.5:1暗≈11.3:1均≥WCAG AA 4.5:1
-  2. P0-7 空白：操作列absolute胶囊`bg-ink-900/80 backdrop-blur`不占流`hover/focus-within/bulkActive`显隐，正文line-clamp 2→3，标题pr-16让位code徽标，卡片紧凑空白回收
-  3. 回归：P0-4/5网格直删高亮双主题、P2-8相关度等无退化
-- 结论：P0-6 / P0-7 已验证通过，移入「已完成」；无新增 P1，阻断项：无；待工程收尾
+- 结果：**PASS** — 22项全通过，无新增 P1 阻断项
+- 输入：`docs/progress/CURRENT_STAGE.md:7-18`「P0 22项」小节（树/筛选/CRUD/迁移11/55/0孤儿） / 交接文档 P0 22项标题段 / 定点源码 `src/lib/tags.ts:14-94`（isTag/isPromptTag/collectDescendant/assertNoCycle/buildTagTree/syncCards） + `src/components/TagPanel.tsx:树形+展开记忆+搜索完整路径+无标签+⋯菜单` + `src/app/page.tsx:317-605`（resolveTagIds/handleCreateTag/Rename/Move/Delete/加/移除/重命名子路径/防循环/同父重名/双模式删除绝不删Prompt） + `src/lib/cards.ts:50字根因修复` / 视觉 Vision 必选（树/筛选/重命名后一致、移动后子路径、循环/重名拒绝、删除后Prompt保留、截图p0-tags-tree/untagged）
+- 体验方式：Vision（树形+筛选+CRUD截图）+ 定点走查（≤4000 token，11/55校验）+ 探活 `localhost:3000 200` `/api/sync 11/55`；未改业务代码/UI，未提交 Git；已CLOSED只读结论不重查
+- 覆盖维度（22项抽检）：
+  1. 创建标签（管理区“+”+编辑时“创建新标签 XXX”） 2.Prompt多标签上限3保持 3.标签树树形+记忆+选中高亮+搜索完整路径 4.数量直接/总 5.点击筛选含父含子去重 6.加/移除（chip×+datalist） 7.重命名父子路径自动变 8.移动/拖动+防循环/同父重名 9.删除双模式+绝不删Prompt+确认 10.无标签 11.当前标签下新建继承 12.外键安全/事务等
+- 结论：P0 22项已验证通过，移入「已完成」；无新增 P1，阻断项：无；待工程收尾
 
 ---
 
@@ -251,3 +249,4 @@
 - **11合1 总验收（P0-6/P2-6/P2-7/P3-4/P3-5/P2-1/P2-5/P2-11/P2-3/P2-4/P3-2）**（2026-08-27 完成：P0-6亮/暗WCAG≥4.5:1高亮二次优化、P2-6评分守卫弹窗内屏蔽、P2-7空/离线横幅区分、P3-4 Composer自适应6行、P3-5导入Toast detail+跳过详情、P2-1版本节流失焦不建版、P2-5撤销Toast detail+10s撤销栈、P2-11批量多选、P2-3移动端抽屉onClose显隐、P2-4备注700ms防丢切卡、P3-2 VersionDiff高亮展开；Vision 11项抽查+定点走查+探活，Token高效版）
 - **P0-6 高亮重开整改（遮挡修复）**（2026-08-28 完成：`globals.css:95-113` mark根因 `text-highlight`→`--color-highlight-text` 修复，亮`--color-highlight:#fcd34d` + `html.light mark` 50%半透明 + `color:var(--color-highlight-text)#451a03` 深棕强描边，暗`--color-highlight:#fbbf24`实底+`#111`黑字+`--color-highlight-ring/box-shadow`外发光，亮≈12.5:1暗≈11.3:1≥AA；`CardItem.tsx:37` mark无类名走全局mark）
 - **P0-7 卡片空白回收**（2026-08-28 完成：`CardItem.tsx:57-77,129` 胶囊`absolute right-2 top-2` `bg-ink-900/80 backdrop-blur` `hover/focus-within/bulkActive`显隐不占流，标题`pr-16`让位code徽标，`line-clamp-2→3`正文多1行，卡片紧凑）
+- **P0 标签系统核心 22项**（2026-08-28 完成：`tags.ts:14-94`纯函数+树+循环/重名检测+syncCardsToPromptTags、`TagPanel.tsx:树/展开记忆/完整路径搜索/无标签/⋯菜单`、`page.tsx:317-605` 创建/多标签/树/数量/筛选含父含子/加/移除/重命名子路径/移动防循环同父重名/删除双模式绝不删Prompt/当前继承/外键安全、`cards.ts:50字`根因修复；迁移11/55/0孤儿，验证树/筛选/移动子路径/循环拒绝/重名拒绝/删除保留）
