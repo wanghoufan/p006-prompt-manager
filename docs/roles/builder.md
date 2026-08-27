@@ -29,6 +29,8 @@
 - 相关源码
 - 相关测试
 
+> 读取约束：默认按 `token-efficient-read` 定点读取（`CURRENT_STAGE`+`HANDOFF` 优先，标题定位，≤4000 Token，已 CLOSED 不重查）；**S 级大规模 UI 重构/全仓重命名/跨模块搜索时可按需扩大范围**（如全量 `src/components/*`），但仍需跳过已 CLOSED 历史（2026-08-28 补充，仅 Builder 适用）。
+
 ## 开发完成后的基础验证
 
 至少检查：
