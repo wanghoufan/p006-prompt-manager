@@ -101,6 +101,10 @@ export function PreviewPanel({
   const [expandedVersionId, setExpandedVersionId] = useState<string | null>(null)
   const [width, setWidth] = useState<number>(() => readSavedWidth(defaultWidth))
   const dragState = useRef<{ startX: number; startW: number } | null>(null)
+  // <md 时作为底部抽屉：先从屏幕底部进入，拖动手柄下拉可收起。
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
+  const mobileDragStartY = useRef<number | null>(null)
+  const mobileCloseTimer = useRef<number | null>(null)
   const firstSync = useRef(true)
   // RISK-3：AI 请求取消控制器（新请求前 abort 上一个，卸载时 abort）
   const metaAbortRef = useRef<AbortController | null>(null)
@@ -144,6 +148,18 @@ export function PreviewPanel({
     window.removeEventListener('pointerup', handleDragEnd)
   }
 
+  function handleMobileHandlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    mobileDragStartY.current = e.clientY
+    window.addEventListener('pointerup', handleMobileHandlePointerUp, { once: true })
+  }
+
+  function handleMobileHandlePointerUp(e: PointerEvent) {
+    const startY = mobileDragStartY.current
+    mobileDragStartY.current = null
+    // 下拉至少 56px 才收起，避免手柄的普通点按误关闭。
+    if (startY !== null && e.clientY - startY >= 56) handleClose()
+  }
+
   function resetWidth() {
     setWidth(defaultWidth)
     try {
@@ -167,6 +183,12 @@ export function PreviewPanel({
     const timer = window.setTimeout(() => setDraft(cardDraftFrom(card)), 0)
     return () => window.clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [card])
+
+  useEffect(() => {
+    if (!card) return
+    const frame = window.requestAnimationFrame(() => setMobileDrawerOpen(true))
+    return () => window.cancelAnimationFrame(frame)
   }, [card])
 
   // silent=true 用于失焦/防抖自动保存：静默落地，不弹 toast，仅更新「已自动保存」角标
@@ -228,6 +250,7 @@ export function PreviewPanel({
       metaAbortRef.current?.abort()
       summaryAbortRef.current?.abort()
       formatAbortRef.current?.abort()
+      if (mobileCloseTimer.current) window.clearTimeout(mobileCloseTimer.current)
       saveThrough(true, true)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -241,7 +264,10 @@ export function PreviewPanel({
   function handleClose() {
     if (notesTimer.current) window.clearTimeout(notesTimer.current)
     commitSave(true)
-    onClose?.()
+    setMobileDrawerOpen(false)
+    if (mobileCloseTimer.current) window.clearTimeout(mobileCloseTimer.current)
+    // 等抽屉滑回底部后，再清除选中项；桌面端不显示此入口，原行为不受影响。
+    mobileCloseTimer.current = window.setTimeout(() => onClose?.(), 200)
   }
 
   // 备注边输入边存：停手 700ms 后自动落库
@@ -368,7 +394,9 @@ export function PreviewPanel({
       // md+ 保持右侧可拖宽侧边栏（宽度由 --pw CSS 变量驱动，移动端忽略）
       className={`${
         card ? 'flex' : 'hidden md:flex'
-      } fixed inset-x-0 bottom-0 z-30 max-h-[75dvh] w-full flex-col overflow-hidden rounded-t-xl border border-line bg-ink-900 md:relative md:inset-auto md:bottom-auto md:z-auto md:max-h-none md:w-[var(--pw)] md:shrink-0 md:rounded-xl`}
+      } fixed inset-x-0 bottom-0 z-30 max-h-[75dvh] w-full flex-col overflow-hidden rounded-t-xl border border-line bg-ink-900 transition-transform duration-200 ease-out ${
+        mobileDrawerOpen ? 'translate-y-0' : 'translate-y-full'
+      } md:relative md:inset-auto md:bottom-auto md:z-auto md:max-h-none md:w-[var(--pw)] md:shrink-0 md:translate-y-0 md:rounded-xl`}
       style={{ '--pw': `${width}px` } as React.CSSProperties}
     >
       <div
@@ -380,11 +408,18 @@ export function PreviewPanel({
         className="absolute left-0 top-0 z-10 hidden h-full w-2 cursor-ew-resize bg-transparent transition-colors hover:bg-gold/10 active:bg-gold/20 md:block"
       />
       {card && onClose && (
-        <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-1.5 md:hidden">
-          <span className="min-w-0 flex-1 truncate text-xs text-paper">{card.title}</span>
-          <button type="button" className="btn-ghost shrink-0 text-[10px]" onClick={handleClose}>
-            收起
-          </button>
+        <div className="border-b border-line px-3 pb-1.5 pt-1 md:hidden">
+          <div
+            aria-hidden="true"
+            className="mx-auto mb-1 h-1 w-9 touch-none rounded-full bg-muted/60"
+            onPointerDown={handleMobileHandlePointerDown}
+          />
+          <div className="flex items-center justify-between gap-2">
+            <span className="min-w-0 flex-1 truncate text-xs text-paper">{card.title}</span>
+            <button type="button" className="btn-ghost shrink-0 text-[10px]" onClick={handleClose}>
+              关闭
+            </button>
+          </div>
         </div>
       )}
       {!card ? (
