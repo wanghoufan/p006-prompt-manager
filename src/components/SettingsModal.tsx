@@ -173,6 +173,28 @@ export function SettingsModal({ settings, onSave, onClose }: SettingsModalProps)
               <option value="manual">手动确认</option>
             </select>
           </div>
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-ink-900 px-3.5 py-3">
+            <div className="min-w-0">
+              <p className="text-sm text-paper">鼠标停留预览</p>
+              <p className="mt-0.5 text-xs text-muted">开启后，鼠标停留在卡片正文上会显示全文预览。</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={settings.hoverPreview}
+              aria-label="鼠标停留预览"
+              onClick={() => onSave({ ...settings, hoverPreview: !settings.hoverPreview })}
+              className={`relative h-5 w-9 shrink-0 cursor-pointer rounded-full transition-colors ${
+                settings.hoverPreview ? 'bg-gold' : 'bg-ink-700'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${
+                  settings.hoverPreview ? 'left-[18px]' : 'left-0.5'
+                }`}
+              />
+            </button>
+          </div>
           <div className="rounded-lg border border-line bg-ink-900 px-3.5 py-3">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">

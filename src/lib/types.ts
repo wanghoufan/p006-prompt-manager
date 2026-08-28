@@ -35,6 +35,8 @@ export interface Settings {
   bodyAlignment: 'left' | 'center' | 'right'
   /** Composer 粘贴正文后的建卡方式；auto 立即建卡，manual 等待用户确认。 */
   composerAddMode: 'auto' | 'manual'
+  /** 是否在鼠标停留卡片正文时显示浏览器全文预览（默认关闭）。 */
+  hoverPreview: boolean
 }
 
 /** 标签实体：与 Prompt 完全解耦，通过稳定 id 关联（交接 §38）。

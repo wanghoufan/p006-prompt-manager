@@ -63,6 +63,7 @@ export default function Home() {
     autoFormatBody: false,
     bodyAlignment: 'left',
     composerAddMode: 'auto',
+    hoverPreview: false,
   }))
   const [hydrated, setHydrated] = useState(false)
   const [view, setView] = useState<ViewMode>('mine')
@@ -1208,6 +1209,7 @@ export default function Home() {
                     bulkSelected={bulkIds.has(card.id)}
                     bulkActive={bulkIds.size > 0}
                     onBulkToggle={isDemoView ? undefined : toggleBulk}
+                    hoverPreview={settings.hoverPreview}
                   />
                 ))}
               </div>

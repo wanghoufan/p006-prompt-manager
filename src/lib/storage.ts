@@ -100,6 +100,7 @@ const DEFAULT_SETTINGS: Settings = {
   autoFormatBody: false,
   bodyAlignment: 'left',
   composerAddMode: 'auto',
+  hoverPreview: false,
 }
 
 /** 设置归一化（P0-4/P0-5）：老数据缺 confirmDelete / theme 字段时补默认值；
@@ -116,6 +117,7 @@ function normalizeSettings(v: unknown): Settings {
     autoFormatBody: typeof s.autoFormatBody === 'boolean' ? s.autoFormatBody : false,
     bodyAlignment,
     composerAddMode,
+    hoverPreview: typeof s.hoverPreview === 'boolean' ? s.hoverPreview : false,
   }
 }
 

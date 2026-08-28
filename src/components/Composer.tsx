@@ -18,7 +18,12 @@ export function Composer({ existingTags, addMode, onCreate, onApplyGeneratedMeta
   const [text, setText] = useState('')
   const [autoGenerateTags, setAutoGenerateTags] = useState(true)
   const [autoGenerateTitle, setAutoGenerateTitle] = useState(true)
+  const [generationStatus, setGenerationStatus] = useState<'idle' | 'generating' | 'complete'>('idle')
+  const [generationLabel, setGenerationLabel] = useState('标题与标签')
   const abortControllersRef = useRef(new Set<AbortController>())
+  const activeGenerationsRef = useRef(0)
+  const completionTimerRef = useRef<number | null>(null)
+  const mountedRef = useRef(true)
   const taRef = useRef<HTMLTextAreaElement>(null)
 
   // P3-4：autoResize 至 maxRows=6，粘贴长文自动展开，避免手动拖高
@@ -35,14 +40,40 @@ export function Composer({ existingTags, addMode, onCreate, onApplyGeneratedMeta
   }, [text])
 
   useEffect(() => {
+    mountedRef.current = true
     const controllers = abortControllersRef.current
-    return () => controllers.forEach((controller) => controller.abort())
+    return () => {
+      mountedRef.current = false
+      controllers.forEach((controller) => controller.abort())
+      if (completionTimerRef.current !== null) window.clearTimeout(completionTimerRef.current)
+    }
   }, [])
+
+  function beginGeneration(generateTitle: boolean, generateTags: boolean) {
+    activeGenerationsRef.current += 1
+    if (completionTimerRef.current !== null) {
+      window.clearTimeout(completionTimerRef.current)
+      completionTimerRef.current = null
+    }
+    setGenerationLabel(generateTitle && generateTags ? '标题与标签' : generateTitle ? '标题' : '标签')
+    setGenerationStatus('generating')
+  }
+
+  function finishGeneration() {
+    activeGenerationsRef.current -= 1
+    if (activeGenerationsRef.current > 0 || !mountedRef.current) return
+    setGenerationStatus('complete')
+    completionTimerRef.current = window.setTimeout(() => {
+      if (mountedRef.current) setGenerationStatus('idle')
+      completionTimerRef.current = null
+    }, 2000)
+  }
 
   async function enrichCard(id: string, source: string, generateTitle: boolean, generateTags: boolean) {
     if (!generateTitle && !generateTags) return
     const controller = new AbortController()
     abortControllersRef.current.add(controller)
+    beginGeneration(generateTitle, generateTags)
     try {
       const res = await fetch('/api/ai/generate-meta', {
         method: 'POST',
@@ -65,6 +96,7 @@ export function Composer({ existingTags, addMode, onCreate, onApplyGeneratedMeta
       }
     } finally {
       abortControllersRef.current.delete(controller)
+      finishGeneration()
     }
   }
 
@@ -144,6 +176,13 @@ export function Composer({ existingTags, addMode, onCreate, onApplyGeneratedMeta
           生成卡片 (Enter)
         </button>
       </div>
+      {generationStatus !== 'idle' && (
+        <p aria-live="polite" className="mt-2 text-xs text-gold-bright">
+          {generationStatus === 'generating'
+            ? `正在生成${generationLabel}…`
+            : '已完成'}
+        </p>
+      )}
     </section>
   )
 }

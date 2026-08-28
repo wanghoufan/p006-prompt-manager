@@ -20,6 +20,8 @@ interface CardItemProps {
   bulkSelected?: boolean
   bulkActive?: boolean
   onBulkToggle?: (id: string) => void
+  /** 设置开启时才使用浏览器原生 title 展示正文全文。 */
+  hoverPreview?: boolean
 }
 
 /** 把文本按关键词拆分为片段数组：非命中片段为纯文本节点，命中片段包 <mark>。
@@ -42,7 +44,7 @@ function highlightParts(text: string, query: string): ReactNode[] {
   return parts
 }
 
-export function CardItem({ card, selected, readonly = false, query = '', onSelect, onOpen, onCopy, onRate, onDelete, bulkSelected = false, bulkActive = false, onBulkToggle }: CardItemProps) {
+export function CardItem({ card, selected, readonly = false, query = '', onSelect, onOpen, onCopy, onRate, onDelete, bulkSelected = false, bulkActive = false, onBulkToggle, hoverPreview = false }: CardItemProps) {
   // @code 直达模式：高亮词去掉 @ 前缀，命中片段落在调取码徽标上
   const match = query.replace(/^@/, '').trim()
   return (
@@ -127,7 +129,7 @@ export function CardItem({ card, selected, readonly = false, query = '', onSelec
       {card.body && (
         <p
           className="line-clamp-3 min-w-0 whitespace-pre-wrap text-xs leading-relaxed text-paper-dim/80"
-          title={card.body}
+          title={hoverPreview ? card.body : undefined}
         >
           {highlightParts(card.body, match)}
         </p>
