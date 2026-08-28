@@ -2,9 +2,9 @@
 
 ## 最新状态
 - **时间**：2026-08-28
-- **阶段**：P0级用户反馈全部完成
-- **分支**：`feat/p0-h-mcp-copy-prompts`（已推送）
-- **提交**：`ad7431a`
+- **阶段**：P0级和P2级任务全部完成
+- **分支**：`master`（最新）
+- **提交**：`c6deff7`
 
 ## 已完成P0级任务
 | 任务 | 状态 | 验证 |
@@ -19,9 +19,20 @@
 | P0-F 右侧预览面板排版优化 | ✅ CLOSED | QA/产品 PASS |
 | P0-G MCP连接说明文档 | ✅ CLOSED | QA/产品 PASS |
 | P0-H MCP连接一键复制提示词 | ✅ CLOSED | QA/产品 PASS |
-| P0-I 正文区域格式整理功能 | ✅ CLOSED | QA PARTIAL/产品 PASS |
+| P0-I 正文区域格式整理功能 | ✅ CLOSED | QA/产品 PASS |
+
+## 已完成P2优化项
+| 任务 | 状态 | 验证 |
+|------|------|------|
+| P2-1 正文失焦不建版本 | ✅ CLOSED | QA/产品 PASS |
+| P2-3 移动端底部抽屉 | ✅ CLOSED | QA/产品 PASS |
+| P2-4 备注防抖定时器清理 | ✅ CLOSED | QA/产品 PASS |
+| P2-5 危险操作撤销 | ✅ CLOSED | QA/产品 PASS |
+| P2-6 弹窗内评分守卫 | ✅ CLOSED | QA/产品 PASS |
+| P2-7 空/离线态文案区分 | ✅ CLOSED | QA/产品 PASS |
+| P2-I1 CardDetail格式整理入口 | ✅ CLOSED | QA/产品 PASS |
 
 ## 下一步
-- 所有P0级任务已完成，可合并到master分支
-- 剩余P2优化项择机排期
-- 建议创建PR合并到master
+- 所有P0和P2级任务已完成
+- 无剩余P2优化项
+- 可进入发布准备阶段
