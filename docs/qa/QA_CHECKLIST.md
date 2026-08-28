@@ -313,3 +313,21 @@
 - [x] P0-A 冲突刷新重试：doPush 冲突时 loadFromServer → onConflictRefresh → page 重载三集合 + notify（storage.ts:426-433, page.tsx:214-223）
 - [x] P0-A SSE 回声过滤：lastPushedVersion 匹配跳过（storage.ts:576）
 - [x] 构建门禁：tsc --noEmit ✅ 0 错误、npm run lint ✅ 0 错误（2026-08-28 验证）
+
+### P0级用户反馈问题整改 - 2026-08-28 真机验证
+
+- [x] P0-D 标签切换逻辑修复：单击标签切换筛选，再次单击取消筛选，功能正常 ✅
+- [x] P0-E 标签拖拽功能实现：拖拽功能已实现，有操作提示「拖到上/下边缘排序，拖到标签上可设为子标签或合并」✅
+- [x] P0-F 右侧预览面板排版优化：标题突出（文本栏形式），调取码收进标题行（@符号 + 调取码输入框），布局合理 ✅
+- [x] P0-G MCP连接说明文档：设置中新增MCP连接说明区域，包含配置示例、安装说明、使用说明 ✅
+- [x] 真机验证：Orca Computer Use 操作 localhost:3000，截图存 scratch/qa-real-device/ ✅
+- [x] 构建门禁：tsc --noEmit ✅ 0 错误、npm run lint ✅ 0 错误（2026-08-28 验证）
+
+### P0-H MCP 连接一键复制提示词 - 2026-08-28 真机验证
+
+- [x] SettingsModal MCP 说明拆分为 GPT / WorkBuddy / Orca 三个独立场景
+- [x] 三个场景均展示独立「复制命令」按钮，构建命令包含 `npm install && npm run build`
+- [x] 三个场景均展示独立「复制完整提示词」按钮，提示词包含对应客户端配置步骤和 `prompt_manager_activate_prompt`
+- [x] 真机逐一点击 6 个复制按钮：剪贴板内容可读且与目标按钮匹配；按钮反馈「已复制」
+- [x] MCP 子包 `cd mcp/prompt-server && npm run build` 通过
+- [x] 真机截图：`scratch/qa-real-device/p0-h-settings-mcp-expanded.png`
