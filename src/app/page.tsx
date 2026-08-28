@@ -54,6 +54,8 @@ function compareBySortMode(a: Card, b: Card, mode: SortMode): number {
 
 export default function Home() {
   const [cards, setCards] = useState<Card[]>([])
+  // Composer 的 AI 补全在异步请求完成后才回调。保留最新卡片快照，避免回调闭包仍指向创建前的 cards。
+  const cardsRef = useRef<Card[]>([])
   const [settings, setSettings] = useState<Settings>(() => ({
     thinkingSummaryPrompt: '',
     confirmDelete: true,
@@ -94,6 +96,10 @@ export default function Home() {
     undoRef.current = null
     setToast({ msg, detail: detail && detail.length > 0 ? detail : null })
   }, [])
+
+  useEffect(() => {
+    cardsRef.current = cards
+  }, [cards])
 
   // P2-5 撤销栈：缓存操作前快照，Toast 内 10s「撤销」可回退
   const notifyWithUndo = useCallback((msg: string, undo: () => void) => {
@@ -452,7 +458,11 @@ export default function Home() {
     }
     const { tagIds, nextTags } = resolveTagIds(names)
     const card = createCard(body, title, names)
-    setCards((prev) => [card, ...prev])
+    setCards((prev) => {
+      const nextCards = [card, ...prev]
+      cardsRef.current = nextCards
+      return nextCards
+    })
     setTags(nextTags)
     setPromptTags((prev) => setCardTags(prev, card.id, tagIds))
     return card.id
@@ -460,7 +470,7 @@ export default function Home() {
 
   /** Composer 后台补全：只填仍处于初始状态的字段，避免覆盖用户刚完成的手动编辑。 */
   function handleApplyGeneratedMeta(id: string, title: string, tagNames: string[], generateTitle: boolean, generateTags: boolean) {
-    const card = cards.find((item) => item.id === id)
+    const card = cardsRef.current.find((item) => item.id === id)
     if (!card) return
     const nextTitle = generateTitle && card.title === '未命名提示词' ? title : card.title
     const nextTagNames = generateTags ? Array.from(new Set([...card.tags, ...tagNames])) : card.tags

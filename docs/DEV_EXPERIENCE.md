@@ -177,6 +177,16 @@
 - 可直接给 Agent 的规则：`Builder 禁止重启/关闭 Orca 进程及操作其他终端，遇 Orca 异常仅写 BUGS.md 并继续改代码；Orca 进程管理一律由 Stage Manager 负责。`
 - 候选升级位置：`docs/roles/builder.md` 增加“权限边界”条目 + `docs/roles/stage-manager.md` 增加“Orca 进程管理”职责（待授权）
 
+## 14. QA 完成后必须清理测试卡片，避免污染正式数据库
+
+- 成熟度：B 候选升级项目规范（需用户授权后写入 `docs/roles/qa.md` / `docs/workflow/QUALITY_GATES.md`）
+- 时间：2026-08-28
+- 现象：QA 为验证 P2-10/P2-11 等新建大量测试卡片，完成后未删除，残留数据污染用户正式库（`data/store.json` / `serverStore`），影响真实数据与计数。
+- 小白解释：就像考试后把草稿纸留在试卷里，老师批卷时分不清哪是真答案。考完就应把草稿撕掉，只留正式答卷。
+- 技术处理：QA 流程末尾增加清理步骤：① 测试卡片打标记（如 `title` 前缀 `QA-` 或 `isTest`）便于识别 ② `QA PASS` 前执行批量删除 `handleDeleteCard` / `filter` 清理并落盘 `data/store.json` ③ Stage Manager 在 QA Prompt 末尾显式要求“完成后删除本轮新建测试卡片”；或改用隔离环境（`isDemoView` / 临时库）避免直写正式库。
+- 可直接给 Agent 的规则：`QA 完成测试后必须删除本轮新建的所有测试卡片并落盘，禁止残留污染正式库；Prompt 中必须包含清理步骤。`
+- 候选升级位置：`docs/roles/qa.md` 增加“测试后清理”条目 + `docs/workflow/QUALITY_GATES.md` 增加清理门控（待授权）
+
 ## 12. 开发前必须预检查dev server和Orca状态
 
 - 成熟度：A 本项目保留（已验证可复用）

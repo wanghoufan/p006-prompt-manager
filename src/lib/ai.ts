@@ -8,7 +8,11 @@ const MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash'
 const BASE_URL = (process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com').replace(/\/+$/, '')
 const ENDPOINT = `${BASE_URL}/chat/completions`
 
-export class AiError extends Error {}
+export class AiError extends Error {
+  constructor(message: string, readonly status = 502) {
+    super(message)
+  }
+}
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant'
@@ -21,7 +25,7 @@ async function chat(
 ): Promise<string> {
   const apiKey = process.env.DEEPSEEK_API_KEY
   if (!apiKey || apiKey.startsWith('sk-your-key')) {
-    throw new AiError('服务端未配置 DEEPSEEK_API_KEY（请检查 .env.local）')
+    throw new AiError('AI 服务尚未配置，请在 .env.local 中设置 DEEPSEEK_API_KEY 后重启服务', 503)
   }
   const res = await fetch(ENDPOINT, {
     method: 'POST',

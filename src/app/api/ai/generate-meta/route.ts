@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { generateMeta } from '@/lib/ai'
+import { AiError, generateMeta } from '@/lib/ai'
 
 export async function POST(request: Request) {
   let bodyText: string
@@ -22,6 +22,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ title, tags })
   } catch (e) {
     const message = e instanceof Error ? e.message : 'AI 调用失败'
-    return NextResponse.json({ error: message }, { status: 502 })
+    return NextResponse.json({ error: message }, { status: e instanceof AiError ? e.status : 502 })
   }
 }

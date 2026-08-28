@@ -50,13 +50,18 @@ export function Composer({ existingTags, addMode, onCreate, onApplyGeneratedMeta
         body: JSON.stringify({ body: source, existingTags }),
         signal: controller.signal,
       })
-      const data: { title?: string; tags?: string[]; error?: string } = await res.json()
+      let data: { title?: string; tags?: string[]; error?: string }
+      try {
+        data = await res.json()
+      } catch {
+        throw new Error('AI 服务返回了无法识别的响应，请稍后重试')
+      }
       if (controller.signal.aborted) return
-      if (!res.ok) throw new Error(data.error || '生成失败，请重试')
+      if (!res.ok) throw new Error(data.error || 'AI 自动生成暂不可用，请稍后重试')
       onApplyGeneratedMeta(id, data.title ?? '', data.tags ?? [], generateTitle, generateTags)
     } catch (error) {
       if (!controller.signal.aborted) {
-        notify(`卡片已创建，${error instanceof Error ? error.message : '标题与标签补全失败'}`)
+        notify(`卡片已创建；${error instanceof Error ? error.message : '标题与标签补全失败'}。你可在详情中手动补充。`)
       }
     } finally {
       abortControllersRef.current.delete(controller)
