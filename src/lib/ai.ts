@@ -2,6 +2,8 @@ import { DEFAULT_THINKING_PROMPT, META_PROMPT } from '@/lib/prompts'
 import { normalizeTags } from '@/lib/cards'
 import type { GenerateMetaResult } from '@/lib/types'
 
+export type BodyAlignment = 'left' | 'center' | 'right'
+
 const MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash'
 const BASE_URL = (process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com').replace(/\/+$/, '')
 const ENDPOINT = `${BASE_URL}/chat/completions`
@@ -122,4 +124,20 @@ export async function summarizeThinking(body: string, customPrompt?: string): Pr
   const prompt = template.replace('{body}', body)
   const content = await chat([{ role: 'user', content: prompt }], { maxTokens: 600 })
   return content.trim()
+}
+
+/** P0-I：保留正文语义与 Markdown 结构，仅清理粘贴造成的空白和段落排版。 */
+export async function formatBody(body: string, alignment: BodyAlignment): Promise<string> {
+  const alignmentLabel = { left: '左对齐', center: '居中', right: '右对齐' }[alignment]
+  const prompt = `你是文本格式整理助手。请整理下面的提示词正文，目标为${alignmentLabel}。
+
+要求：
+1. 不得增删、改写或概括任何正文语义；不得添加说明、标题、Markdown 代码围栏。
+2. 清理因网页、PDF 或聊天工具粘贴导致的多余前导空白、尾随空白和连续空行；保留有意义的 Markdown 列表、引用和代码缩进。
+3. 对齐方式由阅读器显示控制；不要为了模拟居中或右对齐而在每行前补空格。
+4. 只输出整理后的正文，不要输出任何解释。
+
+正文：
+${body}`
+  return (await chat([{ role: 'user', content: prompt }], { temperature: 0, maxTokens: 3000 })).trim()
 }

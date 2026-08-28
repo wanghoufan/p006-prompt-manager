@@ -27,6 +27,10 @@ export interface Settings {
   confirmDelete: boolean
   /** P0-5：外观主题；system 跟随系统偏好，dark/light 手动覆盖 */
   theme: 'dark' | 'light' | 'system'
+  /** P0-I：粘贴正文后是否自动请求 AI 进行格式整理（默认关闭） */
+  autoFormatBody: boolean
+  /** P0-I：正文显示及 AI 格式整理所采用的对齐方式 */
+  bodyAlignment: 'left' | 'center' | 'right'
 }
 
 /** 标签实体：与 Prompt 完全解耦，通过稳定 id 关联（交接 §38）。

@@ -156,6 +156,43 @@ export function SettingsModal({ settings, onSave, onClose }: SettingsModalProps)
               <option value="light">亮色</option>
             </select>
           </div>
+          <div className="rounded-lg border border-line bg-ink-900 px-3.5 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm text-paper">粘贴后自动整理正文</p>
+                <p className="mt-0.5 text-xs text-muted">开启后，粘贴到正文区域的内容会按所选对齐方式由 AI 整理。</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={settings.autoFormatBody}
+                aria-label="粘贴后自动整理正文"
+                onClick={() => onSave({ ...settings, autoFormatBody: !settings.autoFormatBody })}
+                className={`relative h-5 w-9 shrink-0 cursor-pointer rounded-full transition-colors ${
+                  settings.autoFormatBody ? 'bg-gold' : 'bg-ink-700'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${
+                    settings.autoFormatBody ? 'left-[18px]' : 'left-0.5'
+                  }`}
+                />
+              </button>
+            </div>
+            <label htmlFor="settings-body-alignment" className="mt-3 block text-sm text-paper">
+              正文对齐方式
+            </label>
+            <select
+              id="settings-body-alignment"
+              className="field mt-2"
+              value={settings.bodyAlignment}
+              onChange={(e) => onSave({ ...settings, bodyAlignment: e.target.value as Settings['bodyAlignment'] })}
+            >
+              <option value="left">左对齐</option>
+              <option value="center">居中</option>
+              <option value="right">右对齐</option>
+            </select>
+          </div>
           <details className="rounded-lg border border-line bg-ink-900 px-3.5 py-3">
             <summary className="cursor-pointer text-sm text-paper">MCP 一键连接提示词</summary>
             <div className="mt-3 space-y-4 text-xs leading-relaxed text-muted">
