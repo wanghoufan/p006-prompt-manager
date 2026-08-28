@@ -9,21 +9,16 @@ export function normalizeCode(raw: string): string {
 }
 
 /**
- * 正文格式规范化（左对齐风格，P3-6）：
- * ① 逐行去除前导 tab；
+ * 正文格式规范化（左对齐风格，P3-6 + P0-I 增强）：
+ * ① 逐行去除前导 tab 和所有前导空格（粘贴内容靠左对齐）；
  * ② 纯空白行归一为空行；
- * ③ 非空行前导空格保留最多 4 个（超过部分 collapse），避免破坏 Markdown 列表嵌套 / 代码块缩进；
- * ④ 去掉首尾空行；
- * ⑤ 合并连续空行（最多保留 1 个空行 ≈ 2 个 \n）。
+ * ③ 去掉首尾空行；
+ * ④ 合并连续空行（最多保留 1 个空行 ≈ 2 个 \n）。
  */
 export function normalizeBody(body: string): string {
   const lines = body.split(/\r?\n/).map((line) => {
-    const noTab = line.replace(/^\t+/, '')
-    const stripped = noTab.replace(/^ +/, '')
-    if (stripped === '') return '' // 纯空白行 → 空行
-    const lead = noTab.match(/^ */)?.[0] ?? ''
-    const kept = lead.length > 4 ? 4 : lead.length
-    return ' '.repeat(kept) + stripped
+    const stripped = line.replace(/^[\t ]+/, '')
+    return stripped
   })
   let start = 0
   let end = lines.length
