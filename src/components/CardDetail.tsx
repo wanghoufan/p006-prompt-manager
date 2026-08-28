@@ -69,6 +69,9 @@ export function CardDetail(props: CardDetailProps) {
   const sourceUrlInvalid = sourceUrl !== '' && !isValidSourceUrl(sourceUrl)
   const sourceLink = parseSourceLink(sourceUrl)
   const [sourceTitleLoading, setSourceTitleLoading] = useState(false)
+  const [sourceTitleFetchFailedCardId, setSourceTitleFetchFailedCardId] = useState<string | null>(null)
+  const [manualSourceTitle, setManualSourceTitle] = useState('')
+  const sourceTitleFetchFailed = sourceTitleFetchFailedCardId === card.id
 
   // `useEffect` 同步 ref 会晚于紧接着发生的 blur；粘贴后立即 Tab 离开时，
   // 必须先同步写入，才能用刚粘贴的链接请求标题。
@@ -78,6 +81,17 @@ export function CardDetail(props: CardDetailProps) {
     setDraft(next)
   }
 
+  function applyManualSourceTitle() {
+    const link = parseSourceLink(normalizeSourceUrl(draftRef.current.sourceUrl))
+    const title = manualSourceTitle.replace(/[\[\]\r\n]+/g, ' ').replace(/\s+/g, ' ').trim()
+    if (!link || !title) return
+    const formatted = `[${title}](${link.url})`
+    setSourceUrlDraft(formatted)
+    setSourceTitleFetchFailedCardId(null)
+    setManualSourceTitle('')
+    if (cardRef.current?.id === card.id) props.onUpdateSourceUrl(card.id, formatted)
+  }
+
   async function handleSourceUrlBlur() {
     if (notesTimer.current) window.clearTimeout(notesTimer.current)
     const rawSourceUrl = normalizeSourceUrl(draftRef.current.sourceUrl)
@@ -85,18 +99,25 @@ export function CardDetail(props: CardDetailProps) {
     commitSave(true)
     const link = parseSourceLink(rawSourceUrl)
     if (!link || link.title) return
+    const cardId = card.id
 
+    setSourceTitleFetchFailedCardId(null)
+    setManualSourceTitle('')
     setSourceTitleLoading(true)
     try {
       const response = await fetch(`/api/fetch-title?url=${encodeURIComponent(link.url)}`)
       const data = (await response.json()) as { title?: unknown }
       const title = typeof data.title === 'string' ? data.title.replace(/[\[\]\r\n]+/g, ' ').replace(/\s+/g, ' ').trim() : ''
-      if (!response.ok || !title || draftRef.current.sourceUrl !== rawSourceUrl) return
+      if (cardRef.current?.id !== cardId || draftRef.current.sourceUrl !== rawSourceUrl) return
+      if (!response.ok || !title) {
+        setSourceTitleFetchFailedCardId(cardId)
+        return
+      }
       const formatted = `[${title}](${link.url})`
       setSourceUrlDraft(formatted)
       if (cardRef.current?.id === card.id) props.onUpdateSourceUrl(card.id, formatted)
     } catch {
-      // 标题获取失败时已由失焦保存保留原链接。
+      if (cardRef.current?.id === cardId && draftRef.current.sourceUrl === rawSourceUrl) setSourceTitleFetchFailedCardId(cardId)
     } finally {
       setSourceTitleLoading(false)
     }
@@ -544,6 +565,8 @@ export function CardDetail(props: CardDetailProps) {
                     aria-invalid={sourceUrlInvalid}
                     onChange={(e) => {
                       setSourceUrlDraft(e.target.value)
+                      setSourceTitleFetchFailedCardId(null)
+                      setManualSourceTitle('')
                       scheduleNotesSave()
                     }}
                     onBlur={() => void handleSourceUrlBlur()}
@@ -555,6 +578,27 @@ export function CardDetail(props: CardDetailProps) {
                   )}
                 </div>
                 {sourceTitleLoading && <p className="text-[11px] text-muted">正在获取网页标题…</p>}
+                {sourceTitleFetchFailed && sourceLink && !sourceLink.title && (
+                  <div>
+                    <p className="text-[11px] text-rust">无法自动获取标题，请手动输入</p>
+                    <div className="mt-1 flex items-center gap-2">
+                      <input
+                        type="text"
+                        className="field min-w-0 flex-1 text-xs"
+                        value={manualSourceTitle}
+                        placeholder="输入链接标题"
+                        aria-label="手动输入来源链接标题"
+                        onChange={(e) => setManualSourceTitle(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') applyManualSourceTitle()
+                        }}
+                      />
+                      <button type="button" className="btn-ghost shrink-0 text-xs" onClick={applyManualSourceTitle} disabled={!manualSourceTitle.trim()}>
+                        应用
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {sourceUrlInvalid && <p className="text-[11px] text-rust">请输入有效的 http:// 或 https:// 链接</p>}
               </div>
               <div className="space-y-1.5">

@@ -122,6 +122,9 @@ export function PreviewPanel({
   const sourceUrlInvalid = sourceUrl !== '' && !isValidSourceUrl(sourceUrl)
   const sourceLink = parseSourceLink(sourceUrl)
   const [sourceTitleLoading, setSourceTitleLoading] = useState(false)
+  const [sourceTitleFetchFailedCardId, setSourceTitleFetchFailedCardId] = useState<string | null>(null)
+  const [manualSourceTitle, setManualSourceTitle] = useState('')
+  const sourceTitleFetchFailed = sourceTitleFetchFailedCardId === card?.id
 
   // `useEffect` 同步 ref 会晚于紧接着发生的 blur；粘贴后立即 Tab 离开时，
   // 必须先同步写入，才能用刚粘贴的链接请求标题。
@@ -129,6 +132,17 @@ export function PreviewPanel({
     const next = { ...draftRef.current, sourceUrl }
     draftRef.current = next
     setDraft(next)
+  }
+
+  function applyManualSourceTitle() {
+    const link = parseSourceLink(normalizeSourceUrl(draftRef.current.sourceUrl))
+    const title = manualSourceTitle.replace(/[\[\]\r\n]+/g, ' ').replace(/\s+/g, ' ').trim()
+    if (!card || !link || !title) return
+    const formatted = `[${title}](${link.url})`
+    setSourceUrlDraft(formatted)
+    setSourceTitleFetchFailedCardId(null)
+    setManualSourceTitle('')
+    if (cardRef.current?.id === card.id) onUpdateSourceUrl(card.id, formatted)
   }
 
   async function handleSourceUrlBlur() {
@@ -139,18 +153,25 @@ export function PreviewPanel({
     commitSave(true)
     const link = parseSourceLink(rawSourceUrl)
     if (!link || link.title) return
+    const cardId = card.id
 
+    setSourceTitleFetchFailedCardId(null)
+    setManualSourceTitle('')
     setSourceTitleLoading(true)
     try {
       const response = await fetch(`/api/fetch-title?url=${encodeURIComponent(link.url)}`)
       const data = (await response.json()) as { title?: unknown }
       const title = typeof data.title === 'string' ? data.title.replace(/[\[\]\r\n]+/g, ' ').replace(/\s+/g, ' ').trim() : ''
-      if (!response.ok || !title || draftRef.current.sourceUrl !== rawSourceUrl) return
+      if (cardRef.current?.id !== cardId || draftRef.current.sourceUrl !== rawSourceUrl) return
+      if (!response.ok || !title) {
+        setSourceTitleFetchFailedCardId(cardId)
+        return
+      }
       const formatted = `[${title}](${link.url})`
       setSourceUrlDraft(formatted)
       if (cardRef.current?.id === card.id) onUpdateSourceUrl(card.id, formatted)
     } catch {
-      // 标题获取失败时已由失焦保存保留原链接。
+      if (cardRef.current?.id === cardId && draftRef.current.sourceUrl === rawSourceUrl) setSourceTitleFetchFailedCardId(cardId)
     } finally {
       setSourceTitleLoading(false)
     }
@@ -696,6 +717,8 @@ export function PreviewPanel({
                 aria-invalid={sourceUrlInvalid}
                 onChange={(e) => {
                   setSourceUrlDraft(e.target.value)
+                  setSourceTitleFetchFailedCardId(null)
+                  setManualSourceTitle('')
                   scheduleNotesSave()
                 }}
                 onBlur={() => void handleSourceUrlBlur()}
@@ -712,6 +735,27 @@ export function PreviewPanel({
               )}
             </div>
             {sourceTitleLoading && <p className="pt-1 text-[10px] text-muted">正在获取网页标题…</p>}
+            {sourceTitleFetchFailed && sourceLink && !sourceLink.title && (
+              <div className="pt-1">
+                <p className="text-[10px] text-rust">无法自动获取标题，请手动输入</p>
+                <div className="mt-1 flex items-center gap-2">
+                  <input
+                    type="text"
+                    className="field min-w-0 flex-1 py-1 text-[12px]"
+                    value={manualSourceTitle}
+                    placeholder="输入链接标题"
+                    aria-label="手动输入来源链接标题"
+                    onChange={(e) => setManualSourceTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') applyManualSourceTitle()
+                    }}
+                  />
+                  <button type="button" className="btn-ghost shrink-0 text-[10px]" onClick={applyManualSourceTitle} disabled={!manualSourceTitle.trim()}>
+                    应用
+                  </button>
+                </div>
+              </div>
+            )}
             {sourceUrlInvalid && <p className="pt-1 text-[10px] text-rust">请输入有效的 http:// 或 https:// 链接</p>}
             <div className="mt-2">
               <TagEditor
