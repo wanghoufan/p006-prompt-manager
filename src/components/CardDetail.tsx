@@ -70,10 +70,19 @@ export function CardDetail(props: CardDetailProps) {
   const sourceLink = parseSourceLink(sourceUrl)
   const [sourceTitleLoading, setSourceTitleLoading] = useState(false)
 
+  // `useEffect` 同步 ref 会晚于紧接着发生的 blur；粘贴后立即 Tab 离开时，
+  // 必须先同步写入，才能用刚粘贴的链接请求标题。
+  function setSourceUrlDraft(sourceUrl: string) {
+    const next = { ...draftRef.current, sourceUrl }
+    draftRef.current = next
+    setDraft(next)
+  }
+
   async function handleSourceUrlBlur() {
     if (notesTimer.current) window.clearTimeout(notesTimer.current)
-    commitSave(true)
     const rawSourceUrl = normalizeSourceUrl(draftRef.current.sourceUrl)
+    setSourceUrlDraft(rawSourceUrl)
+    commitSave(true)
     const link = parseSourceLink(rawSourceUrl)
     if (!link || link.title) return
 
@@ -84,7 +93,7 @@ export function CardDetail(props: CardDetailProps) {
       const title = typeof data.title === 'string' ? data.title.replace(/[\[\]\r\n]+/g, ' ').replace(/\s+/g, ' ').trim() : ''
       if (!response.ok || !title || draftRef.current.sourceUrl !== rawSourceUrl) return
       const formatted = `[${title}](${link.url})`
-      setDraft((current) => (current.sourceUrl === rawSourceUrl ? { ...current, sourceUrl: formatted } : current))
+      setSourceUrlDraft(formatted)
       if (cardRef.current?.id === card.id) props.onUpdateSourceUrl(card.id, formatted)
     } catch {
       // 标题获取失败时已由失焦保存保留原链接。
@@ -534,7 +543,7 @@ export function CardDetail(props: CardDetailProps) {
                     placeholder="粘贴来源链接"
                     aria-invalid={sourceUrlInvalid}
                     onChange={(e) => {
-                      setDraft((d) => ({ ...d, sourceUrl: e.target.value }))
+                      setSourceUrlDraft(e.target.value)
                       scheduleNotesSave()
                     }}
                     onBlur={() => void handleSourceUrlBlur()}

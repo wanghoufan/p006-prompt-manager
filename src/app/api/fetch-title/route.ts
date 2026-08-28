@@ -21,8 +21,11 @@ function decodeHtml(value: string): string {
 
 function extractTitle(html: string): string | null {
   const match = /<title\b[^>]*>([\s\S]*?)<\/title\s*>/i.exec(html)
-  if (!match) return null
-  const title = decodeHtml(match[1].replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim())
+  const ogTitle = /<meta\b[^>]*(?:property|name)\s*=\s*["']og:title["'][^>]*content\s*=\s*["']([^"']+)["'][^>]*>/i.exec(html)
+    ?? /<meta\b[^>]*content\s*=\s*["']([^"']+)["'][^>]*(?:property|name)\s*=\s*["']og:title["'][^>]*>/i.exec(html)
+  const rawTitle = match?.[1] ?? ogTitle?.[1]
+  if (!rawTitle) return null
+  const title = decodeHtml(rawTitle.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim())
   return title || null
 }
 
@@ -46,7 +49,10 @@ export async function GET(request: NextRequest) {
     const response = await fetch(url, {
       signal: controller.signal,
       redirect: 'follow',
-      headers: { 'User-Agent': 'Prompt-Manager/1.0 (title preview)' },
+      headers: {
+        Accept: 'text/html,application/xhtml+xml',
+        'User-Agent': 'Prompt-Manager/1.0 (title preview)',
+      },
     })
     if (!response.ok) return NextResponse.json({ error: '网页请求失败' }, { status: 502 })
     const html = await response.text()
