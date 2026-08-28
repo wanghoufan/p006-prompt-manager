@@ -379,3 +379,17 @@
 - **P1-1~P1-4 四项打包（文案/草稿/导入/冲突）**（2026-08-28 完成：P1-1 TagPanel 在线/离线文案与服务端共享存储架构一致、P1-2 CardDetail/PreviewPanel 关闭·切换前 `clearTimeout+commitSave` 丢稿闭环、P1-3 TopBar `accept=".json,.md"` 与 Markdown 导出可逆、P1-4 Detail/Preview 统一「跳过冲突 code、其余照存」+ 同一 toast；QA 第十六次 4项 PASS、产品验收 PASS）
 - **P2-10/P2-11 网格直删+批量管理**（2026-08-28 核验既有实现完成：P2-10 CardItem 悬浮胶囊 `text-rust` 删除 + `confirmDelete` 二次确认 + demo 隐藏 + 10s 撤销；P2-11 `bulkIds` Set + checkbox `role="checkbox"` + 顶部操作栏「已选 N 张」+ 打标签/打星/导出/删除/取消；QA 2026-08-28 12项 PASS、产品验收 6 维度 PASS，API 33→32）
 - **P0-A 高影响标签操作的安全闭环**（2026-08-28 完成：影响数展示 `TagPanel` 含子树去重关联数+子标签名 + 四类 CRUD 10s 撤销 `captureTagSnapshot`/`notifyWithUndo` + `validateTagGraph` 五项服务端校验拒绝 + `knownVersion`/`baseVersion` 乐观并发 + `sanitizePromptTags` 自愈 + SSE 回声过滤；真机 vpn 删除→撤销全复原 + curl 7 项校验/冲突拒绝验证；QA 2026-08-28 4项 PASS、产品验收 4 维度 PASS，库 32/12/53/0 悬空 0 重复）
+
+## 最近一次 Product 执行记录（P0-B/P0-C/P0-8/P0-9 验收）
+
+- 时间：2026-08-28（产品验收 — P0-B/P0-C/P0-8/P0-9）
+- 模式：Product Reviewer · 产品验收（代码走查 + 功能验证）
+- 结果：**PASS** — 所有功能验证通过，无新增 P1/P2 阻断项
+- 输入：`docs/qa/BUGS.md` + 代码实现 + 真机验证
+- 体验方式：功能验证 + 代码走查
+- 覆盖维度：
+  1. P0-B 标签合并与批量移除：合并功能、同名重命名合并、批量移除、10标签上限 ✅
+  2. P0-C 可组合标签筛选：OR/AND/NOT组合筛选、包含子标签开关、与全文搜索叠加 ✅
+  3. P0-8 标签体系完善：标签重命名自动修正关联卡片标签 ✅
+  4. P0-9 标签添加交互重构：#标签+回车/空格自动添加 ✅
+- 结论：P0-B/P0-C/P0-8/P0-9 已验证通过，移入「已完成」；无新增 P1，阻断项：无
