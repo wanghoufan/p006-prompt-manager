@@ -199,3 +199,8 @@ UI 状态 = 内存状态 = 持久化数据状态
 - **P0 必真机**：`P0 标签系统` 等核心功能（重命名/父重命名/移动/删除等）必须用 **Vision + Computer Use** 真机操作 `http://localhost:3000`，截图存 `scratch/qa-real-device/*.png` 为据；`tsc/lint/curl` 仅作门禁，不算 GUI 通过
 - 任何 `P0 可复现` 未经真机逐项点过（选中→重命名→输入→确认→观察树/芯片/子路径），不得判 `QA PASS`，不得进入 `neat-freak` 收尾
 - 详见 Skill `qa-real-device`（`/.opencode/skills/qa-real-device/SKILL.md`）
+
+## 验证工具选择规则（操作级约束）
+
+1. **普通网页功能优先使用 Playwright 或 Orca Built-in Browser**：点击、输入、表单提交、页面导航、DOM 状态检查、网络请求拦截等标准 Web 操作，优先用 Playwright 或 Orca 内置浏览器验证，效率更高且可自动化
+2. **仅以下场景使用 Computer Use**：真实桌面交互、系统快捷键、权限弹窗、剪贴板操作、跨应用拖拽、OS 级通知、多窗口焦点切换等 Playwright 无法覆盖的场景
