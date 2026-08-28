@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Card, Version } from '@/lib/types'
-import { cardDraftChanges, cardDraftFrom, normalizeCode, parseTags } from '@/lib/cards'
+import { cardDraftChanges, cardDraftFrom, normalizeBody, normalizeCode, parseTags } from '@/lib/cards'
 import type { CardDraft } from '@/lib/cards'
 import { Stars } from '@/components/Stars'
 import { Spinner } from '@/components/Spinner'
@@ -17,6 +17,8 @@ interface PreviewPanelProps {
   /** 全部卡片的调取码（不含当前卡片），用于冲突检测 */
   allCodes: string[]
   customThinkingPrompt: string
+  autoFormatBody: boolean
+  bodyAlignment: 'left' | 'center' | 'right'
   defaultWidth?: number
   onCopy: () => void
   onRate: (rating: number) => void
@@ -58,6 +60,8 @@ export function PreviewPanel({
   existingTags,
   allCodes,
   customThinkingPrompt,
+  autoFormatBody,
+  bodyAlignment,
   defaultWidth = 320,
   onCopy,
   onRate,
@@ -89,6 +93,7 @@ export function PreviewPanel({
   // 用于解决「点击保存按钮时 textarea 先 blur 自动保存正文，导致手动保存无 body 变更而不建版」的问题。
   const bodyDirtyRef = useRef(false)
   const [summaryLoading, setSummaryLoading] = useState(false)
+  const [formatLoading, setFormatLoading] = useState(false)
   const [metaLoading, setMetaLoading] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
   const [showVersions, setShowVersions] = useState(false)
@@ -100,6 +105,8 @@ export function PreviewPanel({
   // RISK-3：AI 请求取消控制器（新请求前 abort 上一个，卸载时 abort）
   const metaAbortRef = useRef<AbortController | null>(null)
   const summaryAbortRef = useRef<AbortController | null>(null)
+  const formatAbortRef = useRef<AbortController | null>(null)
+  const bodyTextareaRef = useRef<HTMLTextAreaElement>(null)
   // P3-1：调取码非法字符被自动过滤后的即时提示（2.5s 自动消失）
   const [codeFiltered, setCodeFiltered] = useState(false)
   const codeTipTimer = useRef<number | null>(null)
@@ -220,6 +227,7 @@ export function PreviewPanel({
       if (codeTipTimer.current) window.clearTimeout(codeTipTimer.current)
       metaAbortRef.current?.abort()
       summaryAbortRef.current?.abort()
+      formatAbortRef.current?.abort()
       saveThrough(true, true)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -305,6 +313,46 @@ export function PreviewPanel({
       notify(`总结失败：${e instanceof Error ? e.message : '未知错误'}`)
     } finally {
       if (!ac.signal.aborted && summaryAbortRef.current === ac) setSummaryLoading(false)
+    }
+  }
+
+  /** P0-I：AI 整理后立即落库；自动整理不建版本，手动整理保留一条可回滚快照。 */
+  async function runBodyFormat(source: string, automatic: boolean) {
+    const c = cardRef.current
+    if (!c) return
+    if (!source.trim()) {
+      if (!automatic) notify('正文为空，无法整理')
+      return
+    }
+    formatAbortRef.current?.abort()
+    const ac = new AbortController()
+    formatAbortRef.current = ac
+    setFormatLoading(true)
+    try {
+      const res = await fetch('/api/ai/format-body', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: source, alignment: bodyAlignment }),
+        signal: ac.signal,
+      })
+      const data: { body?: string; error?: string } = await res.json()
+      if (ac.signal.aborted) return
+      if (!res.ok) throw new Error(data.error || '格式整理失败')
+      // 自动整理期间用户继续编辑时，不能以旧响应覆盖新输入。
+      if (bodyTextareaRef.current?.value !== source) return
+      const formatted = typeof data.body === 'string' ? normalizeBody(data.body) : ''
+      if (!formatted) throw new Error('AI 未返回可用正文')
+      setDraft((d) => ({ ...d, body: formatted }))
+      draftRef.current = { ...draftRef.current, body: formatted }
+      bodyDirtyRef.current = false
+      onSaveBody(c.id, formatted, !automatic)
+      setSavedAt(Date.now())
+      notify(automatic ? '已自动整理粘贴内容' : '正文格式已整理并保存')
+    } catch (e) {
+      if (ac.signal.aborted) return
+      notify(`${automatic ? '自动整理' : '格式整理'}失败：${e instanceof Error ? e.message : '未知错误'}`)
+    } finally {
+      if (!ac.signal.aborted && formatAbortRef.current === ac) setFormatLoading(false)
     }
   }
 
@@ -456,12 +504,12 @@ export function PreviewPanel({
         </>
       ) : (
         <>
-          <header className="border-b border-line px-3 py-1">
+          <header className="border-b border-line px-4 py-3">
             <div className="flex items-center gap-2">
               <div className="relative min-w-0 flex-1">
                 <input
                   id="preview-title"
-                  className="field w-full border-transparent bg-transparent px-0 py-0.5 pr-8 font-serif text-sm text-paper focus:border-transparent"
+                  className="field w-full border-transparent bg-transparent px-0 py-0.5 pr-8 font-serif text-xl font-semibold text-paper focus:border-transparent"
                   value={draft.title}
                   maxLength={20}
                   onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
@@ -472,6 +520,19 @@ export function PreviewPanel({
                   {draft.title.length}/20
                 </span>
               </div>
+              <div className="flex w-28 shrink-0 items-center gap-1">
+                <span className="font-mono text-xs text-gold-bright">@</span>
+                <input
+                  id="preview-code"
+                  className={`field min-w-0 flex-1 px-1.5 py-1 font-mono text-[11px] ${codeConflict ? 'border-rust/60 focus:border-rust' : ''}`}
+                  value={draft.code}
+                  maxLength={12}
+                  onChange={(e) => handleCodeInput(e.target.value)}
+                  onBlur={() => commitSave(true)}
+                  placeholder="调取码"
+                  aria-label="调取码"
+                />
+              </div>
               <button
                 type="button"
                 className="btn-ghost shrink-0 text-[10px]"
@@ -480,37 +541,6 @@ export function PreviewPanel({
               >
                 {metaLoading ? '生成中…' : '⟳ 生成'}
               </button>
-            </div>
-            <div className="mt-1 space-y-1.5">
-              <div className="text-center">
-                <span className="font-serif text-sm font-semibold text-paper">添加标签</span>
-              </div>
-              <TagEditor
-                value={draft.tagsText}
-                existingTags={existingTags}
-                inputId="preview-tags"
-                onChange={(nextTags) => {
-                  setDraft((d) => ({ ...d, tagsText: nextTags.join('、') }))
-                  onUpdateMeta(card.id, draftRef.current.title.trim() || card.title, nextTags)
-                }}
-              />
-            </div>
-            <div className="mt-1 flex items-center gap-1">
-              <span className="shrink-0 font-mono text-xs text-gold-bright">@</span>
-              <div className="relative flex-1">
-                <input
-                  id="preview-code"
-                  className={`field w-full pr-6 font-mono text-[12px] ${codeConflict ? 'border-rust/60 focus:border-rust' : ''}`}
-                  value={draft.code}
-                  maxLength={12}
-                  onChange={(e) => handleCodeInput(e.target.value)}
-                  onBlur={() => commitSave(true)}
-                  placeholder="调取码"
-                />
-                <span className="pointer-events-none absolute bottom-0 right-1 font-mono text-[9px] text-muted">
-                  {draft.code.length}/12
-                </span>
-              </div>
             </div>
             {codeConflict && (
               <p className="pt-1 text-[10px] text-rust">该调取码已被其他卡片使用，请更换</p>
@@ -522,7 +552,7 @@ export function PreviewPanel({
               id="preview-notes"
               rows={2}
               placeholder="备注（自填 · 何时用/注意事项，失焦自动保存）"
-              className="field mt-1.5 resize-y text-[12px] leading-relaxed"
+              className="field mt-2 resize-y text-[12px] leading-relaxed"
               value={draft.notes}
               onChange={(e) => {
                 setDraft((d) => ({ ...d, notes: e.target.value }))
@@ -534,17 +564,35 @@ export function PreviewPanel({
                 commitSave(true)
               }}
             />
+            <div className="mt-2">
+              <TagEditor
+                value={draft.tagsText}
+                existingTags={existingTags}
+                inputId="preview-tags"
+                onChange={(nextTags) => {
+                  setDraft((d) => ({ ...d, tagsText: nextTags.join('、') }))
+                  onUpdateMeta(card.id, draftRef.current.title.trim() || card.title, nextTags)
+                }}
+              />
+            </div>
           </header>
-          <div className="flex min-h-0 flex-1 flex-col border-t border-line px-3 py-2">
+          <div className="flex min-h-0 flex-[3] flex-col border-t border-line px-4 py-3">
             <textarea
               id="preview-body"
+              ref={bodyTextareaRef}
               className="field mt-0 min-h-0 flex-1 resize-none font-mono text-[15px] leading-relaxed"
+              style={{ textAlign: bodyAlignment }}
               value={draft.body}
               onChange={(e) => {
                 setDraft((d) => ({ ...d, body: e.target.value }))
                 bodyDirtyRef.current = true
               }}
               onBlur={() => commitSave(true)}
+              onPaste={(e) => {
+                if (!autoFormatBody) return
+                const textarea = e.currentTarget
+                window.requestAnimationFrame(() => void runBodyFormat(textarea.value, true))
+              }}
               onKeyDown={(e) => {
                 if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
                   e.preventDefault()
@@ -573,6 +621,16 @@ export function PreviewPanel({
             >
               版本 {card.versions.length}
               <span className={`text-[10px] transition-transform ${showVersions ? 'rotate-90' : ''}`}>▸</span>
+            </button>
+            <div className="w-px bg-line" />
+            <button
+              type="button"
+              className="flex flex-1 items-center justify-center gap-1 py-1.5 text-muted transition-colors hover:text-paper disabled:cursor-wait disabled:opacity-60"
+              onClick={() => void runBodyFormat(draftRef.current.body, false)}
+              disabled={formatLoading}
+              title={`按设置的${bodyAlignment === 'left' ? '左对齐' : bodyAlignment === 'center' ? '居中' : '右对齐'}整理正文`}
+            >
+              {formatLoading ? '整理中…' : '✦ 格式整理'}
             </button>
           </div>
           {showSummary && (

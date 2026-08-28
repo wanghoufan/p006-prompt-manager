@@ -20,6 +20,7 @@ import {
   createTag,
   renameTag,
   moveTag,
+  reorderTag,
   deleteTag,
   mergeTags,
   setCardTags,
@@ -57,6 +58,8 @@ export default function Home() {
     thinkingSummaryPrompt: '',
     confirmDelete: true,
     theme: 'system',
+    autoFormatBody: false,
+    bodyAlignment: 'left',
   }))
   const [hydrated, setHydrated] = useState(false)
   const [view, setView] = useState<ViewMode>('mine')
@@ -67,7 +70,6 @@ export default function Home() {
     untaggedOnly: false,
     includeDescendants: true,
   })
-  const [tagFilterMode, setTagFilterMode] = useState<TagFilterMode>('any')
   const [tags, setTags] = useState<Tag[]>([])
   const [promptTags, setPromptTags] = useState<PromptTag[]>([])
   const [sortMode, setSortMode] = useState<SortMode>('updated')
@@ -523,18 +525,17 @@ export default function Home() {
     clearBulk()
   }
 
-  function handleToggleTagFilter(tagId: string, mode: TagFilterMode) {
+  /** P0-D：标签栏默认是单选切换；再次点击当前标签才取消筛选。 */
+  function handleSelectTagFilter(tagId: string) {
     setTagFilters((prev) => {
-      const wasSelectedInMode = prev[mode].includes(tagId)
-      const next: TagFilters = {
+      const isCurrent = prev.any.length === 1 && prev.any[0] === tagId && prev.all.length === 0 && prev.none.length === 0
+      return {
         ...prev,
-        any: prev.any.filter((id) => id !== tagId),
-        all: prev.all.filter((id) => id !== tagId),
-        none: prev.none.filter((id) => id !== tagId),
+        any: isCurrent ? [] : [tagId],
+        all: [],
+        none: [],
         untaggedOnly: false,
       }
-      if (!wasSelectedInMode) next[mode] = [...next[mode], tagId]
-      return next
     })
     setSelectedId(null)
     clearBulk()
@@ -705,6 +706,24 @@ export default function Home() {
     const snapshot = captureTagSnapshot()
     setTags(moveTag(tags, id, newParentId))
     notifyWithUndo('标签已移动', () => restoreTagSnapshot(snapshot))
+    return { ok: true }
+  }
+
+  /** P0-E：拖到标签上方/下方后同级重排；必要时同时切换父级。 */
+  function handleReorderTag(id: string, targetId: string, position: 'before' | 'after'): { ok: boolean; error?: string } {
+    const source = tags.find((t) => t.id === id)
+    const target = tags.find((t) => t.id === targetId)
+    if (!source || !target) return { ok: false, error: '标签不存在' }
+    if (source.id === target.id) return { ok: true }
+    if (!assertNoCycle(tags, id, target.parent_id)) {
+      return { ok: false, error: '不能移动到自身或自己的子标签下（会形成循环）' }
+    }
+    if (!isNameUnique(tags, target.parent_id, source.name, source.id)) {
+      return { ok: false, error: `目标位置同级下已存在标签「${source.name}」` }
+    }
+    const snapshot = captureTagSnapshot()
+    setTags(reorderTag(tags, id, targetId, position))
+    notifyWithUndo('标签顺序已更新', () => restoreTagSnapshot(snapshot))
     return { ok: true }
   }
 
@@ -1020,9 +1039,7 @@ export default function Home() {
           total={sourceCards.length}
           untaggedCount={untaggedCount}
           filters={effectiveTagFilters}
-          filterMode={tagFilterMode}
-          onFilterModeChange={setTagFilterMode}
-          onToggleFilter={handleToggleTagFilter}
+          onSelectTag={handleSelectTagFilter}
           onToggleUntagged={handleToggleUntagged}
           onIncludeDescendantsChange={handleIncludeDescendantsChange}
           onResetFilters={resetTagFilters}
@@ -1030,6 +1047,7 @@ export default function Home() {
           onCreateTag={isDemoView ? undefined : handleCreateTag}
           onRenameTag={isDemoView ? undefined : handleRenameTag}
           onMoveTag={isDemoView ? undefined : handleMoveTag}
+          onReorderTag={isDemoView ? undefined : handleReorderTag}
           onDeleteTag={isDemoView ? undefined : handleDeleteTag}
           onMergeTag={isDemoView ? undefined : handleMergeTag}
         />
@@ -1168,6 +1186,8 @@ export default function Home() {
             existingTags={existingTags}
             allCodes={allCodes}
             customThinkingPrompt={settings.thinkingSummaryPrompt}
+            autoFormatBody={settings.autoFormatBody}
+            bodyAlignment={settings.bodyAlignment}
             onCopy={() => handleCopy(previewCard?.id ?? '')}
             onRate={(r) => handleRate(previewCard?.id ?? '', r)}
             onSaveBody={handleSaveBody}

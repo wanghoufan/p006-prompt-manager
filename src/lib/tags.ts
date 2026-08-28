@@ -246,6 +246,27 @@ export function moveTag(tags: Tag[], tagId: string, newParentId: string | null):
 }
 
 /**
+ * 将标签插入目标标签前/后，并重新编号受影响同级的 sort_order。
+ * 调用方负责父级存在、重名和环路校验；该函数只处理稳定排序。
+ */
+export function reorderTag(tags: Tag[], sourceId: string, targetId: string, position: 'before' | 'after'): Tag[] {
+  const source = tags.find((t) => t.id === sourceId)
+  const target = tags.find((t) => t.id === targetId)
+  if (!source || !target || sourceId === targetId) return tags
+  const parentId = target.parent_id
+  const siblings = childrenOf(tags, parentId).filter((t) => t.id !== sourceId)
+  const targetIndex = siblings.findIndex((t) => t.id === targetId)
+  if (targetIndex < 0) return tags
+  siblings.splice(targetIndex + (position === 'after' ? 1 : 0), 0, { ...source, parent_id: parentId })
+  const orderById = new Map(siblings.map((t, index) => [t.id, index]))
+  const now = nowIso()
+  return tags.map((t) => {
+    const order = orderById.get(t.id)
+    return order === undefined ? t : { ...t, parent_id: parentId, sort_order: order, updated_at: now }
+  })
+}
+
+/**
  * 删除标签（交接 §40）：先级联删关系，再删实体，绝不删 Prompt。
  * @param withDescendants 是否连带删除整棵子树（否则仅删自身，子标签上提一级，交接 §12 模式 A/B）
  * 返回新的 tags 与 promptTags（二者原子替换，由调用方一并落盘）。

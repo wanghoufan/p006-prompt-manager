@@ -1,0 +1,13 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "prompt-manager": {
+      "type": "local",
+      "command": [
+        "/Users/zzymima0000/.nvm/versions/node/v24.19.0/bin/node",
+        "/Users/zzymima0000/Developer/coding/1.Active/ing丨0813提示词管理器 mac gpt桌面 v1.0/mcp/prompt-server/dist/index.js"
+      ],
+      "enabled": true
+    }
+  }
+}
