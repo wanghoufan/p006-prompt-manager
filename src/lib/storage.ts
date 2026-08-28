@@ -35,6 +35,7 @@ export function isCard(v: unknown): v is Card {
     typeof x.copyCount === 'number' &&
     (x.thinkingSummary === null || isString(x.thinkingSummary)) &&
     (x.notes === undefined || isString(x.notes)) &&
+    (x.sourceUrl === undefined || isString(x.sourceUrl)) &&
     Array.isArray(x.versions) &&
     x.versions.every(isVersion) &&
     isString(x.createdAt) &&
@@ -56,15 +57,21 @@ function describeCardFailure(v: unknown): string {
   if (!(x.code === undefined || x.code === null || isString(x.code))) bad.push('code')
   if (!(x.thinkingSummary === null || isString(x.thinkingSummary))) bad.push('thinkingSummary')
   if (!(x.notes === undefined || isString(x.notes))) bad.push('notes')
+  if (!(x.sourceUrl === undefined || isString(x.sourceUrl))) bad.push('sourceUrl')
   if (!Array.isArray(x.versions) || !x.versions.every(isVersion)) bad.push('versions')
   if (!isString(x.createdAt)) bad.push('createdAt')
   if (!isString(x.updatedAt)) bad.push('updatedAt')
   return bad.length ? `字段缺失/类型错误：${bad.join('、')}` : '结构不合法'
 }
 
-/** 归一化卡片：老数据缺 code/notes 字段时补默认值 */
+/** 归一化卡片：老数据缺可选字段时补默认值 */
 function normalizeCard(c: Card): Card {
-  return { ...c, code: c.code ?? null, notes: typeof c.notes === 'string' ? c.notes : '' }
+  return {
+    ...c,
+    code: c.code ?? null,
+    notes: typeof c.notes === 'string' ? c.notes : '',
+    sourceUrl: typeof c.sourceUrl === 'string' ? c.sourceUrl : '',
+  }
 }
 
 export function loadCards(): Card[] {
@@ -196,6 +203,7 @@ function parseMarkdownImport(raw: string): ImportResult | null {
     updatedAt: string
     summary: string | null
     notes: string
+    sourceUrl: string
     body: string[]
   }
 
@@ -224,6 +232,7 @@ function parseMarkdownImport(raw: string): ImportResult | null {
       copyCount: Math.max(0, current.copyCount),
       thinkingSummary: current.summary ? current.summary.trim() : null,
       notes: current.notes,
+      sourceUrl: current.sourceUrl,
       versions: [],
       createdAt: current.createdAt,
       updatedAt: current.updatedAt,
@@ -246,6 +255,7 @@ function parseMarkdownImport(raw: string): ImportResult | null {
         updatedAt: '',
         summary: null,
         notes: '',
+        sourceUrl: '',
         body: [],
       }
       section = 'meta'
@@ -283,6 +293,8 @@ function parseMarkdownImport(raw: string): ImportResult | null {
         current.tags = value.split(/[,，、]+/).map((s) => s.trim()).filter(Boolean).slice(0, 10)
       } else if (key === '调取码') {
         current.code = value && value !== '（未设置）' ? value.trim().toLowerCase() : null
+      } else if (key === '来源链接') {
+        current.sourceUrl = value && value !== '（未设置）' ? value : ''
       } else if (key === '评分') {
         const n = Number(value)
         if (!Number.isNaN(n)) current.rating = n
@@ -310,6 +322,7 @@ export function buildMarkdownExport(cards: Card[]): string {
     lines.push(`## ${i + 1}. ${c.title}`, '')
     lines.push(`- 标签：${c.tags.join('、') || '（无）'}`)
     lines.push(`- 调取码：${c.code ?? '（未设置）'}`)
+    lines.push(`- 来源链接：${c.sourceUrl || '（未设置）'}`)
     lines.push(`- 评分：${c.rating}`)
     lines.push(`- 复制次数：${c.copyCount}`)
     lines.push(`- 创建时间：${c.createdAt}`)

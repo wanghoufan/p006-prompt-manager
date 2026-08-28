@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Card, Version } from '@/lib/types'
-import { cardDraftChanges, cardDraftFrom, normalizeBody, normalizeCode, parseTags } from '@/lib/cards'
+import { cardDraftChanges, cardDraftFrom, isValidSourceUrl, normalizeBody, normalizeCode, normalizeSourceUrl, parseTags } from '@/lib/cards'
 import { Stars } from '@/components/Stars'
 import { Spinner } from '@/components/Spinner'
 import { TagEditor } from '@/components/TagEditor'
@@ -22,6 +22,7 @@ interface CardDetailProps {
   onUpdateMeta: (id: string, title: string, tags: string[]) => void
   onUpdateCode: (id: string, code: string | null) => void
   onUpdateNotes: (id: string, notes: string) => void
+  onUpdateSourceUrl: (id: string, sourceUrl: string) => void
   onRate: (id: string, rating: number) => void
   onCopy: (id: string) => void
   onResetCopies: (id: string) => void
@@ -58,10 +59,25 @@ export function CardDetail(props: CardDetailProps) {
   const metaAbortRef = useRef<AbortController | null>(null)
   const summaryAbortRef = useRef<AbortController | null>(null)
   const formatAbortRef = useRef<AbortController | null>(null)
+  const notesTextareaRef = useRef<HTMLTextAreaElement>(null)
   // P3-1：调取码非法字符被自动过滤后的即时提示（2.5s 自动消失）
   const [codeFiltered, setCodeFiltered] = useState(false)
   const codeTipTimer = useRef<number | null>(null)
   useModalFocus(panelRef, true)
+
+  const sourceUrl = normalizeSourceUrl(draft.sourceUrl)
+  const sourceUrlInvalid = sourceUrl !== '' && !isValidSourceUrl(sourceUrl)
+
+  function resizeNotesTextarea(textarea = notesTextareaRef.current) {
+    if (!textarea) return
+    textarea.style.height = 'auto'
+    textarea.style.height = `${textarea.scrollHeight}px`
+  }
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => resizeNotesTextarea())
+    return () => window.cancelAnimationFrame(frame)
+  }, [draft.notes])
 
   const codeConflict = useMemo(() => {
     const c = normalizeCode(draft.code)
@@ -107,9 +123,25 @@ export function CardDetail(props: CardDetailProps) {
       changes.ratingChanged
     const code = normalizeCode(d.code)
     const conflict = code !== '' && props.allCodes.includes(code) && c.code !== code
+    const nextSourceUrl = normalizeSourceUrl(d.sourceUrl)
+    const invalidSourceUrl = nextSourceUrl !== '' && !isValidSourceUrl(nextSourceUrl)
     // 手动保存补建版：正文刚被失焦自动保存过（anyChanged 已为 false），
     // 但用户主动点「保存」，仍应为当前正文生成版本快照
     const needManualVersion = !silent && !flushOnly && bodyDirtyRef.current && !changes.bodyChanged && d.body === c.body
+    const onlyInvalidSourceUrl =
+      invalidSourceUrl &&
+      changes.sourceUrlChanged &&
+      !changes.bodyChanged &&
+      !changes.titleChanged &&
+      !changes.tagsChanged &&
+      !changes.codeChanged &&
+      !changes.notesChanged &&
+      !changes.ratingChanged &&
+      !needManualVersion
+    if (onlyInvalidSourceUrl) {
+      props.notify('来源链接格式不正确，请填写 http:// 或 https:// 开头的链接')
+      return
+    }
     if (!changes.anyChanged && !needManualVersion) {
       if (!silent && !flushOnly) props.notify('没有需要保存的修改')
       return
@@ -128,11 +160,14 @@ export function CardDetail(props: CardDetailProps) {
     // 调取码冲突时跳过该字段，其余字段照常保存（与 PreviewPanel 语义对齐）
     if (changes.codeChanged && !conflict) props.onUpdateCode(c.id, code || null)
     if (changes.notesChanged) props.onUpdateNotes(c.id, d.notes)
+    if (changes.sourceUrlChanged && !invalidSourceUrl) props.onUpdateSourceUrl(c.id, nextSourceUrl)
     if (changes.ratingChanged) props.onRate(c.id, d.rating)
     if (flushOnly) return
     setSavedAt(Date.now())
     // 静默保存遇冲突也要给出可见提示（code 字段被跳过，其余字段已保存）
-    if (conflict && changes.codeChanged) {
+    if (invalidSourceUrl && changes.sourceUrlChanged) {
+      props.notify('来源链接格式不正确，请填写 http:// 或 https:// 开头的链接')
+    } else if (conflict && changes.codeChanged) {
       props.notify('调取码与其他卡片冲突，其余修改已保存，请更换调取码后重试')
     } else if (!silent) {
       props.notify(conflict && !nonCodeChanged ? '调取码与其他卡片冲突，请更换后再保存' : '已保存')
@@ -352,6 +387,19 @@ export function CardDetail(props: CardDetailProps) {
                   </p>
                 </div>
               )}
+              {card.sourceUrl && isValidSourceUrl(card.sourceUrl) && (
+                <div className="space-y-1.5">
+                  <p className="text-xs text-muted">来源链接</p>
+                  <a
+                    href={card.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block truncate rounded-md border border-line bg-ink-850 px-3 py-2.5 text-sm text-gold-bright hover:underline"
+                  >
+                    打开来源网站
+                  </a>
+                </div>
+              )}
               <div className="space-y-1.5">
                 <p className="text-xs text-muted">正文</p>
                 <div className="rounded-md border border-line bg-ink-850 px-3 py-2.5 text-sm leading-relaxed whitespace-pre-wrap text-paper-dim">
@@ -429,16 +477,18 @@ export function CardDetail(props: CardDetailProps) {
               </div>
               <div className="space-y-1.5">
                 <label htmlFor="detail-notes" className="text-xs text-muted">
-                  备注（自填 · 何时用 / 注意事项，不超过 6 行高度；可拖动加高）
+                  备注（自填 · 何时用 / 注意事项，随内容自动扩展高度）
                 </label>
                 <textarea
                   id="detail-notes"
-                  rows={2}
+                  ref={notesTextareaRef}
+                  rows={1}
                   placeholder="例如：适用于 X 场景；输入前请先 Y（失焦自动保存）"
-                  className="field resize-y text-xs leading-relaxed"
+                  className="field resize-none overflow-hidden text-xs leading-relaxed"
                   value={draft.notes}
                   onChange={(e) => {
                     setDraft((d) => ({ ...d, notes: e.target.value }))
+                    resizeNotesTextarea(e.currentTarget)
                     scheduleNotesSave()
                   }}
                   onBlur={() => {
@@ -447,6 +497,33 @@ export function CardDetail(props: CardDetailProps) {
                     commitSave(true)
                   }}
                 />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="detail-source-url" className="text-xs text-muted">来源链接</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="detail-source-url"
+                    type="url"
+                    className={`field min-w-0 flex-1 text-xs ${sourceUrlInvalid ? 'border-rust/60 focus:border-rust' : ''}`}
+                    value={draft.sourceUrl}
+                    placeholder="粘贴来源链接"
+                    aria-invalid={sourceUrlInvalid}
+                    onChange={(e) => {
+                      setDraft((d) => ({ ...d, sourceUrl: e.target.value }))
+                      scheduleNotesSave()
+                    }}
+                    onBlur={() => {
+                      if (notesTimer.current) window.clearTimeout(notesTimer.current)
+                      commitSave(true)
+                    }}
+                  />
+                  {sourceUrl && !sourceUrlInvalid && (
+                    <a href={sourceUrl} target="_blank" rel="noreferrer" className="btn-ghost shrink-0 text-xs">
+                      打开
+                    </a>
+                  )}
+                </div>
+                {sourceUrlInvalid && <p className="text-[11px] text-rust">请输入有效的 http:// 或 https:// 链接</p>}
               </div>
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between gap-2">

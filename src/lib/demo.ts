@@ -20,6 +20,7 @@ export const DEMO_CARDS: Card[] = [
     thinkingSummary:
       '该提示词采用「专家角色 + 多维审查清单 + 输出约束」的框架：先以资深工程师身份建立权威性，再用三个编号问题锚定审查维度（性能、可读性、优化建议），最后约束输出格式为 markdown 并明确回答顺序。值得借鉴的是用「先总评再逐条」的结构控制回答节奏，让审查结论可执行、可对照。',
     notes: '在提 PR 前自查时使用；可直接把 diff 全量贴进去。结论优先用来排「必修」与「建议」，不一定要逐条采纳。',
+    sourceUrl: '',
     versions: [
       { id: 'demo-001-v1', body: '你是一名资深前端工程师，请审查下面这段代码，指出问题并给出优化建议。', createdAt: iso(18) },
       { id: 'demo-001-v2', body: '你是一名资深前端工程师，请审查下面这段代码：\n1. 指出性能问题\n2. 指出可读性问题\n3. 给出优化建议', createdAt: iso(9) },
@@ -42,6 +43,7 @@ export const DEMO_CARDS: Card[] = [
     thinkingSummary:
       '采用角色扮演框架，将抽象的产品想法投射到资深产品经理的职责视角，通过三连问（用户、方案、MVP）把开放性讨论收敛为结构化输出。亮点是「先给结论再展开」，以及把验收标准显式化，适合任何需要把模糊需求落地的场景。',
     notes: '适合在脑子只有一个朦胧想法、需要快速形成初步方案时使用。如果你已经有详细 PRD，直接给需求文档比用这条更高效。',
+    sourceUrl: '',
     versions: [],
     createdAt: iso(19),
     updatedAt: iso(4),
@@ -60,6 +62,7 @@ export const DEMO_CARDS: Card[] = [
     copyCount: 30,
     thinkingSummary: null,
     notes: '对长文档效果最好，200 字以内短文直接让 AI「一句话概括」即可，不要套这条容易过度输出。',
+    sourceUrl: '',
     versions: [],
     createdAt: iso(16),
     updatedAt: iso(5, 6),
@@ -79,6 +82,7 @@ export const DEMO_CARDS: Card[] = [
     thinkingSummary:
       '使用「双版本翻译 + 歧义标注」的结构：直译保证忠实、意译保证自然，两者对照让用户能判断语义取舍；要求标注歧义表述则把翻译问题显式化。值得借鉴的是在输出中加入元层反思（指出原文问题），提升了提示词的工具属性。',
     notes: '若原文是合同 / 法务文本，建议你再加一句「保留条款编号与列举项」。本条默认面向通用商务写作。',
+    sourceUrl: '',
     versions: [
       { id: 'demo-004-v1', body: '请将下面的中文翻译成英文，要求专业、自然。', createdAt: iso(11) },
     ],
@@ -99,6 +103,7 @@ export const DEMO_CARDS: Card[] = [
     copyCount: 25,
     thinkingSummary: null,
     notes: '改用「3 道题」即可控制节奏；如果想要 5 道题，直接在末尾追加一句「再来 2 道延伸题」。',
+    sourceUrl: '',
     versions: [],
     createdAt: iso(14),
     updatedAt: iso(7, 4),
@@ -117,6 +122,7 @@ export const DEMO_CARDS: Card[] = [
     copyCount: 7,
     thinkingSummary: null,
     notes: '如果你的问题本身就一句话，先自己补 2~3 条子问题再用本条更稳；不要把整段乱糟糟的吐槽直接抛进来。',
+    sourceUrl: '',
     versions: [],
     createdAt: iso(12),
     updatedAt: iso(8),
@@ -136,6 +142,7 @@ export const DEMO_CARDS: Card[] = [
     thinkingSummary:
       '该提示词是「元提示词」：让 AI 扮演提示词工程专家，对自己的另一条提示词进行诊断。通过编号问题强制输出结构化分析（问题、优化版、原因），把修改理由显式化，便于用户理解与复用；前后版本对照的结构是值得借鉴的核心技巧。',
     notes: '适合对已有提示词做「体检」。新建提示词前先用「任务 → 角色 → 约束」三段法手写一版，比一开始就用本条更省时间。',
+    sourceUrl: '',
     versions: [
       { id: 'demo-007-v1', body: '请帮我改进下面这条提示词，让它效果更好。', createdAt: iso(10) },
     ],
@@ -156,6 +163,7 @@ export const DEMO_CARDS: Card[] = [
     copyCount: 4,
     thinkingSummary: null,
     notes: '仅适用于纯函数（含 class 静态方法）。对于依赖全局状态、副作用重的函数，先 mock 再测，别直接套本条。',
+    sourceUrl: '',
     versions: [],
     createdAt: iso(11),
     updatedAt: iso(9, 2),
@@ -174,6 +182,7 @@ export const DEMO_CARDS: Card[] = [
     copyCount: 1,
     thinkingSummary: null,
     notes: '把「已经熟悉 JavaScript 基础」改成你当前的实际水平会让计划更贴脸；本条对完全 TS 新手偏激进。',
+    sourceUrl: '',
     versions: [],
     createdAt: iso(9),
     updatedAt: iso(9),
@@ -192,6 +201,7 @@ export const DEMO_CARDS: Card[] = [
     copyCount: 9,
     thinkingSummary: null,
     notes: '贴 SQL 之前先把表结构 / 索引同步贴进去；如果只能贴一条 SQL，明确告诉 AI「数据量约 X 行」。',
+    sourceUrl: '',
     versions: [],
     createdAt: iso(8),
     updatedAt: iso(2, 8),
@@ -210,6 +220,7 @@ export const DEMO_CARDS: Card[] = [
     copyCount: 2,
     thinkingSummary: null,
     notes: '先把一周的会议纪要 / 任务流水贴到「以下是本周记录」前面，再让 AI 出周报；空贴会让模型自己编。',
+    sourceUrl: '',
     versions: [],
     createdAt: iso(6),
     updatedAt: iso(1, 5),
@@ -228,6 +239,7 @@ export const DEMO_CARDS: Card[] = [
     copyCount: 0,
     thinkingSummary: null,
     notes: '若已知目标字段类型，在备注里加一句「输出字段类型严格保持 string / number / date」会更稳。',
+    sourceUrl: '',
     versions: [],
     createdAt: iso(5),
     updatedAt: iso(5),

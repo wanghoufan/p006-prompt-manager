@@ -16,6 +16,8 @@ export interface Card {
   thinkingSummary: string | null
   /** 用户自填的备注：何时用、注意事项等。空串视为未填写。 */
   notes: string
+  /** 原始提示词/文章的来源链接。空串视为未填写。 */
+  sourceUrl: string
   versions: Version[]
   createdAt: string
   updatedAt: string

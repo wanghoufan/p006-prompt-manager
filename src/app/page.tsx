@@ -618,6 +618,10 @@ export default function Home() {
     updateCard(id, (c) => ({ ...c, notes, updatedAt: nowIso() }))
   }
 
+  function handleUpdateSourceUrl(id: string, sourceUrl: string) {
+    updateCard(id, (c) => ({ ...c, sourceUrl, updatedAt: nowIso() }))
+  }
+
   function handleRollback(id: string, versionId: string) {
     updateCard(id, (c) => rollbackToVersion(c, versionId))
   }
@@ -1197,6 +1201,7 @@ export default function Home() {
             onUpdateMeta={handleUpdateMeta}
             onUpdateCode={handleUpdateCode}
             onUpdateNotes={handleUpdateNotes}
+            onUpdateSourceUrl={handleUpdateSourceUrl}
             onResetCopies={handleResetCopies}
             onRollback={handleRollback}
             defaultWidth={420}
@@ -1220,6 +1225,7 @@ export default function Home() {
           onUpdateMeta={handleUpdateMeta}
           onUpdateCode={handleUpdateCode}
           onUpdateNotes={handleUpdateNotes}
+          onUpdateSourceUrl={handleUpdateSourceUrl}
           onRate={handleRate}
           onCopy={handleCopy}
           onResetCopies={handleResetCopies}

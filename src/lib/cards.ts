@@ -8,6 +8,20 @@ export function normalizeCode(raw: string): string {
   return raw.trim().toLowerCase().replace(/[^a-z0-9-]/g, '')
 }
 
+/** 来源链接仅允许可在浏览器中安全打开的 HTTP(S) URL。 */
+export function isValidSourceUrl(raw: string): boolean {
+  try {
+    const url = new URL(raw.trim())
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+export function normalizeSourceUrl(raw: string): string {
+  return raw.trim()
+}
+
 /**
  * 正文格式规范化（左对齐风格，P3-6 + P0-I 增强）：
  * ① 逐行去除前导 tab 和所有前导空格（粘贴内容靠左对齐）；
@@ -41,6 +55,7 @@ export function createCard(body: string, title: string, tags: string[], code?: s
     copyCount: 0,
     thinkingSummary: null,
     notes: '',
+    sourceUrl: '',
     versions: [],
     createdAt: now,
     updatedAt: now,
@@ -116,6 +131,7 @@ export interface CardDraft {
   rating: number
   code: string
   notes: string
+  sourceUrl: string
 }
 
 export function cardDraftFrom(card: Card): CardDraft {
@@ -126,6 +142,7 @@ export function cardDraftFrom(card: Card): CardDraft {
     rating: card.rating,
     code: card.code ?? '',
     notes: card.notes ?? '',
+    sourceUrl: card.sourceUrl ?? '',
   }
 }
 
@@ -136,6 +153,7 @@ export interface CardDraftChanges {
   ratingChanged: boolean
   codeChanged: boolean
   notesChanged: boolean
+  sourceUrlChanged: boolean
   anyChanged: boolean
 }
 
@@ -146,6 +164,7 @@ export function cardDraftChanges(draft: CardDraft, card: Card): CardDraftChanges
   const ratingChanged = draft.rating !== card.rating
   const codeChanged = normalizeCode(draft.code) !== (card.code ?? '')
   const notesChanged = draft.notes !== (card.notes ?? '')
+  const sourceUrlChanged = normalizeSourceUrl(draft.sourceUrl) !== (card.sourceUrl ?? '')
   return {
     bodyChanged,
     titleChanged,
@@ -153,6 +172,7 @@ export function cardDraftChanges(draft: CardDraft, card: Card): CardDraftChanges
     ratingChanged,
     codeChanged,
     notesChanged,
-    anyChanged: bodyChanged || titleChanged || tagsChanged || ratingChanged || codeChanged || notesChanged,
+    sourceUrlChanged,
+    anyChanged: bodyChanged || titleChanged || tagsChanged || ratingChanged || codeChanged || notesChanged || sourceUrlChanged,
   }
 }
