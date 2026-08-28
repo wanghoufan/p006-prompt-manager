@@ -331,3 +331,11 @@
 - [x] 真机逐一点击 6 个复制按钮：剪贴板内容可读且与目标按钮匹配；按钮反馈「已复制」
 - [x] MCP 子包 `cd mcp/prompt-server && npm run build` 通过
 - [x] 真机截图：`scratch/qa-real-device/p0-h-settings-mcp-expanded.png`
+
+### 3 个 P0 用户反馈问题 - 2026-08-28 复测记录
+
+- [ ] 排序栏「有调取码」显示、仅显示有调取码卡片，并与标签筛选/搜索叠加（静态代码证据通过，Orca 真机阻断）
+- [ ] TagEditor 中文输入法 compositionstart/compositionend 不自动添加英文候选词（静态代码证据通过，Orca 真机阻断）
+- [ ] TagPanel 删除确认弹窗靠近删除菜单，子标签可选仅删当前/删除整棵子树（静态代码证据通过，Orca 真机阻断）
+- [x] 构建门禁：`npx tsc --noEmit` ✅、`npm run lint` ✅
+- **阻断**：Orca 状态 `stale_bootstrap` / `runtime_unavailable`，需恢复桌面运行时后重测并补 `scratch/qa-real-device/*.png`。

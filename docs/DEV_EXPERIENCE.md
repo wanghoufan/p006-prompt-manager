@@ -167,6 +167,16 @@
 - 可直接给 Agent 的规则：`Stage Manager 派发含 UI 探活的任务时，必须在 Prompt 首步加入端口冲突预检（lsof :3000 / Orca 状态），有占用先清理或换端口、Orca 异常先重启并 curl 探活成功后再继续；不得让开发者到场才处理 3000 冲突。`
 - 候选升级位置：`docs/roles/stage-manager.md §Prompt 生成契约` 增加“端口与运行时预检”条目 + `dev-server.sh` 使用约束（待授权）
 
+## 13. Builder 禁止重启 Orca 进程，权限边界归 Stage Manager 统一管理
+
+- 成熟度：B 候选升级项目规范（需用户授权后写入 `docs/roles/builder.md` / `docs/roles/stage-manager.md`）
+- 时间：2026-08-28
+- 现象：Builder 越权执行 `ps aux | rg orca / ls -ld /Applications/Orca.app / orca open --json` 重启 Orca 进程，属系统进程管理权限越界；此前 #12 的端口预检若由 Builder 自行重启，会混淆职责。
+- 小白解释：就像施工员只负责砌墙，不能去拉电闸。电闸跳了应由调度员来处理，施工员只记录“闸有问题”继续砌墙。
+- 技术处理：明确权限边界：① **Builder 只能**：修改业务代码、运行 `npx tsc --noEmit`、运行 `npm run lint`、检查页面状态 ② **Builder 禁止**：重启/关闭 Orca 进程、修改系统配置、操作其他终端标签。Builder 遇 `Orca stale_bootstrap/runtime_unavailable` 时，仅记录问题到 `docs/qa/BUGS.md` 并继续代码修改，Orca 重启由 Stage Manager 统一处理（复用 #12 的预检与 `orca open` 流程）。
+- 可直接给 Agent 的规则：`Builder 禁止重启/关闭 Orca 进程及操作其他终端，遇 Orca 异常仅写 BUGS.md 并继续改代码；Orca 进程管理一律由 Stage Manager 负责。`
+- 候选升级位置：`docs/roles/builder.md` 增加“权限边界”条目 + `docs/roles/stage-manager.md` 增加“Orca 进程管理”职责（待授权）
+
 ## 12. 开发前必须预检查dev server和Orca状态
 
 - 成熟度：A 本项目保留（已验证可复用）

@@ -747,6 +747,14 @@ P0-A 安全闭环 4 项验证全通过，无新增 Bug。标签操作的安全�
 
 P0-H 当前实现 **PASS**，无新增 Bug；建议进入后续客户端真实 MCP 配置/新会话调用验收。
 
+## 第二十二次 QA - 3 个 P0 用户反馈问题复测（2026-08-28）
+
+- **范围**：排序筛选调取码、TagEditor 中文输入法合成事件、TagPanel 删除确认弹窗与子树删除模式。
+- **静态门禁**：`npx tsc --noEmit` 通过；`npm run lint` 通过。
+- **代码证据**：SortBar 暴露「有调取码」按钮并使用 `aria-pressed`；page.tsx 在视图/标签过滤阶段叠加 `Boolean(card.code?.trim())`，随后搜索与排序继续作用。TagEditor 同时守卫 `e.nativeEvent.isComposing` 与 `isComposingRef`，并处理 compositionstart/compositionend。TagPanel 以删除触发控件的 `DOMRect` 计算弹窗位置，并提供「仅删当前标签」/「删除整棵子树」两种按钮。
+- **真机环境**：未完成。Orca Computer Use 连续返回 `runtime_unavailable`，状态为 `app.running=false / stale_bootstrap`；直接启动还出现旧 daemon 持有 live sessions 与 `terminal_liveness_unavailable`。3000 端口的 HTTP 探测受当前沙箱网络权限阻断（`Operation not permitted`）。
+- **结果**：三项均保持 `VERIFY`，不能据此判定 GUI PASS；未新增产品 Bug。需恢复 Orca 运行时后逐项执行真实点击、中文 IME 合成输入、筛选叠加及删除弹窗操作，并保存截图证据。
+
 ## 第二十一次 QA - P0-I 正文区域格式整理功能（2026-08-28）
 
 - **时间**：2026-08-28

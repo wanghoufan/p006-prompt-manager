@@ -172,11 +172,7 @@ export function TagEditor({
         )}
       </div>
 
-      <p className={`text-[11px] ${atMax ? 'text-rust' : 'text-muted'}`}>
-        {atMax
-          ? '已达上限（最多 10 个）'
-          : '输入 #标签名 后按回车/空格添加，或点选已有标签'}
-      </p>
+      {atMax && <p className="text-[11px] text-rust">已达上限（最多 10 个）</p>}
     </div>
   )
 }
