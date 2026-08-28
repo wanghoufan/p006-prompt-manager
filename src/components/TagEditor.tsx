@@ -3,6 +3,23 @@
 import { useMemo, useRef, useState } from 'react'
 import { parseTags } from '@/lib/cards'
 
+const RECENT_TAGS_STORAGE_KEY = 'prompt-manager:recent-tags'
+
+function loadRecentTagUsage(): Record<string, number> {
+  try {
+    const stored = window.localStorage.getItem(RECENT_TAGS_STORAGE_KEY)
+    if (!stored) return {}
+    const parsed: unknown = JSON.parse(stored)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+
+    return Object.fromEntries(
+      Object.entries(parsed).filter((entry): entry is [string, number] => typeof entry[1] === 'number' && Number.isFinite(entry[1])),
+    )
+  } catch {
+    return {}
+  }
+}
+
 interface TagEditorProps {
   /** 当前标签文本（draft.tagsText），组件据此渲染 chip 列表并作双向同步 */
   value: string
@@ -35,15 +52,36 @@ export function TagEditor({
   const [input, setInput] = useState('')
   const [open, setOpen] = useState(false)
   const [highlight, setHighlight] = useState(-1)
+  const [recentTagUsage, setRecentTagUsage] = useState<Record<string, number>>(() =>
+    typeof window === 'undefined' ? {} : loadRecentTagUsage(),
+  )
   const isComposingRef = useRef(false)
+  const lastTagUsageRef = useRef(0)
 
   const atMax = chips.length >= max
 
   const suggestions = useMemo(() => {
     const q = input.replace(/^#+/, '').trim().toLowerCase()
-    if (!q) return []
-    return existingTags.filter((t) => !chips.includes(t) && t.toLowerCase().includes(q)).slice(0, 8)
-  }, [input, existingTags, chips])
+    return existingTags
+      .filter((t) => !chips.includes(t) && t.toLowerCase().includes(q))
+      .sort((a, b) => (recentTagUsage[b] ?? 0) - (recentTagUsage[a] ?? 0) || a.localeCompare(b, 'zh-CN'))
+      .slice(0, 8)
+  }, [input, existingTags, chips, recentTagUsage])
+
+  function recordTagUsage(name: string) {
+    // 同一毫秒内连续添加也保持严格的最近使用顺序。
+    const usedAt = Math.max(Date.now(), lastTagUsageRef.current + 1)
+    lastTagUsageRef.current = usedAt
+    setRecentTagUsage((current) => {
+      const next = { ...current, [name]: usedAt }
+      try {
+        window.localStorage.setItem(RECENT_TAGS_STORAGE_KEY, JSON.stringify(next))
+      } catch {
+        // 隐私模式或存储配额不足时，当前页面内的排序仍然有效。
+      }
+      return next
+    })
+  }
 
   function addTag(raw: string) {
     const name = raw.replace(/^#+/, '').trim()
@@ -55,6 +93,7 @@ export function TagEditor({
     }
     const next = [...chips, name].slice(0, max)
     onChange(next)
+    recordTagUsage(name)
     setInput('')
     setOpen(false)
     setHighlight(-1)

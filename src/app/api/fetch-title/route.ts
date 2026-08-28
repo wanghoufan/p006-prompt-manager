@@ -26,12 +26,18 @@ function decodeJavaScriptString(value: string): string {
     .replace(/\\([\\'\"])/g, '$1')
 }
 
+function extractWeChatTitle(html: string): string | undefined {
+  // 文章页通常是 `var msg_title = '…'`，但不同页面版本也会将其作为对象字段输出。
+  // 同时支持 `msg_title =`、`msg_title:` 和带引号的对象键，避免回退到空的 <title>。
+  return /(?:["']?msg_title["']?)\s*(?:=|:)\s*(['"])((?:\\.|(?!\1)[\s\S])*)\1/i.exec(html)?.[2]
+}
+
 function extractTitle(html: string, preferWeChatTitle: boolean): string | null {
   const match = /<title\b[^>]*>([\s\S]*?)<\/title\s*>/i.exec(html)
   const ogTitle = /<meta\b[^>]*(?:property|name)\s*=\s*["']og:title["'][^>]*content\s*=\s*["']([^"']+)["'][^>]*>/i.exec(html)
     ?? /<meta\b[^>]*content\s*=\s*["']([^"']+)["'][^>]*(?:property|name)\s*=\s*["']og:title["'][^>]*>/i.exec(html)
-  // 微信文章常把标题放在页面脚本的 msg_title 变量中，<title> 则可能为空。
-  const weChatTitle = /(?:var\s+)?msg_title\s*=\s*(['\"])((?:\\.|(?!\1)[\s\S])*)\1/i.exec(html)?.[2]
+  // 微信文章常把标题放在页面脚本的 msg_title 中，<title> 则可能为空。
+  const weChatTitle = extractWeChatTitle(html)
   const rawTitle = (preferWeChatTitle ? weChatTitle : undefined) ?? match?.[1] ?? ogTitle?.[1] ?? weChatTitle
   if (!rawTitle) return null
   const title = decodeHtml(decodeJavaScriptString(rawTitle).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim())
