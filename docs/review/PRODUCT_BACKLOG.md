@@ -399,6 +399,8 @@
 - **P1-1~P1-4 四项打包（文案/草稿/导入/冲突）**（2026-08-28 完成：P1-1 TagPanel 在线/离线文案与服务端共享存储架构一致、P1-2 CardDetail/PreviewPanel 关闭·切换前 `clearTimeout+commitSave` 丢稿闭环、P1-3 TopBar `accept=".json,.md"` 与 Markdown 导出可逆、P1-4 Detail/Preview 统一「跳过冲突 code、其余照存」+ 同一 toast；QA 第十六次 4项 PASS、产品验收 PASS）
 - **P2-10/P2-11 网格直删+批量管理**（2026-08-28 核验既有实现完成：P2-10 CardItem 悬浮胶囊 `text-rust` 删除 + `confirmDelete` 二次确认 + demo 隐藏 + 10s 撤销；P2-11 `bulkIds` Set + checkbox `role="checkbox"` + 顶部操作栏「已选 N 张」+ 打标签/打星/导出/删除/取消；QA 2026-08-28 12项 PASS、产品验收 6 维度 PASS，API 33→32）
 - **P0-A 高影响标签操作的安全闭环**（2026-08-28 完成：影响数展示 `TagPanel` 含子树去重关联数+子标签名 + 四类 CRUD 10s 撤销 `captureTagSnapshot`/`notifyWithUndo` + `validateTagGraph` 五项服务端校验拒绝 + `knownVersion`/`baseVersion` 乐观并发 + `sanitizePromptTags` 自愈 + SSE 回声过滤；真机 vpn 删除→撤销全复原 + curl 7 项校验/冲突拒绝验证；QA 2026-08-28 4项 PASS、产品验收 4 维度 PASS，库 32/12/53/0 悬空 0 重复）
+- **P2-5 危险操作撤销**（2026-08-27 完成：删除单卡/清空仓库/覆盖式导入/载入示例四类操作均新增 `notifyWithUndo` 10s 撤销栈，缓存被覆盖前的 `cards` 快照，误操作可一键回退；P2-1/P2-11 批量删除复用同套撤销机制；11合1总验收通过）
+- **P2-3 移动端预览面板抽屉化**（2026-08-27 完成：`PreviewPanel.tsx` `<md` 时渲染为底部抽屉 `fixed inset-x-0 bottom-0 max-h-[75dvh]`，含收起按钮 `onClose`；桌面端保持侧边栏 `md:relative md:w-[var(--pw)]`；核心编辑路径移动端闭环；11合1总验收通过）
 
 ## 最近一次 Product 执行记录（P0-B/P0-C/P0-8/P0-9 验收）
 
