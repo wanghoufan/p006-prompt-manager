@@ -181,3 +181,16 @@
   5. **重启Orca**：如果Orca状态异常，执行 `open /Applications/Orca.app` 并等待10秒
 - 可直接给 Agent 的规则：`开发者在执行UI验证前必须预检查：1) ./dev-server.sh status 2) curl http://localhost:3000 3) orca status --json。如果任一项失败，先修复再验证。`
 - 候选升级位置：`docs/roles/builder.md` 增加"开发前预检查"硬约束（待授权）
+
+## 13. Builder权限边界：禁止重启Orca进程
+
+- 成熟度：A 本项目保留（已验证可复用）
+- 时间：2026-08-28
+- 现象：Builder在开发过程中遇到Orca状态异常时，直接执行`orca open`重启Orca，导致权限过大，可能意外关闭Orca影响整个流程。
+- 小白解释：就像普通员工不应该有权限重启公司的服务器，只有运维人员才能操作。Builder只能改代码，不能动系统进程。
+- 技术处理：
+  - **Builder禁止执行**：`orca open`、`orca close`、`orca status`等Orca相关命令
+  - **Builder只能执行**：修改业务代码、运行npx tsc --noEmit、运行npm run lint、检查页面状态
+  - **Orca问题由Stage Manager处理**：Builder遇到Orca状态异常时，记录问题到BUGS.md，继续完成代码修改
+- 可直接给 Agent 的规则：`Builder禁止重启/关闭Orca进程，只能修改业务代码和运行检查命令。Orca状态异常由Stage Manager处理。`
+- 候选升级位置：`docs/roles/builder.md` 增加"权限边界"硬约束（已添加）

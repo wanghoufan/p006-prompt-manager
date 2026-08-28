@@ -69,3 +69,24 @@
 ### 已知风险
 
 如修复 `BUGS.md` 中问题，可更新对应 Bug 状态，但不要删除历史问题记录。
+
+## 权限边界
+
+Builder 只能执行以下操作：
+- 修改业务代码（src/ 目录）
+- 运行类型检查：npx tsc --noEmit
+- 运行代码检查：npm run lint
+- 检查页面状态：curl http://localhost:3000
+- 读取文档和配置文件
+
+Builder 禁止执行以下操作：
+- 重启 Orca 进程（orca open/orca close）
+- 关闭 Orca 进程
+- 修改系统配置
+- 操作其他终端标签
+- 修改 dev-server.sh 状态
+
+如果遇到 Orca 状态异常或 dev server 问题，Builder 应该：
+1. 记录问题到 BUGS.md
+2. 继续完成代码修改任务
+3. 由 Stage Manager 处理 Orca/dev server 问题
