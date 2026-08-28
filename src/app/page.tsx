@@ -534,9 +534,8 @@ export default function Home() {
       return { ok: false, error: `同一父级下已存在标签「${trimmed}」` }
     }
     const nextTags = renameTag(tags, id, trimmed)
-    setTags(nextTags)
-    // 同步卡片冗余字段（方案 A 双写）：旧名 → 新名
-    setCards((prev) => syncCardsToPromptTags(prev, nextTags, promptTags))
+    // P0-8 原子落盘：tags（仅改 Tag.name）+ promptTags（不变）+ Card.tags 冗余字段整体重建（方案 A 双写一致）
+    applyTags(nextTags, promptTags)
     notify(`标签已重命名为「${trimmed}」`)
     return { ok: true }
   }

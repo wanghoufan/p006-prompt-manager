@@ -1,9 +1,16 @@
 # 实施计划（PLAN）
 
 > 当前需求的验收标准与实施方案。由技术规划师（Planner）维护；完成 `PLAN.md` 后须检查并按需建立 / 补充 `docs/qa/QA_CHECKLIST.md` 核心回归基线。
-> 上一轮 P0-6 重开 + P0-7 打包（2026-08-28）已交付。本轮：**P0 标签系统核心实现（22 项）**，对齐交接 §38-§43 + 迁移方案 §二-§八。
+> 上一轮 P0-6 重开 + P0-7 打包（2026-08-28）已交付。上上轮：**P0 标签系统核心实现（22 项）**，对齐交接 §38-§43 + 迁移方案 §二-§八。本轮：**P0-8 标签重命名**（对齐交接 §7/§8 + PRODUCT_BACKLOG P0-8 段）。
 
 ## 当前目标
+
+0. **P0-8 标签重命名**（2026-08-28 用户反馈，最高优先级）：
+   - 选中标签重命名时，带有该标签的所有笔记自动修正为新标签（批量原子更新，无逐卡手动改）。
+   - 入口：TagPanel 选中标签行 ⋯ 菜单「✎ 重命名」（`TagPanel.tsx:91-92` + `handleRename`）。
+   - `page.tsx handleRenameTag(id, name)`：空名校验 → 50 字上限 → `isNameUnique` 同父重名检测 → `renameTag` 仅改 `Tag.name` → `applyTags` 原子落盘（`syncCardsToPromptTags` 重建 Card.tags 冗余字段）。
+   - 父标签重命名：子标签路径自动变化（`tagPath` 动态计算，交接 §8）。
+   - 已有关联卡片无需逐条写回：以稳定 tag_id 关联（交接 §39），仅改一条 Tag 记录 + 冗余字段整体重建。
 
 1. **P0 标签系统 22 项核心能力**（基于 `docs/review/标签系统-现状审计.md` 现状 + `docs/review/标签系统-迁移方案.md` 设计 + 交接文档 §38-§43 数据结构）：
    - **数据层**：types.ts 新增 `Tag` / `PromptTag` 类型；新建 `src/lib/tags.ts`（守卫 + 树构建 + 循环/重名检测 + 8 个 mutation 纯函数 + syncCardsToPromptTags 冗余同步）；serverStore.ts `ServerState` 扩展 `tags` / `promptTags` 集合 + `isTag`/`isPromptTag` 守卫过滤；storage.ts 新增 `TAGS_KEY` / `PROMPT_TAGS_KEY` + load/save + push/load 透传；api/sync GET/POST 透传
@@ -45,6 +52,7 @@
 
 ## 进行中 / 待办
 
+- P0-8 标签重命名已实现，待【节奏】触发 QA Acceptance。
 - 本轮 22 项完成，待【节奏】触发 QA Acceptance
 
 ---
@@ -55,6 +63,13 @@
 - 涉及文件：`src/lib/tags.ts`（新增）、`scripts/migrate-tags.mjs`（新增）、`src/lib/types.ts`、`src/lib/cards.ts`、`src/lib/serverStore.ts`、`src/lib/storage.ts`、`src/app/api/sync/route.ts`、`src/app/page.tsx`、`src/components/TagPanel.tsx`、`src/components/CardDetail.tsx`、`src/components/PreviewPanel.tsx`
 - 浏览器实测（agent-browser）：11 标签树渲染、点击「开发恢复」→ 11 张、点击「无标签」→ 2 张（迁移预期）、删除「预览服务」→ 标签 11→10、卡片 32→32 安全约束通过
 - 迁移报告：`tags=11 / promptTags=55 / 0 孤儿`，备份 `data/store.json.bak-20260827-133433`
+
+## 已收口（2026-08-28，P0-8 标签重命名）
+
+- 选中标签 ⋯ 菜单「✎ 重命名」→ prompt 输入新名 → `handleRenameTag` 校验（空名 / 50 字 / 同父重名 `isNameUnique`）→ `renameTag` 仅改 `Tag.name` → `applyTags` 原子落盘（`syncCardsToPromptTags` 重建 Card.tags 冗余字段，方案 A 双写一致）。
+- 涉及文件：`src/components/TagPanel.tsx`（既有入口，无需改动）、`src/app/page.tsx`（handleRenameTag 对齐 applyTags 原子落盘）、`src/lib/tags.ts`（既有 renameTag + tagPath 动态计算，无需改动）。
+- 验证：`npx tsc --noEmit` 零错误；`npm run lint` 零错误零警告。
+- 要点：稳定 tag_id 关联 → 仅改一条 Tag 记录即可完成全量关联更新（交接 §39）；父重命名子路径经 `tagPath` 动态计算自动变化（交接 §8）。
 
 ## 已收口（2026-08-28，P0-6 重开 + P0-7 两项打包）
 
