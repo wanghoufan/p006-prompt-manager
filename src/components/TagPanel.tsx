@@ -1,11 +1,8 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import type { Tag, PromptTag } from '@/lib/types'
+import type { Tag, PromptTag, TagFilterMode, TagFilters } from '@/lib/types'
 import { childrenOf, collectDescendantIds, directCount, totalCount, tagPath } from '@/lib/tags'
-
-/** 无标签筛选的虚拟 tag id（非真实标签实体） */
-export const UNTAGGED = '__untagged__'
 
 export interface TagPanelProps {
   tags: Tag[]
@@ -14,14 +11,20 @@ export interface TagPanelProps {
   total: number
   /** 无标签卡片数（「无标签」计数） */
   untaggedCount: number
-  selected: string | null
-  onSelect: (id: string | null) => void
+  filters: TagFilters
+  filterMode: TagFilterMode
+  onFilterModeChange: (mode: TagFilterMode) => void
+  onToggleFilter: (id: string, mode: TagFilterMode) => void
+  onToggleUntagged: () => void
+  onIncludeDescendantsChange: (value: boolean) => void
+  onResetFilters: () => void
   offline?: boolean
   /** demo/只读视图不传以下操作回调（隐藏管理入口） */
   onCreateTag?: (name: string, parentId: string | null) => { ok: boolean; error?: string }
   onRenameTag?: (id: string, name: string) => { ok: boolean; error?: string }
   onMoveTag?: (id: string, parentId: string | null) => { ok: boolean; error?: string }
   onDeleteTag?: (id: string, mode: 'self' | 'subtree') => void
+  onMergeTag?: (sourceId: string, targetId: string) => { ok: boolean; error?: string }
 }
 
 const EXPAND_KEY = 'pm:tag-expanded'
@@ -51,12 +54,14 @@ function writeExpanded(set: Set<string>) {
 function TagMenu({
   onRename,
   onMove,
+  onMerge,
   onCreateChild,
   onDelete,
   onClose,
 }: {
   onRename: () => void
   onMove: () => void
+  onMerge: () => void
   onCreateChild: () => void
   onDelete: () => void
   onClose: () => void
@@ -100,6 +105,16 @@ function TagMenu({
         >
           ↗ 移动标签
         </button>
+        <button
+          type="button"
+          className="block w-full px-3 py-1.5 text-left text-paper-dim hover:bg-ink-800 hover:text-paper"
+          onClick={() => {
+            onMerge()
+            onClose()
+          }}
+        >
+          ⇄ 合并到标签
+        </button>
         <div className="my-1 h-px bg-line" />
         <button
           type="button"
@@ -122,12 +137,14 @@ interface TreeNodeProps {
   promptTags: PromptTag[]
   depth: number
   expanded: Set<string>
-  selected: string | null
-  onSelect: (id: string | null) => void
+  filters: TagFilters
+  filterMode: TagFilterMode
+  onToggleFilter: (id: string, mode: TagFilterMode) => void
   onToggle: (id: string) => void
   editable: boolean
   onRename: (tag: Tag) => void
   onMove: (tag: Tag) => void
+  onMerge: (tag: Tag) => void
   onCreateChild: (tag: Tag) => void
   onDelete: (tag: Tag) => void
 }
@@ -138,12 +155,14 @@ function TreeNode({
   promptTags,
   depth,
   expanded,
-  selected,
-  onSelect,
+  filters,
+  filterMode,
+  onToggleFilter,
   onToggle,
   editable,
   onRename,
   onMove,
+  onMerge,
   onCreateChild,
   onDelete,
 }: TreeNodeProps) {
@@ -151,7 +170,14 @@ function TreeNode({
   const kids = childrenOf(tags, tag.id)
   const hasKids = kids.length > 0
   const isExpanded = expanded.has(tag.id)
-  const active = selected === tag.id
+  const selectedMode: TagFilterMode | null = filters.any.includes(tag.id)
+    ? 'any'
+    : filters.all.includes(tag.id)
+      ? 'all'
+      : filters.none.includes(tag.id)
+        ? 'none'
+        : null
+  const active = selectedMode !== null
   const direct = directCount(promptTags, tag.id)
   const subIds = useMemo(() => new Set([tag.id, ...collectDescendantIds(tags, tag.id)]), [tags, tag.id])
   const total = totalCount(promptTags, subIds)
@@ -189,13 +215,27 @@ function TreeNode({
         )}
         <button
           type="button"
-          onClick={() => onSelect(active ? null : tag.id)}
+          onClick={() => onToggleFilter(tag.id, filterMode)}
           className={`flex min-w-0 flex-1 items-center gap-2 text-left ${
             active ? 'text-gold-bright' : 'text-paper-dim group-hover:text-paper'
           }`}
           title={tagPath(tags, tag.id)}
         >
           <span className="min-w-0 flex-1 truncate">{tag.name}</span>
+          {selectedMode && (
+            <span
+              className={`shrink-0 rounded px-1 py-0.5 font-mono text-[9px] font-semibold ${
+                selectedMode === 'none'
+                  ? 'bg-rust/15 text-rust'
+                  : selectedMode === 'all'
+                    ? 'bg-sky-400/10 text-sky-300'
+                    : 'bg-gold/15 text-gold-bright'
+              }`}
+              title={selectedMode === 'any' ? '包含任一（OR）' : selectedMode === 'all' ? '必须同时包含（AND）' : '排除（NOT）'}
+            >
+              {selectedMode === 'any' ? 'OR' : selectedMode === 'all' ? 'AND' : 'NOT'}
+            </span>
+          )}
           <span
             className={`shrink-0 font-mono text-xs ${active ? 'text-gold' : 'text-muted'}`}
             title={direct !== total ? `直接 ${direct} · 含子 ${total}` : `关联 ${total} 条`}
@@ -224,6 +264,7 @@ function TreeNode({
           <TagMenu
             onRename={() => onRename(tag)}
             onMove={() => onMove(tag)}
+            onMerge={() => onMerge(tag)}
             onCreateChild={() => onCreateChild(tag)}
             onDelete={() => onDelete(tag)}
             onClose={() => setMenuOpen(false)}
@@ -240,12 +281,14 @@ function TreeNode({
               promptTags={promptTags}
               depth={depth + 1}
               expanded={expanded}
-              selected={selected}
-              onSelect={onSelect}
+              filters={filters}
+              filterMode={filterMode}
+              onToggleFilter={onToggleFilter}
               onToggle={onToggle}
               editable={editable}
               onRename={onRename}
               onMove={onMove}
+              onMerge={onMerge}
               onCreateChild={onCreateChild}
               onDelete={onDelete}
             />
@@ -261,13 +304,19 @@ export function TagPanel({
   promptTags,
   total,
   untaggedCount,
-  selected,
-  onSelect,
+  filters,
+  filterMode,
+  onFilterModeChange,
+  onToggleFilter,
+  onToggleUntagged,
+  onIncludeDescendantsChange,
+  onResetFilters,
   offline,
   onCreateTag,
   onRenameTag,
   onMoveTag,
   onDeleteTag,
+  onMergeTag,
 }: TagPanelProps) {
   const [expanded, setExpanded] = useState<Set<string>>(() => readExpanded())
   const [search, setSearch] = useState('')
@@ -284,6 +333,7 @@ export function TagPanel({
   }
 
   const editable = Boolean(onCreateTag && onRenameTag && onMoveTag && onDeleteTag)
+  const filterCount = filters.any.length + filters.all.length + filters.none.length + (filters.untaggedOnly ? 1 : 0)
 
   const roots = useMemo(() => childrenOf(tags, null), [tags])
 
@@ -339,9 +389,83 @@ export function TagPanel({
       return
     }
     if (trimmed === tag.name) return
+    // 检测同级同名：存在时提供合并选项
+    const duplicate = tags.find((t) => t.id !== tag.id && t.parent_id === tag.parent_id && t.name === trimmed)
+    if (duplicate && onMergeTag) {
+      const useCount = totalCount(promptTags, new Set([tag.id, ...collectDescendantIds(tags, tag.id)]))
+      const dupCount = totalCount(promptTags, new Set([duplicate.id, ...collectDescendantIds(tags, duplicate.id)]))
+      if (
+        window.confirm(
+          `同级下已存在标签「${trimmed}」。\n\n` +
+            `· 当前标签「${tag.name}」关联 ${useCount} 条提示词\n` +
+            `· 目标标签「${duplicate.name}」关联 ${dupCount} 条提示词\n\n` +
+            `点击「确定」将两标签合并（关联 + 子标签全部转移到「${duplicate.name}」，当前标签删除）\n` +
+            `点击「取消」取消操作`,
+        )
+      ) {
+        const r = onMergeTag(tag.id, duplicate.id)
+        if (!r.ok) {
+          setError(r.error ?? '合并失败')
+          return
+        }
+        setError(null)
+      }
+      return
+    }
     const r = onRenameTag(tag.id, trimmed)
     if (!r.ok) {
       setError(r.error ?? '重命名失败')
+      return
+    }
+    setError(null)
+  }
+
+  function handleMerge(tag: Tag) {
+    if (!onMergeTag) return
+    const descendantIds = collectDescendantIds(tags, tag.id)
+    const candidates = tags.filter((candidate) => candidate.id !== tag.id && !descendantIds.has(candidate.id))
+    if (candidates.length === 0) {
+      setError('没有可合并的目标标签')
+      return
+    }
+    const targetInput = promptForName(
+      `将「${tagPath(tags, tag.id)}」合并到哪个标签？\n请输入完整路径（例如：开发 / 前端）；同名时必须输入完整路径。`,
+    )
+    if (targetInput === null) return
+    const trimmed = targetInput.trim()
+    if (!trimmed) {
+      setError('请选择要合并到的目标标签')
+      return
+    }
+    const exactPathMatches = candidates.filter((candidate) => tagPath(tags, candidate.id) === trimmed)
+    const nameMatches = candidates.filter((candidate) => candidate.name === trimmed)
+    const matches = exactPathMatches.length > 0 ? exactPathMatches : nameMatches
+    if (matches.length === 0) {
+      setError(`未找到标签「${trimmed}」`)
+      return
+    }
+    if (matches.length > 1) {
+      setError(`存在多个「${trimmed}」，请使用完整路径`)
+      return
+    }
+    const target = matches[0]
+    const sourceCount = totalCount(promptTags, new Set([tag.id, ...descendantIds]))
+    const targetCount = totalCount(
+      promptTags,
+      new Set([target.id, ...collectDescendantIds(tags, target.id)]),
+    )
+    if (
+      !window.confirm(
+        `确认将「${tagPath(tags, tag.id)}」合并到「${tagPath(tags, target.id)}」？\n\n` +
+          `源标签关联 ${sourceCount} 条提示词，目标标签关联 ${targetCount} 条提示词。\n` +
+          '源标签的关联会迁移并自动去重，源标签将被删除；提示词不会被删除。',
+      )
+    ) {
+      return
+    }
+    const result = onMergeTag(tag.id, target.id)
+    if (!result.ok) {
+      setError(result.error ?? '合并失败')
       return
     }
     setError(null)
@@ -411,7 +535,7 @@ export function TagPanel({
   }
 
   return (
-    <aside className="flex w-48 shrink-0 flex-col border-r border-line bg-ink-900/60">
+    <aside className="flex w-60 shrink-0 flex-col border-r border-line bg-ink-900/60">
       <div className="flex items-center justify-between px-4 pb-1 pt-5">
         <span className="font-serif text-xs tracking-[0.2em] text-muted">标签</span>
         {editable && (
@@ -427,6 +551,73 @@ export function TagPanel({
             </svg>
           </button>
         )}
+      </div>
+      <div className="space-y-2 border-b border-line/70 px-3 pb-3 pt-1">
+        <div className="grid grid-cols-3 gap-1 rounded-lg border border-line bg-ink-900 p-0.5" aria-label="标签筛选条件">
+          {([
+            ['any', '任一 OR'],
+            ['all', '同时 AND'],
+            ['none', '排除 NOT'],
+          ] as const).map(([mode, label]) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => onFilterModeChange(mode)}
+              aria-pressed={filterMode === mode}
+              className={`rounded-md px-1 py-1 text-[10px] transition-colors ${
+                filterMode === mode
+                  ? mode === 'none'
+                    ? 'bg-rust/15 text-rust'
+                    : 'bg-gold/15 text-gold-bright'
+                  : 'text-muted hover:text-paper'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center justify-between gap-2 text-[11px]">
+          <label className="flex cursor-pointer items-center gap-1.5 text-paper-dim">
+            <input
+              type="checkbox"
+              checked={filters.includeDescendants}
+              onChange={(e) => onIncludeDescendantsChange(e.target.checked)}
+              className="accent-gold"
+            />
+            包含子标签
+          </label>
+          {filterCount > 0 && (
+            <button type="button" className="text-muted hover:text-gold-bright" onClick={onResetFilters}>
+              重置 {filterCount}
+            </button>
+          )}
+        </div>
+        {filterCount > 0 && !filters.untaggedOnly && (
+          <div className="flex max-h-20 flex-wrap gap-1 overflow-y-auto" aria-label="已选标签筛选条件">
+            {(['any', 'all', 'none'] as const).flatMap((mode) =>
+              filters[mode].map((id) => (
+                <button
+                  key={`${mode}:${id}`}
+                  type="button"
+                  onClick={() => onToggleFilter(id, mode)}
+                  className={`inline-flex max-w-full items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] ${
+                    mode === 'none'
+                      ? 'border-rust/30 bg-rust/10 text-rust'
+                      : 'border-gold/25 bg-gold/10 text-gold-bright'
+                  }`}
+                  title={`移除条件：${tagPath(tags, id)}`}
+                >
+                  <span className="font-mono">{mode === 'any' ? 'OR' : mode === 'all' ? 'AND' : 'NOT'}</span>
+                  <span className="max-w-28 truncate">{tagPath(tags, id)}</span>
+                  <span aria-hidden>×</span>
+                </button>
+              )),
+            )}
+          </div>
+        )}
+        <p className="text-[10px] leading-relaxed text-muted">
+          先选条件类型，再点标签；再点已选条件可移除。
+        </p>
       </div>
       {editable && (
         <div className="px-3 pb-1.5">
@@ -448,15 +639,15 @@ export function TagPanel({
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-2" aria-label="标签筛选">
         <div
           className={`flex w-full cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors ${
-            selected === null ? 'bg-gold/10' : 'hover:bg-ink-800'
+            filterCount === 0 ? 'bg-gold/10' : 'hover:bg-ink-800'
           }`}
-          onClick={() => onSelect(null)}
+          onClick={onResetFilters}
         >
           <span aria-hidden className="w-4 shrink-0" />
-          <span className={`min-w-0 flex-1 truncate ${selected === null ? 'text-gold-bright' : 'text-paper-dim'}`}>
+          <span className={`min-w-0 flex-1 truncate ${filterCount === 0 ? 'text-gold-bright' : 'text-paper-dim'}`}>
             全部
           </span>
-          <span className={`shrink-0 font-mono text-xs ${selected === null ? 'text-gold' : 'text-muted'}`}>
+          <span className={`shrink-0 font-mono text-xs ${filterCount === 0 ? 'text-gold' : 'text-muted'}`}>
             {total}
           </span>
         </div>
@@ -466,14 +657,21 @@ export function TagPanel({
             <p className="px-2.5 py-3 text-xs leading-relaxed text-muted">未找到匹配的标签。</p>
           ) : (
             searchResults.map((t) => {
-              const active = selected === t.id
+              const selectedMode: TagFilterMode | null = filters.any.includes(t.id)
+                ? 'any'
+                : filters.all.includes(t.id)
+                  ? 'all'
+                  : filters.none.includes(t.id)
+                    ? 'none'
+                    : null
+              const active = selectedMode !== null
               return (
                 <div
                   key={t.id}
                   className={`flex w-full cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors ${
                     active ? 'bg-gold/10' : 'hover:bg-ink-800'
                   }`}
-                  onClick={() => onSelect(active ? null : t.id)}
+                  onClick={() => onToggleFilter(t.id, filterMode)}
                 >
                   <span aria-hidden className="w-4 shrink-0" />
                   <span
@@ -482,6 +680,7 @@ export function TagPanel({
                   >
                     {tagPath(tags, t.id)}
                   </span>
+                  {selectedMode && <span className="font-mono text-[9px] text-gold-bright">{selectedMode.toUpperCase()}</span>}
                   <span className={`shrink-0 font-mono text-xs ${active ? 'text-gold' : 'text-muted'}`}>
                     {totalCount(promptTags, new Set([t.id, ...collectDescendantIds(tags, t.id)]))}
                   </span>
@@ -499,12 +698,14 @@ export function TagPanel({
                 promptTags={promptTags}
                 depth={0}
                 expanded={expanded}
-                selected={selected}
-                onSelect={onSelect}
+                filters={filters}
+                filterMode={filterMode}
+                onToggleFilter={onToggleFilter}
                 onToggle={toggle}
                 editable={editable}
                 onRename={handleRename}
                 onMove={handleMove}
+                onMerge={handleMerge}
                 onCreateChild={(tag) => handleCreate(tag.id)}
                 onDelete={handleDelete}
               />
@@ -512,15 +713,15 @@ export function TagPanel({
             <div className="my-1 h-px bg-line/60" />
             <div
               className={`flex w-full cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors ${
-                selected === UNTAGGED ? 'bg-gold/10' : 'hover:bg-ink-800'
+                filters.untaggedOnly ? 'bg-gold/10' : 'hover:bg-ink-800'
               }`}
-              onClick={() => onSelect(selected === UNTAGGED ? null : UNTAGGED)}
+              onClick={onToggleUntagged}
             >
               <span aria-hidden className="w-4 shrink-0" />
-              <span className={`min-w-0 flex-1 truncate ${selected === UNTAGGED ? 'text-gold-bright' : 'text-paper-dim'}`}>
+              <span className={`min-w-0 flex-1 truncate ${filters.untaggedOnly ? 'text-gold-bright' : 'text-paper-dim'}`}>
                 无标签
               </span>
-              <span className={`shrink-0 font-mono text-xs ${selected === UNTAGGED ? 'text-gold' : 'text-muted'}`}>
+              <span className={`shrink-0 font-mono text-xs ${filters.untaggedOnly ? 'text-gold' : 'text-muted'}`}>
                 {untaggedCount}
               </span>
             </div>

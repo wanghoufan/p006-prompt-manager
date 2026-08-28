@@ -52,6 +52,22 @@ export interface PromptTag {
   tag_id: string
 }
 
+/** P0-C 组合标签筛选。仅存于当前页面会话，不持久化。 */
+export type TagFilterMode = 'any' | 'all' | 'none'
+
+export interface TagFilters {
+  /** 包含任一（OR） */
+  any: string[]
+  /** 必须同时包含（AND） */
+  all: string[]
+  /** 排除（NOT） */
+  none: string[]
+  /** 仅显示无标签卡片；与三组标签条件互斥 */
+  untaggedOnly: boolean
+  /** 每个条件是否同时命中该标签的后代 */
+  includeDescendants: boolean
+}
+
 export type SortMode = 'updated' | 'copies' | 'rating'
 
 export interface GenerateMetaResult {

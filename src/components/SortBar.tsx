@@ -11,6 +11,8 @@ interface SortBarProps {
   scopeLabel: string
   search: string
   onSearchChange: (v: string) => void
+  tagFilterSummary?: string
+  onClearTagFilters?: () => void
 }
 
 const OPTIONS: { value: SortMode; label: string; hint: string }[] = [
@@ -19,7 +21,17 @@ const OPTIONS: { value: SortMode; label: string; hint: string }[] = [
   { value: 'rating', label: '评分', hint: '按星级评分排序（高分在前）' },
 ]
 
-export function SortBar({ mode, onChange, count, total, scopeLabel, search, onSearchChange }: SortBarProps) {
+export function SortBar({
+  mode,
+  onChange,
+  count,
+  total,
+  scopeLabel,
+  search,
+  onSearchChange,
+  tagFilterSummary,
+  onClearTagFilters,
+}: SortBarProps) {
   const searching = search.trim().length > 0
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -48,6 +60,25 @@ export function SortBar({ mode, onChange, count, total, scopeLabel, search, onSe
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-3">
+        {tagFilterSummary && (
+          <span
+            className="inline-flex max-w-72 items-center gap-1 rounded-md border border-gold/30 bg-gold/10 px-2 py-1 text-[11px] text-gold-bright"
+            title={tagFilterSummary}
+          >
+            <span className="truncate">{tagFilterSummary}</span>
+            {onClearTagFilters && (
+              <button
+                type="button"
+                onClick={onClearTagFilters}
+                aria-label="重置标签筛选"
+                title="重置标签筛选"
+                className="shrink-0 rounded px-0.5 text-gold hover:bg-gold/15 hover:text-paper"
+              >
+                ×
+              </button>
+            )}
+          </span>
+        )}
         <div className="relative">
           <svg
             viewBox="0 0 16 16"

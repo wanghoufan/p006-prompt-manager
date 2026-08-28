@@ -60,5 +60,15 @@
 - 现象：QA 已启动（`term_6185798f, mimo-v2.5-free` 验 P2-10/P2-11）后无主动巡检，`tui-idle` 假死无感知，任务停滞无超时切换，日志无回溯。
 - 小白解释：就像派人去干活后不去看进度，人卡住了也不知道。要每隔十几秒去敲门看一眼，没动静就换人，确保活一直在干。
 - 技术处理：整改方案确保工作不停止：① 强制监控循环：派发后立即 `while True`，每 15-30s 主动 `orca terminal wait --for tui-idle --timeout-ms 5000 --json | grep "satisfied"` + `orca terminal read --json | python -c` 取 `tail[10:]` ② 完成标志检测：输出中搜索 `完成后停止/等待 QA/已完成` 等关键词 ③ 超时处理：单任务 >10 分钟无进展则重新派发或切换 fallback 模型 ④ 日志记录：每次检查写入 `scratch/monitor-log.md` 便于回溯。当前监控中每 15s 检查一次：`sleep 15; echo "=== QA 进度检查 ==="; orca terminal wait ...; orca terminal read ...`。
-- 可直接给 Agent 的规则：`派发 QA/子任务后必须立即进入 15-30s 轮询的强制监控循环（tui-idle 检测 + 关键词完成检测 + 10分钟超时切 fallback），每次结果 append 到 scratch/monitor-log.md，未完成不得退出循环。`
+- 可直接给 Agent 的规则：`派发 QA/子任务后必须立即进入 30-45s 轮询的强制监控循环（tui-idle 检测 + 关键词完成检测 + 10分钟超时切 fallback），每次结果 append 到 scratch/monitor-log.md，未完成不得退出循环。`
 - 候选升级位置：`docs/roles/stage-manager.md` 或 `docs/workflow/` 增加“子任务监控”硬约束 + `AGENTS.md §六` 补充监控纪律（待授权）
+
+## 6. Codex/子任务调用必须走 ORCA 编排终端直接执行，不向用户反问
+
+- 成熟度：B 候选升级项目规范（需用户授权后写入 `docs/roles/stage-manager.md` / `AGENTS.md`）
+- 时间：2026-08-28
+- 现象：节奏角色（Stage Manager）不知如何在 opencode 内启动 codex，反复向用户确认“如何调用”，阻塞编排。最后自行从 `~/.codex/models_cache.json` 与 `~/.codex/config.toml` 探明正确模型名 `gpt-5.6-terra（config.toml 默认）/ gpt-5.6-sol（models_cache.json 存在）` 才打通。
+- 小白解释：就像调度员不知道怎么叫车，一直问老板“车在哪”，最后自己翻车库清单才找到车。以后调度员应直接照清单叫车，不用再问老板。
+- 技术处理：后续一律走 ORCA 编排的终端直调，不反问用户：`orca terminal create -- codex --model gpt-5.6-terra`（或 `gpt-5.6-sol`）或在 opencode TUI 终端直接 `codex --model gpt-5.6-terra`；模型名以 `~/.codex/config.toml` 与 `models_cache.json` 为准，优先用 `terra` 默认。Stage Manager 派发时直接给出可执行命令与终端 ID 监控（复用 #5 的 15-30s 轮询），用户仅需确认结果，无需回答“怎么调”。
+- 可直接给 Agent 的规则：`需调用 codex/子 Agent 时，Stage Manager 必须直接通过 orca terminal / opencode 终端执行 codex --model gpt-5.6-terra（或 sol）完成编排，并在 Prompt 中写明终端命令与模型名，禁止反问用户“如何启动/用哪个模型”。`
+- 候选升级位置：`docs/roles/stage-manager.md §Prompt 生成契约` 增加“ORCA 终端直调”条目 + `AGENTS.md §三` 补充编排调用规范（待授权）

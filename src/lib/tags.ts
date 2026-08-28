@@ -170,12 +170,12 @@ export function promptTagNamesOf(
 }
 
 /** 以 promptTags 关联为唯一真源，重建所有卡片的 Card.tags 冗余字段（方案 A 双写一致）。
- *  仅当名字数组发生变化时才生成新对象，避免无谓渲染。 */
+ *  仅当名字数组发生变化时才生成新对象，并记录标签变更时间，避免无谓渲染。 */
 export function syncCardsToPromptTags(cards: Card[], tags: Tag[], promptTags: PromptTag[]): Card[] {
   return cards.map((c) => {
     const names = promptTagNamesOf(tags, promptTags, c.id)
     const same = names.length === c.tags.length && names.every((n, i) => n === c.tags[i])
-    return same ? c : { ...c, tags: names }
+    return same ? c : { ...c, tags: names, updatedAt: nowIso() }
   })
 }
 
@@ -274,6 +274,42 @@ export function deleteTag(
 
   const nextPromptTags = promptTags.filter((rt) => !removedIds.has(rt.tag_id))
   return { tags: nextTags, promptTags: nextPromptTags }
+}
+
+/**
+ * 合并标签：将 sourceTag 的全部关联 prompt 转移到 targetTag，sourceTag 的子标签提升到 targetTag 下，
+ * 然后删除 sourceTag 实体。
+ * 调用方需先校验：同级同名（isNameUnique）、不成环（assertNoCycle）。
+ * 返回新的 tags 与 promptTags。
+ */
+export function mergeTags(
+  tags: Tag[],
+  promptTags: PromptTag[],
+  sourceId: string,
+  targetId: string,
+): { tags: Tag[]; promptTags: PromptTag[] } {
+  const source = tags.find((t) => t.id === sourceId)
+  const target = tags.find((t) => t.id === targetId)
+  if (!source || !target) return { tags, promptTags }
+
+  // ① 转移 prompt 关联：source → target（去重：同一 prompt 已关联 target 时跳过）
+  const nextPromptTags = promptTags.map((rt) =>
+    rt.tag_id === sourceId ? { ...rt, tag_id: targetId } : rt,
+  )
+  // 去重：若同一 prompt_id 出现两条（原 target + 转移来的），保留一条
+  const deduped = new Map<string, PromptTag>()
+  for (const rt of nextPromptTags) {
+    const key = `${rt.prompt_id}\u0000${rt.tag_id}`
+    if (!deduped.has(key)) deduped.set(key, rt)
+  }
+  const finalPromptTags = [...deduped.values()]
+
+  // ② source 的子标签提升到 target 下（而非提升到 source 的原父级）
+  const nextTags = tags
+    .filter((t) => t.id !== sourceId)
+    .map((t) => (t.parent_id === sourceId ? { ...t, parent_id: targetId, updated_at: nowIso() } : t))
+
+  return { tags: nextTags, promptTags: finalPromptTags }
 }
 
 /** 原子替换某 prompt 的全部标签关系（交接 §38 唯一约束：去重 + 覆盖式整体替换）。 */

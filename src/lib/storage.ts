@@ -271,7 +271,7 @@ function parseMarkdownImport(raw: string): ImportResult | null {
       const key = meta[1].trim()
       const value = meta[2].trim()
       if (key === '标签') {
-        current.tags = value.split(/[,，、]+/).map((s) => s.trim()).filter(Boolean).slice(0, 3)
+        current.tags = value.split(/[,，、]+/).map((s) => s.trim()).filter(Boolean).slice(0, 10)
       } else if (key === '调取码') {
         current.code = value && value !== '（未设置）' ? value.trim().toLowerCase() : null
       } else if (key === '评分') {

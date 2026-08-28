@@ -91,7 +91,7 @@ export const DISCARD_TAGS = new Set(['无法分类', '未分类', '其他', '无
 
 /**
  * 标签数组归一（P0-1）：trim → 丢弃 DISCARD_TAGS 脏标签（大小写不敏感）→ 去空 → 去重
- * → 单标签截断 50 字（对齐交接 §31，1~50 字符）→ 最多 3 个；过滤后为空则保持 []（无标签状态正常展示）。
+ * → 单标签截断 50 字（对齐交接 §31，1~50 字符）→ 最多 10 个；过滤后为空则保持 []（无标签状态正常展示）。
  * 供 AI 标签路径（ai.ts generateMeta）与新建卡片合并标签使用。
  *
  * 2026-08-28 修复：原 slice(0, 4) 会把「多agent编程」截成「多age」，是存量碎片标签的根因；
@@ -107,11 +107,11 @@ export function normalizeTags(tags: string[]): string[] {
     ),
   ]
     .map((t) => t.slice(0, 50))
-    .slice(0, 3)
+    .slice(0, 10)
 }
 
 export function parseTags(text: string): string[] {
-  return [...new Set(text.split(/[,，、\s]+/).map((s) => s.trim()).filter(Boolean))].slice(0, 3)
+  return [...new Set(text.split(/[,，、\s]+/).map((s) => s.trim()).filter(Boolean))].slice(0, 10)
 }
 
 export interface CardDraft {

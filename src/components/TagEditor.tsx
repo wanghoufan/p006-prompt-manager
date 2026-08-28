@@ -10,7 +10,7 @@ interface TagEditorProps {
   existingTags: string[]
   /** 标签集合变更回写：调用方需同时 setDraft(tagsText=next.join('、')) 与 onUpdateMeta(id, title, next) */
   onChange: (nextTags: string[]) => void
-  /** 最多标签数，默认 3 */
+  /** 最多标签数，默认 10 */
   max?: number
   placeholder?: string
   inputId?: string
@@ -27,7 +27,7 @@ export function TagEditor({
   value,
   existingTags,
   onChange,
-  max = 3,
+  max = 10,
   placeholder = '输入 #标签名 后按回车/空格添加',
   inputId,
 }: TagEditorProps) {
@@ -165,7 +165,7 @@ export function TagEditor({
 
       <p className={`text-[11px] ${atMax ? 'text-rust' : 'text-muted'}`}>
         {atMax
-          ? '已达上限（最多 3 个）'
+          ? '已达上限（最多 10 个）'
           : '输入 #标签名 后按回车/空格添加，或点选已有标签'}
       </p>
     </div>

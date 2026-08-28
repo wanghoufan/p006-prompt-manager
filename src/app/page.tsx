@@ -1,14 +1,14 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Card, Settings, SortMode, Tag, PromptTag } from '@/lib/types'
+import type { Card, Settings, SortMode, Tag, PromptTag, TagFilterMode, TagFilters } from '@/lib/types'
 import { loadCards, loadSettings, loadTags, loadPromptTags, parseImport, saveCards, saveSettings, saveTags, savePromptTags, buildMarkdownExport, isServerAvailable, loadFromServer, pushToServer, subscribeSync, sanitizePromptTags, setConflictRefreshHandler } from '@/lib/storage'
 import { createCard, normalizeBody, parseTags, rollbackToVersion, saveBodyOnly, saveBodyWithVersion } from '@/lib/cards'
 import { DEMO_CARDS } from '@/lib/demo'
 import { nowIso } from '@/lib/util'
 import { TopBar } from '@/components/TopBar'
 import type { ViewMode } from '@/components/DemoMenu'
-import { TagPanel, UNTAGGED } from '@/components/TagPanel'
+import { TagPanel } from '@/components/TagPanel'
 import { Composer } from '@/components/Composer'
 import { SortBar } from '@/components/SortBar'
 import { CardItem } from '@/components/CardItem'
@@ -21,12 +21,14 @@ import {
   renameTag,
   moveTag,
   deleteTag,
+  mergeTags,
   setCardTags,
   addCardTag,
+  removeCardTag,
   collectDescendantIds,
-  collectTagPromptIds,
   isNameUnique,
   assertNoCycle,
+  tagPath,
   deriveTagsFromCards,
   syncCardsToPromptTags,
 } from '@/lib/tags'
@@ -58,7 +60,14 @@ export default function Home() {
   }))
   const [hydrated, setHydrated] = useState(false)
   const [view, setView] = useState<ViewMode>('mine')
-  const [selectedTag, setSelectedTag] = useState<string | null>(null)
+  const [tagFilters, setTagFilters] = useState<TagFilters>({
+    any: [],
+    all: [],
+    none: [],
+    untaggedOnly: false,
+    includeDescendants: true,
+  })
+  const [tagFilterMode, setTagFilterMode] = useState<TagFilterMode>('any')
   const [tags, setTags] = useState<Tag[]>([])
   const [promptTags, setPromptTags] = useState<PromptTag[]>([])
   const [sortMode, setSortMode] = useState<SortMode>('updated')
@@ -253,6 +262,16 @@ export default function Home() {
   }, [isDemoView, tags, promptTags, cards])
   const activeTags = activeTagData.tags
   const activePromptTags = activeTagData.promptTags
+  const activeTagIds = useMemo(() => new Set(activeTags.map((tag) => tag.id)), [activeTags])
+  const effectiveTagFilters = useMemo<TagFilters>(
+    () => ({
+      ...tagFilters,
+      any: tagFilters.any.filter((id) => activeTagIds.has(id)),
+      all: tagFilters.all.filter((id) => activeTagIds.has(id)),
+      none: tagFilters.none.filter((id) => activeTagIds.has(id)),
+    }),
+    [tagFilters, activeTagIds],
+  )
 
   // AI 生成接口用的标签名列表（供补全候选 / 避免生成重复标签）
   const existingTags = useMemo(() => activeTags.map((t) => t.name), [activeTags])
@@ -268,18 +287,52 @@ export default function Home() {
     [cards],
   )
 
-  // 过滤链三段：baseCards（视图 + 标签）→ 搜索过滤（AND 叠加）→ 排序
-  // 标签筛选：父标签含子标签内容（交接 §10）；无标签筛选用 UNTAGGED 虚拟 id
+  // 过滤链三段：baseCards（视图 + 组合标签）→ 搜索过滤（AND 叠加）→ 排序。
+  // 三组条件之间也是 AND：(any 命中任一) AND (all 逐个命中) AND (none 全部不命中)。
   const baseCards = useMemo(() => {
-    if (selectedTag === null) return sourceCards
-    if (selectedTag === UNTAGGED) {
+    if (effectiveTagFilters.untaggedOnly) {
       const linked = new Set(activePromptTags.map((rt) => rt.prompt_id))
       return sourceCards.filter((c) => !linked.has(c.id))
     }
-    const subIds = new Set([selectedTag, ...collectDescendantIds(activeTags, selectedTag)])
-    const matched = collectTagPromptIds(activePromptTags, subIds)
-    return sourceCards.filter((c) => matched.has(c.id))
-  }, [sourceCards, selectedTag, activeTags, activePromptTags])
+    const hasTagConditions =
+      effectiveTagFilters.any.length + effectiveTagFilters.all.length + effectiveTagFilters.none.length > 0
+    if (!hasTagConditions) return sourceCards
+
+    const promptTagIds = new Map<string, Set<string>>()
+    for (const relation of activePromptTags) {
+      const ids = promptTagIds.get(relation.prompt_id) ?? new Set<string>()
+      ids.add(relation.tag_id)
+      promptTagIds.set(relation.prompt_id, ids)
+    }
+    const conditionIds = (tagId: string) =>
+      effectiveTagFilters.includeDescendants
+        ? new Set([tagId, ...collectDescendantIds(activeTags, tagId)])
+        : new Set([tagId])
+    const anyConditions = effectiveTagFilters.any.map(conditionIds)
+    const allConditions = effectiveTagFilters.all.map(conditionIds)
+    const noneConditions = effectiveTagFilters.none.map(conditionIds)
+    const matches = (cardId: string, condition: Set<string>) => {
+      const cardTagIds = promptTagIds.get(cardId)
+      return cardTagIds ? [...condition].some((id) => cardTagIds.has(id)) : false
+    }
+
+    return sourceCards.filter((card) => {
+      const passesAny = anyConditions.length === 0 || anyConditions.some((condition) => matches(card.id, condition))
+      const passesAll = allConditions.every((condition) => matches(card.id, condition))
+      const passesNone = noneConditions.every((condition) => !matches(card.id, condition))
+      return passesAny && passesAll && passesNone
+    })
+  }, [sourceCards, effectiveTagFilters, activeTags, activePromptTags])
+
+  const tagFilterSummary = useMemo(() => {
+    if (effectiveTagFilters.untaggedOnly) return '无标签'
+    const names = (ids: string[]) => ids.map((id) => tagPath(activeTags, id)).join('、')
+    const parts: string[] = []
+    if (effectiveTagFilters.any.length > 0) parts.push(`OR: ${names(effectiveTagFilters.any)}`)
+    if (effectiveTagFilters.all.length > 0) parts.push(`AND: ${names(effectiveTagFilters.all)}`)
+    if (effectiveTagFilters.none.length > 0) parts.push(`NOT: ${names(effectiveTagFilters.none)}`)
+    return parts.join(' · ')
+  }, [effectiveTagFilters, activeTags])
 
   const searchActive = debouncedQuery.trim().length > 0
   const searchTerm = debouncedQuery.trim()
@@ -356,12 +409,18 @@ export default function Home() {
 
   // P0-A 标签级操作撤销快照：缓存操作前 tags/promptTags/cards，10s 内整体回退
   function captureTagSnapshot() {
-    return { cards, tags, promptTags }
+    return { cards, tags, promptTags, tagFilters }
   }
-  function restoreTagSnapshot(snap: { cards: Card[]; tags: Tag[]; promptTags: PromptTag[] }) {
+  function restoreTagSnapshot(snap: {
+    cards: Card[]
+    tags: Tag[]
+    promptTags: PromptTag[]
+    tagFilters: TagFilters
+  }) {
     setCards(snap.cards)
     setTags(snap.tags)
     setPromptTags(snap.promptTags)
+    setTagFilters(snap.tagFilters)
   }
 
   function handleCreate(body: string, title: string, aiTags: string[]) {
@@ -377,12 +436,15 @@ export default function Home() {
         return
       }
     }
-    // P0-2 标签筛选态下新建强制携带当前选中标签（首位），其余 AI 标签去重补充；
-    // 「全部」（selectedTag 为空）时维持原 AI 标签；demo 只读视图不继承
+    // P0-2/P0-C：组合筛选态下新建继承所有正向（OR/AND）标签，NOT 不继承；
+    // 无筛选 / 无标签 / demo 视图维持原 AI 标签。
     let names = aiTags
-    if (selectedTag && selectedTag !== UNTAGGED && !isDemoView) {
-      const selName = activeTags.find((t) => t.id === selectedTag)?.name
-      if (selName) names = Array.from(new Set([selName, ...aiTags]))
+    if (!effectiveTagFilters.untaggedOnly && !isDemoView) {
+      const positiveIds = [...new Set([...effectiveTagFilters.any, ...effectiveTagFilters.all])]
+      const positiveNames = positiveIds
+        .map((id) => activeTags.find((tag) => tag.id === id)?.name)
+        .filter((name): name is string => Boolean(name))
+      if (positiveNames.length > 0) names = Array.from(new Set([...positiveNames, ...aiTags]))
     }
     const { tagIds, nextTags } = resolveTagIds(names)
     const card = createCard(body, title, names)
@@ -406,7 +468,7 @@ export default function Home() {
     setTags(derived.tags)
     setPromptTags(derived.promptTags)
     setView('mine')
-    setSelectedTag(null)
+    resetTagFilters()
     setSelectedId(null)
     setDetailId(null)
     clearBulk()
@@ -431,7 +493,7 @@ export default function Home() {
     setCards([])
     // P0-A 关联不悬空：清空卡片后一并清除全部标签关联（标签实体保留，关联归零）
     setPromptTags([])
-    setSelectedTag(null)
+    resetTagFilters()
     setSelectedId(null)
     setDetailId(null)
     clearBulk()
@@ -443,14 +505,55 @@ export default function Home() {
 
   function handleSwitchView(next: ViewMode) {
     setView(next)
-    setSelectedTag(null)
+    resetTagFilters()
     setSelectedId(null)
     setDetailId(null)
     clearBulk()
   }
 
-  function handleSelectTag(tag: string | null) {
-    setSelectedTag(tag)
+  function resetTagFilters() {
+    setTagFilters((prev) => ({
+      any: [],
+      all: [],
+      none: [],
+      untaggedOnly: false,
+      includeDescendants: prev.includeDescendants,
+    }))
+    setSelectedId(null)
+    clearBulk()
+  }
+
+  function handleToggleTagFilter(tagId: string, mode: TagFilterMode) {
+    setTagFilters((prev) => {
+      const wasSelectedInMode = prev[mode].includes(tagId)
+      const next: TagFilters = {
+        ...prev,
+        any: prev.any.filter((id) => id !== tagId),
+        all: prev.all.filter((id) => id !== tagId),
+        none: prev.none.filter((id) => id !== tagId),
+        untaggedOnly: false,
+      }
+      if (!wasSelectedInMode) next[mode] = [...next[mode], tagId]
+      return next
+    })
+    setSelectedId(null)
+    clearBulk()
+  }
+
+  function handleToggleUntagged() {
+    setTagFilters((prev) => ({
+      any: [],
+      all: [],
+      none: [],
+      untaggedOnly: !prev.untaggedOnly,
+      includeDescendants: prev.includeDescendants,
+    }))
+    setSelectedId(null)
+    clearBulk()
+  }
+
+  function handleIncludeDescendantsChange(includeDescendants: boolean) {
+    setTagFilters((prev) => ({ ...prev, includeDescendants }))
     setSelectedId(null)
     clearBulk()
   }
@@ -613,8 +716,54 @@ export default function Home() {
     const snapshot = captureTagSnapshot()
     const { tags: nextTags, promptTags: nextPromptTags } = deleteTag(tags, promptTags, id, mode === 'subtree')
     applyTags(nextTags, nextPromptTags)
-    if (selectedTag === id) setSelectedTag(null)
+    const removedFilterIds = mode === 'subtree' ? new Set([id, ...collectDescendantIds(tags, id)]) : new Set([id])
+    setTagFilters((prev) => ({
+      ...prev,
+      any: prev.any.filter((filterId) => !removedFilterIds.has(filterId)),
+      all: prev.all.filter((filterId) => !removedFilterIds.has(filterId)),
+      none: prev.none.filter((filterId) => !removedFilterIds.has(filterId)),
+    }))
     notifyWithUndo(`已删除标签「${tag.name}」（提示词未受影响）`, () => restoreTagSnapshot(snapshot))
+  }
+
+  /** 合并标签：source 的关联 + 子标签全部转移到 target，source 删除 */
+  function handleMergeTag(sourceId: string, targetId: string): { ok: boolean; error?: string } {
+    const source = tags.find((t) => t.id === sourceId)
+    const target = tags.find((t) => t.id === targetId)
+    if (!source || !target) return { ok: false, error: '标签不存在' }
+    if (sourceId === targetId) return { ok: false, error: '不能合并到自身' }
+    // 防循环：target 不能是 source 的后代
+    const descIds = collectDescendantIds(tags, sourceId)
+    if (descIds.has(targetId)) return { ok: false, error: '不能合并到自身的子标签下（会形成循环）' }
+    const targetChildNames = new Set(tags.filter((t) => t.parent_id === targetId).map((t) => t.name))
+    const conflictingChild = tags.find(
+      (t) => t.parent_id === sourceId && targetChildNames.has(t.name),
+    )
+    if (conflictingChild) {
+      return { ok: false, error: `目标标签下已存在同名子标签「${conflictingChild.name}」，请先处理该子标签` }
+    }
+    const snapshot = captureTagSnapshot()
+    const { tags: nextTags, promptTags: nextPromptTags } = mergeTags(tags, promptTags, sourceId, targetId)
+    applyTags(nextTags, nextPromptTags)
+    setTagFilters((prev) => {
+      const sourceMode: TagFilterMode | null = prev.any.includes(sourceId)
+        ? 'any'
+        : prev.all.includes(sourceId)
+          ? 'all'
+          : prev.none.includes(sourceId)
+            ? 'none'
+            : null
+      const next: TagFilters = {
+        ...prev,
+        any: prev.any.filter((id) => id !== sourceId && id !== targetId),
+        all: prev.all.filter((id) => id !== sourceId && id !== targetId),
+        none: prev.none.filter((id) => id !== sourceId && id !== targetId),
+      }
+      if (sourceMode) next[sourceMode] = [...next[sourceMode], targetId]
+      return next
+    })
+    notifyWithUndo(`已将「${source.name}」合并到「${target.name}」`, () => restoreTagSnapshot(snapshot))
+    return { ok: true }
   }
 
   // ===== P2-11 批量管理 =====
@@ -689,6 +838,47 @@ export default function Home() {
     }
   }
 
+  // 批量移除标签：从选中卡片中移除指定标签
+  function handleBulkRemoveTag() {
+    if (bulkIds.size === 0) return
+    const input = window.prompt(`从选中的 ${bulkIds.size} 张卡片中移除标签（多个用逗号/顿号分隔）`)
+    if (input === null) return
+    const tagNames = parseTags(input)
+    if (tagNames.length === 0) {
+      notify('未输入有效标签')
+      return
+    }
+    // 支持完整路径消歧；只输入名称时，移除所有同名标签关系，避免层级同名时误操作。
+    const tagIdsToRemove = new Set<string>()
+    for (const nameOrPath of tagNames) {
+      const pathMatches = tags.filter((t) => tagPath(tags, t.id) === nameOrPath)
+      const matches = pathMatches.length > 0 ? pathMatches : tags.filter((t) => t.name === nameOrPath)
+      for (const tag of matches) tagIdsToRemove.add(tag.id)
+    }
+    if (tagIdsToRemove.size === 0) {
+      notify('未找到匹配的标签')
+      return
+    }
+    const ids = bulkIds
+    let changed = 0
+    let nextPromptTags = promptTags
+    for (const c of cards) {
+      if (!ids.has(c.id)) continue
+      const before = nextPromptTags.length
+      for (const tid of tagIdsToRemove) {
+        nextPromptTags = removeCardTag(nextPromptTags, c.id, tid)
+      }
+      if (nextPromptTags.length !== before) changed++
+    }
+    setPromptTags(nextPromptTags)
+    setCards((prev) => syncCardsToPromptTags(prev, tags, nextPromptTags))
+    if (changed === 0) {
+      notify('选中的卡片均不含这些标签，未做修改')
+    } else {
+      notify(`已从 ${changed} 张卡片移除标签：${tagNames.join('、')}`)
+    }
+  }
+
   // 批量打星：0-5 整数，0 表示清零
   function handleBulkRate() {
     if (bulkIds.size === 0) return
@@ -755,7 +945,7 @@ export default function Home() {
       setTags(derived.tags)
       setPromptTags(derived.promptTags)
       setView('mine')
-      setSelectedTag(null)
+      resetTagFilters()
       setSelectedId(null)
       setDetailId(null)
       clearBulk()
@@ -829,13 +1019,19 @@ export default function Home() {
           promptTags={activePromptTags}
           total={sourceCards.length}
           untaggedCount={untaggedCount}
-          selected={selectedTag}
-          onSelect={handleSelectTag}
+          filters={effectiveTagFilters}
+          filterMode={tagFilterMode}
+          onFilterModeChange={setTagFilterMode}
+          onToggleFilter={handleToggleTagFilter}
+          onToggleUntagged={handleToggleUntagged}
+          onIncludeDescendantsChange={handleIncludeDescendantsChange}
+          onResetFilters={resetTagFilters}
           offline={serverOnline === false}
           onCreateTag={isDemoView ? undefined : handleCreateTag}
           onRenameTag={isDemoView ? undefined : handleRenameTag}
           onMoveTag={isDemoView ? undefined : handleMoveTag}
           onDeleteTag={isDemoView ? undefined : handleDeleteTag}
+          onMergeTag={isDemoView ? undefined : handleMergeTag}
         />
         <main className="flex min-w-0 flex-1 gap-4 overflow-hidden px-5 py-4">
           <div className="min-w-0 flex-1 space-y-4 overflow-y-auto">
@@ -844,17 +1040,11 @@ export default function Home() {
               onChange={setSortMode}
               count={visibleCards.length}
               total={baseCards.length}
-              scopeLabel={
-                selectedTag === null
-                  ? isDemoView
-                    ? '示例知识库'
-                    : '全部'
-                  : selectedTag === UNTAGGED
-                    ? '无标签'
-                    : (activeTags.find((t) => t.id === selectedTag)?.name ?? '全部')
-              }
+              scopeLabel={tagFilterSummary || (isDemoView ? '示例知识库' : '全部')}
               search={searchQuery}
               onSearchChange={setSearchQuery}
+              tagFilterSummary={tagFilterSummary}
+              onClearTagFilters={resetTagFilters}
             />
             {isDemoView ? (
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gold/30 bg-gold/5 px-3.5 py-2.5">
@@ -874,6 +1064,9 @@ export default function Home() {
                 <div className="flex items-center gap-1.5">
                   <button type="button" className="btn px-2.5 py-1 text-xs" onClick={handleBulkTag}>
                     打标签
+                  </button>
+                  <button type="button" className="btn px-2.5 py-1 text-xs" onClick={handleBulkRemoveTag}>
+                    移除标签
                   </button>
                   <button type="button" className="btn px-2.5 py-1 text-xs" onClick={handleBulkRate}>
                     打星
