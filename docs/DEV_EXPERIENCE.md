@@ -121,3 +121,13 @@
   - **体验问题路由**：真人QA发现体验问题，不代表QA自己决定修；Task Manager分类后路由到Product / Visual / Backlog
 - 可直接给 Agent 的规则：`Stage Manager 调用QA前必须先读取自动化测试结果（Build/Unit/Integration/API/Playwright），如果机械功能已被自动化充分验证，QA不重复检查同一件事。真人式QA只负责自动化覆盖不到的：焦点、拖拽、弹窗、快捷键、跨应用、多窗口、用户理解、异常操作、实际桌面体验。QA发现体验问题后，Task Manager分类后路由到Product / Visual / Backlog，QA不直接决定修复。`
 - 候选升级位置：`docs/roles/qa.md` 增加"自动化优先 + 角色边界"硬约束 + `docs/workflow/QUALITY_GATES.md` 增加QA前读取自动化结果的门控（待授权）
+
+## 10. 普通网页功能优先 Playwright/Orca Built-in Browser，仅真实桌面场景用 Computer Use
+
+- 成熟度：B 候选升级项目规范（需用户授权后写入 `docs/roles/qa.md` / `docs/workflow/QUALITY_GATES.md` / `AGENTS.md`）
+- 时间：2026-08-28
+- 现象：现行 QA 常一刀切用 `Computer Use` 测普通网页功能，消耗大、稳定性差；真实桌面、快捷键、权限、剪贴板、跨应用等场景又未覆盖。
+- 小白解释：就像普通网页点按钮，用轻便的浏览器遥控器（Playwright/Built-in Browser）就够；只有要测“真桌面才有”的东西（键盘快捷键、系统权限弹窗、剪贴板、拖到别的App）才需上重型的桌面遥控（Computer Use）。
+- 技术处理：补两条操作级约束：① **普通网页功能优先 Playwright 或 Orca Built-in Browser**（`src/app/page.tsx` 内组件、列表、弹窗、路由等）② **仅验证真实桌面、快捷键、权限、剪贴板、跨应用等场景时使用 Computer Use**。Stage Manager 在 QA Prompt 中按此分流标注工具选型，QA 不为普通网页功能滥用 Computer Use。
+- 可直接给 Agent 的规则：`QA/验收对普通网页功能必须优先用 Playwright 或 Orca Built-in Browser；仅当验证真实桌面/快捷键/权限/剪贴板/跨应用时才用 Computer Use，并在 Prompt 中显式标注工具选型。`
+- 候选升级位置：`docs/roles/qa.md` 增加“工具选型两条约束” + `docs/workflow/QUALITY_GATES.md` 补充操作级门控 + `AGENTS.md §三` 角色能力分工（待授权）

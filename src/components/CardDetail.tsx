@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Card, Version } from '@/lib/types'
-import { cardDraftChanges, cardDraftFrom, normalizeCode, parseTags } from '@/lib/cards'
+import { cardDraftChanges, cardDraftFrom, normalizeBody, normalizeCode, parseTags } from '@/lib/cards'
 import { Stars } from '@/components/Stars'
 import { Spinner } from '@/components/Spinner'
 import { TagEditor } from '@/components/TagEditor'
@@ -16,6 +16,7 @@ interface CardDetailProps {
   existingTags: string[]
   allCodes: string[]
   customThinkingPrompt: string
+  bodyAlignment: 'left' | 'center' | 'right'
   onClose: () => void
   onSaveBody: (id: string, body: string, createVersion: boolean) => void
   onUpdateMeta: (id: string, title: string, tags: string[]) => void
@@ -47,6 +48,7 @@ export function CardDetail(props: CardDetailProps) {
   // 用于解决「点击保存按钮时 textarea 先 blur 自动保存正文，导致手动保存无 body 变更而不建版」的问题。
   const bodyDirtyRef = useRef(false)
   const [summaryLoading, setSummaryLoading] = useState(false)
+  const [formatLoading, setFormatLoading] = useState(false)
   const [metaLoading, setMetaLoading] = useState(false)
   // P3-2：当前展开完整内容/diff 的版本 id（单开，再点收起）
   const [expandedVersionId, setExpandedVersionId] = useState<string | null>(null)
@@ -55,6 +57,7 @@ export function CardDetail(props: CardDetailProps) {
   // RISK-3：AI 请求取消控制器（新请求前 abort 上一个，卸载时 abort）
   const metaAbortRef = useRef<AbortController | null>(null)
   const summaryAbortRef = useRef<AbortController | null>(null)
+  const formatAbortRef = useRef<AbortController | null>(null)
   // P3-1：调取码非法字符被自动过滤后的即时提示（2.5s 自动消失）
   const [codeFiltered, setCodeFiltered] = useState(false)
   const codeTipTimer = useRef<number | null>(null)
@@ -147,6 +150,7 @@ export function CardDetail(props: CardDetailProps) {
       if (codeTipTimer.current) window.clearTimeout(codeTipTimer.current)
       metaAbortRef.current?.abort()
       summaryAbortRef.current?.abort()
+      formatAbortRef.current?.abort()
       saveThrough(true, true)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -229,6 +233,46 @@ export function CardDetail(props: CardDetailProps) {
       props.notify(`总结失败：${e instanceof Error ? e.message : '未知错误'}`)
     } finally {
       if (!ac.signal.aborted && summaryAbortRef.current === ac) setSummaryLoading(false)
+    }
+  }
+
+  /** P2-I1：与 PreviewPanel 保持一致，AI 整理后立即保存并保留可回滚快照。 */
+  async function runBodyFormat() {
+    const c = cardRef.current
+    const source = draftRef.current.body
+    if (!source.trim()) {
+      props.notify('正文为空，无法整理')
+      return
+    }
+    formatAbortRef.current?.abort()
+    const ac = new AbortController()
+    formatAbortRef.current = ac
+    setFormatLoading(true)
+    try {
+      const res = await fetch('/api/ai/format-body', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: source, alignment: props.bodyAlignment }),
+        signal: ac.signal,
+      })
+      const data: { body?: string; error?: string } = await res.json()
+      if (ac.signal.aborted) return
+      if (!res.ok) throw new Error(data.error || '格式整理失败')
+      // 整理期间用户继续编辑时，不以旧响应覆盖新输入。
+      if (draftRef.current.body !== source) return
+      const formatted = typeof data.body === 'string' ? normalizeBody(data.body) : ''
+      if (!formatted) throw new Error('AI 未返回可用正文')
+      setDraft((d) => ({ ...d, body: formatted }))
+      draftRef.current = { ...draftRef.current, body: formatted }
+      bodyDirtyRef.current = false
+      props.onSaveBody(c.id, formatted, true)
+      setSavedAt(Date.now())
+      props.notify('正文格式已整理并保存')
+    } catch (e) {
+      if (ac.signal.aborted) return
+      props.notify(`格式整理失败：${e instanceof Error ? e.message : '未知错误'}`)
+    } finally {
+      if (!ac.signal.aborted && formatAbortRef.current === ac) setFormatLoading(false)
     }
   }
 
@@ -405,12 +449,24 @@ export function CardDetail(props: CardDetailProps) {
                 />
               </div>
               <div className="space-y-1.5">
-                <label htmlFor="detail-body" className="text-xs text-muted">
-                  正文（失焦自动保存；按「保存」/ Ctrl⌘+Enter 保存并生成版本）
-                </label>
+                <div className="flex items-center justify-between gap-2">
+                  <label htmlFor="detail-body" className="text-xs text-muted">
+                    正文（失焦自动保存；按「保存」/ Ctrl⌘+Enter 保存并生成版本）
+                  </label>
+                  <button
+                    type="button"
+                    className="btn-ghost shrink-0 text-xs disabled:cursor-wait disabled:opacity-60"
+                    onClick={() => void runBodyFormat()}
+                    disabled={formatLoading}
+                    title={`按设置的${props.bodyAlignment === 'left' ? '左对齐' : props.bodyAlignment === 'center' ? '居中' : '右对齐'}整理正文`}
+                  >
+                    {formatLoading ? '整理中…' : '✦ 格式整理'}
+                  </button>
+                </div>
                 <textarea
                   id="detail-body"
                   className="field min-h-72 resize-y font-mono text-sm leading-relaxed"
+                  style={{ textAlign: props.bodyAlignment }}
                   value={draft.body}
                   onChange={(e) => {
                     setDraft((d) => ({ ...d, body: e.target.value }))

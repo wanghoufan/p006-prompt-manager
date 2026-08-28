@@ -1211,6 +1211,7 @@ export default function Home() {
           existingTags={existingTags}
           allCodes={allCodes}
           customThinkingPrompt={settings.thinkingSummaryPrompt}
+          bodyAlignment={settings.bodyAlignment}
           onClose={() => setDetailId(null)}
           onSaveBody={handleSaveBody}
           onUpdateMeta={handleUpdateMeta}
