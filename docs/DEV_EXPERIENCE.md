@@ -156,3 +156,28 @@
 - 永久排除名单：Ox Alpha Free (Unlimited)、OpenCode Zen max
 - 可直接给 Agent 的规则：`Stage Manager 派工前必须先输出模型决策块，按 AI_MODEL_GUIDE.md 规范选择模型，不得使用永久排除模型，不得输出排序措辞。`
 - 候选升级位置：`docs/roles/stage-manager.md §模型决策块` 增加"按 AI_MODEL_GUIDE.md 规范输出"硬约束（待授权）
+
+## 12. 节奏派发必须预判端口冲突，开发者常遇 3000 占用致探活失败
+
+- 成熟度：B 候选升级项目规范（需用户授权后写入 `docs/roles/stage-manager.md` / `AGENTS.md`）
+- 时间：2026-08-28
+- 现象：开发者常遇 `3000 端口已有 Node 进程但 HTTP 探活失败` + `Orca stale_bootstrap/runtime_unavailable`，虽 `npx tsc --noEmit` 与 `npm run lint` 0 错误，UI 验证仍被阻塞，需手动 `ps aux | rg orca` / `ls -ld /Applications/Orca.app` / `orca open --json` 重启后重探活。
+- 小白解释：就像房间门牌 3000 已被占但里面没人应答，想进门还得先清场再开门。节奏者发活前就应先查门是否被占、门是否真能开，别让开发者到门口才发现进不去。
+- 技术处理：Stage Manager 发命令时必须前置端口与运行时预检：① `lsof -i :3000` / `ps aux | rg '[0]rca|[o]rca'` 查占用 ② 若 3000 已有僵死 Node，先 `kill` 或改用 `PORT=3001` / `./dev-server.sh` 自愈脚本 ③ `Orca` 状态为 `stale_bootstrap` 则先 `orca open` 重启并 `curl http://localhost:3000 --fail` 探活成功后再派 UI 验证；Prompt 中写入该预检步骤，避免开发者现场排障打断。
+- 可直接给 Agent 的规则：`Stage Manager 派发含 UI 探活的任务时，必须在 Prompt 首步加入端口冲突预检（lsof :3000 / Orca 状态），有占用先清理或换端口、Orca 异常先重启并 curl 探活成功后再继续；不得让开发者到场才处理 3000 冲突。`
+- 候选升级位置：`docs/roles/stage-manager.md §Prompt 生成契约` 增加“端口与运行时预检”条目 + `dev-server.sh` 使用约束（待授权）
+
+## 12. 开发前必须预检查dev server和Orca状态
+
+- 成熟度：A 本项目保留（已验证可复用）
+- 时间：2026-08-28
+- 现象：开发者遇到"端口3000有Node进程但HTTP探测失败"和"Orca状态是stale_bootstrap/runtime_unavailable"问题，导致UI验证无法进行。
+- 小白解释：就像开车前不检查油和轮胎，半路抛锚了才后悔。开发前先检查服务和工具状态，避免白忙活。
+- 技术处理：
+  1. **预检查dev server**：`./dev-server.sh status` 检查watchdog和next dev是否运行
+  2. **预检查端口**：`curl -s http://localhost:3000 > /dev/null && echo "HTTP 200" || echo "HTTP 失败"` 验证服务可达
+  3. **预检查Orca**：`orca status --json` 检查状态是否为ready
+  4. **启动服务**：如果dev server未运行，执行 `./dev-server.sh start`
+  5. **重启Orca**：如果Orca状态异常，执行 `open /Applications/Orca.app` 并等待10秒
+- 可直接给 Agent 的规则：`开发者在执行UI验证前必须预检查：1) ./dev-server.sh status 2) curl http://localhost:3000 3) orca status --json。如果任一项失败，先修复再验证。`
+- 候选升级位置：`docs/roles/builder.md` 增加"开发前预检查"硬约束（待授权）
