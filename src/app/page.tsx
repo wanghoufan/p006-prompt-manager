@@ -60,6 +60,7 @@ export default function Home() {
     theme: 'system',
     autoFormatBody: false,
     bodyAlignment: 'left',
+    composerAddMode: 'auto',
   }))
   const [hydrated, setHydrated] = useState(false)
   const [view, setView] = useState<ViewMode>('mine')
@@ -426,7 +427,7 @@ export default function Home() {
     setTagFilters(snap.tagFilters)
   }
 
-  function handleCreate(body: string, title: string, aiTags: string[]) {
+  function handleCreate(body: string, title: string, aiTags: string[]): string | null {
     // P0-3 重复内容去重：normalizeBody 全等比对（大小写敏感、空白归一后），命中首个提示二次确认；
     // 空内容（bodyNorm 为空）不触发
     const bodyNorm = normalizeBody(body.trim())
@@ -436,7 +437,7 @@ export default function Home() {
         existing &&
         !window.confirm(`检测到内容已存在（标题「${existing.title}」），是否仍要添加？`)
       ) {
-        return
+        return null
       }
     }
     // P0-2/P0-C：组合筛选态下新建继承所有正向（OR/AND）标签，NOT 不继承；
@@ -454,6 +455,16 @@ export default function Home() {
     setCards((prev) => [card, ...prev])
     setTags(nextTags)
     setPromptTags((prev) => setCardTags(prev, card.id, tagIds))
+    return card.id
+  }
+
+  /** Composer 后台补全：只填仍处于初始状态的字段，避免覆盖用户刚完成的手动编辑。 */
+  function handleApplyGeneratedMeta(id: string, title: string, tagNames: string[], generateTitle: boolean, generateTags: boolean) {
+    const card = cards.find((item) => item.id === id)
+    if (!card) return
+    const nextTitle = generateTitle && card.title === '未命名提示词' ? title : card.title
+    const nextTagNames = generateTags ? Array.from(new Set([...card.tags, ...tagNames])) : card.tags
+    handleUpdateMeta(id, nextTitle, nextTagNames)
   }
 
   function handleLoadDemo() {
@@ -1081,7 +1092,13 @@ export default function Home() {
                 </button>
               </div>
             ) : (
-              <Composer existingTags={existingTags} onCreate={handleCreate} notify={notify} />
+              <Composer
+                existingTags={existingTags}
+                addMode={settings.composerAddMode}
+                onCreate={handleCreate}
+                onApplyGeneratedMeta={handleApplyGeneratedMeta}
+                notify={notify}
+              />
             )}
             {!isDemoView && bulkIds.size > 0 && (
               <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gold/40 bg-gold/10 px-3 py-2">

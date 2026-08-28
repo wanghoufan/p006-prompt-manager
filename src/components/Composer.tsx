@@ -1,26 +1,24 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Spinner } from '@/components/Spinner'
 
 interface ComposerProps {
   existingTags: string[]
-  onCreate: (body: string, title: string, tags: string[]) => void
+  addMode: 'auto' | 'manual'
+  onCreate: (body: string, title: string, tags: string[]) => string | null
+  onApplyGeneratedMeta: (id: string, title: string, tags: string[], generateTitle: boolean, generateTags: boolean) => void
   notify: (msg: string) => void
 }
-
-type Phase = 'idle' | 'working' | 'error'
 
 function Corner({ position }: { position: string }) {
   return <span aria-hidden className={`pointer-events-none absolute h-3 w-3 border-gold/70 ${position}`} />
 }
 
-export function Composer({ existingTags, onCreate, notify }: ComposerProps) {
+export function Composer({ existingTags, addMode, onCreate, onApplyGeneratedMeta, notify }: ComposerProps) {
   const [text, setText] = useState('')
-  const [phase, setPhase] = useState<Phase>('idle')
-  const [errorMsg, setErrorMsg] = useState('')
-  // RISK-3：AI 请求取消控制器（新请求前 abort 上一个，卸载时 abort）
-  const abortRef = useRef<AbortController | null>(null)
+  const [autoGenerateTags, setAutoGenerateTags] = useState(true)
+  const [autoGenerateTitle, setAutoGenerateTitle] = useState(true)
+  const abortControllersRef = useRef(new Set<AbortController>())
   const taRef = useRef<HTMLTextAreaElement>(null)
 
   // P3-4：autoResize 至 maxRows=6，粘贴长文自动展开，避免手动拖高
@@ -37,43 +35,58 @@ export function Composer({ existingTags, onCreate, notify }: ComposerProps) {
   }, [text])
 
   useEffect(() => {
-    return () => abortRef.current?.abort()
+    const controllers = abortControllersRef.current
+    return () => controllers.forEach((controller) => controller.abort())
   }, [])
 
-  async function generate(source: string) {
-    if (phase === 'working') return
-    abortRef.current?.abort()
-    const ac = new AbortController()
-    abortRef.current = ac
-    setPhase('working')
-    setErrorMsg('')
+  async function enrichCard(id: string, source: string, generateTitle: boolean, generateTags: boolean) {
+    if (!generateTitle && !generateTags) return
+    const controller = new AbortController()
+    abortControllersRef.current.add(controller)
     try {
       const res = await fetch('/api/ai/generate-meta', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ body: source, existingTags }),
-        signal: ac.signal,
+        signal: controller.signal,
       })
       const data: { title?: string; tags?: string[]; error?: string } = await res.json()
-      if (ac.signal.aborted) return
+      if (controller.signal.aborted) return
       if (!res.ok) throw new Error(data.error || '生成失败，请重试')
-      onCreate(source, data.title ?? '', data.tags ?? [])
-      setText('')
-      setPhase('idle')
-      notify('已创建卡片')
-    } catch (e) {
-      if (ac.signal.aborted) return
-      setPhase('error')
-      setErrorMsg(e instanceof Error ? e.message : '生成失败，请重试')
+      onApplyGeneratedMeta(id, data.title ?? '', data.tags ?? [], generateTitle, generateTags)
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        notify(`卡片已创建，${error instanceof Error ? error.message : '标题与标签补全失败'}`)
+      }
+    } finally {
+      abortControllersRef.current.delete(controller)
     }
   }
 
+  function createCard(source: string) {
+    const body = source.trim()
+    if (!body) return
+    const generateTitle = autoGenerateTitle
+    const generateTags = autoGenerateTags
+    const id = onCreate(body, '', [])
+    if (!id) return
+    setText('')
+    notify('已创建卡片')
+    void enrichCard(id, body, generateTitle, generateTags)
+  }
+
   function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
-    const pasted = e.clipboardData.getData('text').trim()
-    if (!pasted) return
+    if (addMode !== 'auto') return
+    const pasted = e.clipboardData.getData('text')
+    if (!pasted.trim()) return
     e.preventDefault()
-    setText(pasted)
-    void generate(pasted)
+    createCard(pasted)
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return
+    e.preventDefault()
+    createCard(text)
   }
 
   return (
@@ -88,55 +101,43 @@ export function Composer({ existingTags, onCreate, notify }: ComposerProps) {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onPaste={handlePaste}
+          onKeyDown={handleKeyDown}
           rows={1}
-          placeholder="在这里粘贴提示词正文，将自动生成标签与标题…"
+          placeholder={addMode === 'auto' ? '在这里粘贴提示词正文，将立即创建卡片…' : '在这里粘贴或输入提示词正文…'}
           className="field resize-none font-mono text-[13px] leading-relaxed"
         />
       </div>
 
-      {phase === 'working' && (
-        <div className="mt-3 flex items-center gap-2 text-xs text-gold-bright">
-          <Spinner />
-          正在生成标签与标题…
+      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <span>粘贴正文后全自动生成</span>
+          <label className="flex cursor-pointer items-center gap-1.5 text-paper-dim">
+            <input
+              type="checkbox"
+              checked={autoGenerateTags}
+              onChange={(e) => setAutoGenerateTags(e.target.checked)}
+              className="accent-gold"
+            />
+            自动生成标签
+          </label>
+          <label className="flex cursor-pointer items-center gap-1.5 text-paper-dim">
+            <input
+              type="checkbox"
+              checked={autoGenerateTitle}
+              onChange={(e) => setAutoGenerateTitle(e.target.checked)}
+              className="accent-gold"
+            />
+            自动生成标题
+          </label>
         </div>
-      )}
-
-      {phase === 'error' && (
-        <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-rust/40 bg-rust/10 px-3 py-2">
-          <span className="line-clamp-2 min-w-0 text-xs text-rust" title={errorMsg}>
-            生成失败：{errorMsg}
-          </span>
-          <div className="flex shrink-0 gap-2">
-            <button type="button" className="btn" onClick={() => void generate(text)}>
-              重试
-            </button>
-            <button
-              type="button"
-              className="btn"
-              onClick={() => {
-                onCreate(text, '', [])
-                setText('')
-                setPhase('idle')
-              }}
-            >
-              直接创建
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="mt-2.5 flex items-center justify-between text-xs text-muted">
-        <span>粘贴正文后全自动生成 · 每张卡片 1~3 个标签</span>
-        {phase === 'idle' && text && (
-          <button
-            type="button"
-            className="btn-gold px-2.5 py-1 text-xs"
-            onClick={() => void generate(text)}
-          >
-            生成卡片
-          </button>
-        )}
-        {phase === 'working' && <span className="text-muted">生成中…</span>}
+        <button
+          type="button"
+          className="btn-gold px-2.5 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={!text.trim()}
+          onClick={() => createCard(text)}
+        >
+          生成卡片 (Enter)
+        </button>
       </div>
     </section>
   )

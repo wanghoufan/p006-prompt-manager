@@ -99,6 +99,7 @@ const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
   autoFormatBody: false,
   bodyAlignment: 'left',
+  composerAddMode: 'auto',
 }
 
 /** 设置归一化（P0-4/P0-5）：老数据缺 confirmDelete / theme 字段时补默认值；
@@ -107,12 +108,14 @@ function normalizeSettings(v: unknown): Settings {
   const s = (v && typeof v === 'object' ? v : {}) as Partial<Settings>
   const theme = s.theme === 'dark' || s.theme === 'light' || s.theme === 'system' ? s.theme : 'system'
   const bodyAlignment = s.bodyAlignment === 'center' || s.bodyAlignment === 'right' ? s.bodyAlignment : 'left'
+  const composerAddMode = s.composerAddMode === 'manual' ? 'manual' : 'auto'
   return {
     thinkingSummaryPrompt: typeof s.thinkingSummaryPrompt === 'string' ? s.thinkingSummaryPrompt : '',
     confirmDelete: typeof s.confirmDelete === 'boolean' ? s.confirmDelete : true,
     theme,
     autoFormatBody: typeof s.autoFormatBody === 'boolean' ? s.autoFormatBody : false,
     bodyAlignment,
+    composerAddMode,
   }
 }
 

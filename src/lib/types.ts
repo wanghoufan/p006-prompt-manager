@@ -33,6 +33,8 @@ export interface Settings {
   autoFormatBody: boolean
   /** P0-I：正文显示及 AI 格式整理所采用的对齐方式 */
   bodyAlignment: 'left' | 'center' | 'right'
+  /** Composer 粘贴正文后的建卡方式；auto 立即建卡，manual 等待用户确认。 */
+  composerAddMode: 'auto' | 'manual'
 }
 
 /** 标签实体：与 Prompt 完全解耦，通过稳定 id 关联（交接 §38）。

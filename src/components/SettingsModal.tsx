@@ -157,6 +157,23 @@ export function SettingsModal({ settings, onSave, onClose }: SettingsModalProps)
             </select>
           </div>
           <div className="rounded-lg border border-line bg-ink-900 px-3.5 py-3">
+            <label htmlFor="settings-composer-add-mode" className="text-sm text-paper">
+              添加模式
+            </label>
+            <p className="mt-0.5 text-xs text-muted">
+              默认直接添加会在粘贴后立即建卡；手动确认则需点击生成按钮或按 Enter。
+            </p>
+            <select
+              id="settings-composer-add-mode"
+              className="field mt-2"
+              value={settings.composerAddMode}
+              onChange={(e) => onSave({ ...settings, composerAddMode: e.target.value as Settings['composerAddMode'] })}
+            >
+              <option value="auto">默认直接添加</option>
+              <option value="manual">手动确认</option>
+            </select>
+          </div>
+          <div className="rounded-lg border border-line bg-ink-900 px-3.5 py-3">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-sm text-paper">粘贴后自动整理正文</p>
