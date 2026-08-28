@@ -52,9 +52,16 @@
 
 ## 进行中 / 待办
 
-- P1 四项目已实现，待【节奏】触发 QA Acceptance。
+- P2-10/P2-11 已通过 QA（2026-08-28 12项 PASS）与产品验收 PASS，待工程收尾提交推送。
 
 ---
+
+## 已收口（2026-08-28，P2-10/P2-11 网格直删+批量管理）
+
+- **P2-10 网格直删入口（核验既有实现）**：`CardItem` 悬浮胶囊 `text-rust` 删除按钮（`onDelete` prop，`!readonly` 渲染，`stopPropagation`）+ `handleDeleteCard` 条件 `confirm`「确定删除「{title}」？此操作不可撤销。」+ `snapshot` + `notifyWithUndo` 10s 撤销 + demo 隐藏；`isDemoView ? undefined : handleDeleteCard`。
+- **P2-11 批量管理（核验既有实现）**：`bulkIds` Set + `CardItem` checkbox（`role="checkbox" aria-checked`）+ 顶部批量操作栏「已选 N 张」+ 打标签（prompt→parseTags→addCardTag 去重≤3→syncCards）/ 打星（0-5 校验）/ 导出（buildMarkdownExport）/ 删除（confirm 含数 + 撤销）/ 取消选择（clearBulk）。
+- 涉及文件：`src/components/CardItem.tsx`、`src/app/page.tsx:490-662`（handleDelete/handleBulk*）、`src/lib/storage.ts`/`types.ts`（confirmDelete）；核验无新增改动，12项 QA/产品验收 PASS。
+- 验证：`npx tsc --noEmit` 零错误；`npm run lint` 零错误零警告；API `/api/sync` 33→32。
 
 ## 已收口（2026-08-28，P1 产品缺陷 4 项打包）
 

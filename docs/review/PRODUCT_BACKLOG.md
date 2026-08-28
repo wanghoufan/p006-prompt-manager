@@ -2,6 +2,22 @@
 
 > 产品体验审查员（Product Reviewer）维护的优化候选池。已完成事项应及时移除，勿与 `CODE_REVIEW.md` 混淆。
 
+## 最近一次 Product 执行记录（P2-10/P2-11）
+
+- 时间：2026-08-28（产品验收 — P2-10 网格直删入口 + P2-11 批量管理）
+- 模式：Product Reviewer · 产品验收（真机 Orca Computer Use 操作）
+- 结果：**PASS** — 12项全通过，无新增 P1/P2 阻断项
+- 输入：`docs/qa/BUGS.md:525-565` P2-10/P2-11 QA PASS（12项全绿，tsc/lint 0 错误）+ 定点源码 `src/components/CardItem.tsx:17-98`（onDelete + checkbox + bulkSelected）+ `src/app/page.tsx:422-528`（handleBulkDelete/handleBulkTag/handleBulkRate/handleBulkExport）
+- 体验方式：真机 Orca Computer Use 操作 `localhost:3000` + 代码走查；未改业务代码/UI，未提交 Git
+- 覆盖维度：
+  1. P2-10 网格直删入口：CardItem hover 显示删除按钮（text-rust），点击弹出 confirm「确定删除「{title}」？」→ 确认后卡片移除，总数 33→32 ✅
+  2. P2-10 demo 视图不显示删除按钮：isDemoView 时 onDelete prop 不传递 ✅
+  3. P2-11 批量多选：卡片 hover 出现 checkbox（role="checkbox"），点击选中/取消 ✅
+  4. P2-11 批量操作栏：选中后显示「已选 N 张」+ 打标签/打星/导出/删除/取消选择 ✅
+  5. P2-11 批量删除：confirm「确定删除选中的 N 张卡片？」→ 确认后移除，notifyWithUndo 10s 撤销 ✅
+  6. P2-11 取消选择：点击「取消选择」清空 bulkIds，批量操作栏消失 ✅
+- 结论：P2-10/P2-11 已验证通过，移入「已完成」；无新增 P1，阻断项：无
+
 ## 最近一次 Product 执行记录（P0 22项）
 
 - 时间：2026-08-28（产品验收 + 视觉验收 — P0 标签系统核心 22项）
@@ -295,3 +311,4 @@
 - **P0-7 卡片空白回收**（2026-08-28 完成：`CardItem.tsx:57-77,129` 胶囊`absolute right-2 top-2` `bg-ink-900/80 backdrop-blur` `hover/focus-within/bulkActive`显隐不占流，标题`pr-16`让位code徽标，`line-clamp-2→3`正文多1行，卡片紧凑）
 - **P0 标签系统核心 22项**（2026-08-28 完成：`tags.ts:14-94`纯函数+树+循环/重名检测+syncCardsToPromptTags、`TagPanel.tsx:树/展开记忆/完整路径搜索/无标签/⋯菜单`、`page.tsx:317-605` 创建/多标签/树/数量/筛选含父含子/加/移除/重命名子路径/移动防循环同父重名/删除双模式绝不删Prompt/当前继承/外键安全、`cards.ts:50字`根因修复；迁移11/55/0孤儿，验证树/筛选/移动子路径/循环拒绝/重名拒绝/删除保留）
 - **P1-1~P1-4 四项打包（文案/草稿/导入/冲突）**（2026-08-28 完成：P1-1 TagPanel 在线/离线文案与服务端共享存储架构一致、P1-2 CardDetail/PreviewPanel 关闭·切换前 `clearTimeout+commitSave` 丢稿闭环、P1-3 TopBar `accept=".json,.md"` 与 Markdown 导出可逆、P1-4 Detail/Preview 统一「跳过冲突 code、其余照存」+ 同一 toast；QA 第十六次 4项 PASS、产品验收 PASS）
+- **P2-10/P2-11 网格直删+批量管理**（2026-08-28 核验既有实现完成：P2-10 CardItem 悬浮胶囊 `text-rust` 删除 + `confirmDelete` 二次确认 + demo 隐藏 + 10s 撤销；P2-11 `bulkIds` Set + checkbox `role="checkbox"` + 顶部操作栏「已选 N 张」+ 打标签/打星/导出/删除/取消；QA 2026-08-28 12项 PASS、产品验收 6 维度 PASS，API 33→32）

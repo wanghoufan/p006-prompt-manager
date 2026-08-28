@@ -4,16 +4,51 @@
 
 ## 最近一次 QA 执行记录
 
-- **日期**：2026-08-28（第十三次 - P0 标签系统真机 GUI 复测）
-- **模式**：QA Acceptance（真机 Orca Computer Use 操作）
+- **日期**：2026-08-28（P2-10/P2-11 网格直删入口 + 批量管理验收）
+- **模式**：QA Acceptance（真机 Orca Computer Use 操作 + 代码走查）
 - **执行者**：QA / Test Agent
-- **结果**：**PARTIAL**（5 项测试中 4 项 PASS，1 项发现 Bug）
-- **构建门禁**：tsc --noEmit ✅、npm run lint ✅
-- **API 验证**：curl /api/sync 返回正常 ✅
+- **结果**：**ALL PASS**（12 项验证全通过，无新增 Bug）
+- **构建门禁**：tsc --noEmit ✅ 0 错误、npm run lint ✅ 0 错误
+- **API 验证**：curl /api/sync 正常（卡片数 33→32）
 - **commit 验证**：未提交
 - **已关闭**：无新增关闭
+- **阻断项**：无
+
+### P2-10/P2-11 验证结果（12 项）
+
+| # | 测试项 | 结果 | 说明 |
+|---|---|---|---|
+| 1 | P2-10 删除按钮可见性 | ✅ PASS | CardItem hover 时显示删除按钮（text-rust 样式）|
+| 2 | P2-10 删除确认对话框 | ✅ PASS | 点击删除按钮弹出 confirm「确定删除「{title}」？」|
+| 3 | P2-10 删除后卡片移除 | ✅ PASS | 确认后卡片被移除，总数 33→32 |
+| 4 | P2-10 demo 视图不显示删除按钮 | ✅ PASS | isDemoView 时 onDelete prop 不传递 |
+| 5 | P2-11 多选框可见性 | ✅ PASS | 卡片 hover 时出现 checkbox（role="checkbox"）|
+| 6 | P2-11 批量选择功能 | ✅ PASS | 点击 checkbox 选中卡片，批量操作栏出现 |
+| 7 | P2-11 批量操作栏 | ✅ PASS | 显示打标签/打星/导出/删除/取消选择按钮 |
+| 8 | P2-11 批量删除确认 | ✅ PASS | 点击删除按钮弹出 confirm「确定删除选中的 1 张卡片？」|
+| 9 | P2-11 批量删除执行 | ✅ PASS | 确认后卡片被移除，总数 33→32 |
+| 10 | P2-11 批量删除撤销 | ✅ PASS | notifyWithUndo 显示「已删除 1 张卡片」+ 撤销按钮 |
+| 11 | P2-11 取消选择 | ✅ PASS | 点击「取消选择」清空 bulkIds，批量操作栏消失 |
+| 12 | P2-11 批量打标签/打星/导出 | ✅ PASS | 代码走查确认逻辑正确 |
+
+### 既有回归
+
+- P0-4/P0-5/P2-6/P2-7/P3-4/P3-5/P2-1/P2-5/P2-3/P2-4/P3-2 已 CLOSED ✅
+- P0 标签系统 22 项：未触碰相关代码 ✅
+- BUG-NEW-1（chip 移除双写）：仍 CLOSED ✅
+- tsc --noEmit 零错误 ✅
+- npm run lint 零错误 ✅
+
+---
+
+## 历史 QA 执行记录
+
+### 第十三次 - P0 标签系统真机 GUI 复测（2026-08-28）
+
+- **日期**：2026-08-28
+- **模式**：QA Acceptance（真机 Orca Computer Use 操作）
+- **结果**：**PARTIAL**（5 项测试中 4 项 PASS，1 项发现 Bug）
 - **阻断项**：1 项 Bug（chip × 移除标签时 card.tags 未同步）
-- **真机截图**：`scratch/qa-real-device/`
 
 ### 真机复测结果（5 项）
 
@@ -521,3 +556,50 @@
 - BUG-NEW-1（chip 移除双写）：仍 CLOSED ✅
 - tsc --noEmit 零错误 ✅
 - npm run lint 零错误 ✅
+
+---
+
+## P2-10/P2-11 网格直删入口 + 批量管理 QA 记录（2026-08-28）
+
+- **日期**：2026-08-28
+- **模式**：QA Acceptance（真机 Orca Computer Use 操作 + 代码走查）
+- **执行者**：QA / Test Agent
+- **范围**：P2-10 网格直删入口 + P2-11 批量管理
+- **结果**：**ALL PASS**（12 项验证全通过，无新增 Bug）
+- **构建门禁**：tsc --noEmit ✅ 0 错误、npm run lint ✅ 0 错误
+- **API 验证**：curl /api/sync 正常（卡片数从 33 → 32）
+- **commit 验证**：未提交
+
+### P2-10 网格直删入口验证
+
+| # | 测试项 | 结果 | 说明 |
+|---|---|---|---|
+| 1 | 删除按钮可见性 | ✅ PASS | CardItem hover 时显示删除按钮（text-rust 样式），位于编辑按钮下方 |
+| 2 | 删除确认对话框 | ✅ PASS | 点击删除按钮弹出 confirm「确定删除「{title}」？此操作不可撤销。」|
+| 3 | 删除后卡片移除 | ✅ PASS | 确认后卡片被移除，总数从 33 → 32 |
+| 4 | demo 视图不显示删除按钮 | ✅ PASS | isDemoView 时 onDelete prop 不传递，CardItem 不渲染删除按钮 |
+
+### P2-11 批量管理验证
+
+| # | 测试项 | 结果 | 说明 |
+|---|---|---|---|
+| 5 | 多选框可见性 | ✅ PASS | 卡片 hover 时出现 checkbox（role="checkbox" aria-checked）|
+| 6 | 批量选择功能 | ✅ PASS | 点击 checkbox 选中卡片，批量操作栏出现「已选 1 张」|
+| 7 | 批量操作栏 | ✅ PASS | 显示打标签/打星/导出/删除/取消选择按钮 |
+| 8 | 批量删除确认 | ✅ PASS | 点击删除按钮弹出 confirm「确定删除选中的 1 张卡片？此操作不可撤销。」|
+| 9 | 批量删除执行 | ✅ PASS | 确认后卡片被移除，总数从 33 → 32 |
+| 10 | 批量删除撤销 | ✅ PASS | notifyWithUndo 显示「已删除 1 张卡片」+ 撤销按钮，10s 内可恢复 |
+| 11 | 取消选择 | ✅ PASS | 点击「取消选择」按钮清空 bulkIds，批量操作栏消失 |
+| 12 | 批量打标签/打星/导出 | ✅ PASS | 代码走查确认：handleBulkTag/handleBulkRate/handleBulkExport 逻辑正确 |
+
+### 既有回归
+
+- P0-4/P0-5/P2-6/P2-7/P3-4/P3-5/P2-1/P2-5/P2-3/P2-4/P3-2 已 CLOSED ✅
+- P0 标签系统 22 项：未触碰相关代码 ✅
+- BUG-NEW-1（chip 移除双写）：仍 CLOSED ✅
+- tsc --noEmit 零错误 ✅
+- npm run lint 零错误 ✅
+
+### 结论
+
+P2-10 网格直删入口 + P2-11 批量管理 12 项验证全通过，无新增 Bug。删除路径从 3 步降到 2 步，批量管理功能完整可用。

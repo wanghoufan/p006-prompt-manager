@@ -50,4 +50,15 @@
 - 小白解释：就像只看菜谱没尝菜就说菜熟了。看代码觉得逻辑对，不等于在真机上点一点就真能用——用户一点重命名就失败，说明必须亲手在界面上点过才算测过。单靠一条规定容易“走过场”，要用三道锁一起兜底。
 - 技术处理：按 `QUALITY_GATES.md` 本应 `P0 可复现 → QA 必 GUI`，但本轮 QA 为 B 档代码走查（`gpt-5.4-mini` 等）未强制 `Vision + Computer Use` 真机。本次已补为三重保障：① Skill `qa-real-device` 隐式加载（第一重，能力层兜底）② 角色模板 `docs/roles/qa.md` 写入“真机必测硬约束”（第二重，角色层）③ `Stage Manager` 生成 QA Prompt 时在“约束”首条显式要求 `Vision + Computer Use 真机操作 http://localhost:3000 必选，截图为据`（第三重，刚写入 `docs/roles/stage-manager.md: QA 真机必测多重保障`）。后续任何 P0 的 QA Prompt 都在约束首条显式要求真机，三重缺一不可，未真机逐项点过不得判 QA PASS。补救已入本次 Fix Prompt：Fix 后 QA 必须真机复测 4 项 GUI（单标签重命名 / 父重命名 / 重名拒绝 / 移动后子路径），`QA_CHECKLIST` 追加 P0 重命名 GUI 必测，`BUGS.md` 记 P0 阻断项，下次 `neat-freak` 前必须 GUI PASS 才能合。
 - 可直接给 Agent 的规则：`QA 对 P0 功能必须 Vision + Computer Use 真机点过全链路（选中→操作→显隐→关联数据更新）并截图留证，仅 tsc/lint/走查不得判 PASS；Stage Manager 的 QA Prompt 约束首条必须显式写明真机必选；三重保障（Skill+角色模板+Prompt约束）缺一不可，P0 GUI 未 PASS 禁止 neat-freak 合入与提交。`
-- 候选升级位置：`docs/roles/qa.md` 增加“P0 必真机”条目 + `docs/workflow/QUALITY_GATES.md` 硬门控 + `docs/qa/QA_CHECKLIST.md` 为 P0-13 追加 GUI 必测项 + `docs/roles/stage-manager.md` 增加 QA 真机多重保障（均待授权，已部分写入）
+- QA 分工差异化（2026-08-28 补充，避免一刀切）：`代码走查（所有任务，读代码+验证逻辑）+ 自动化测试（有 tsc/lint/curl 门禁时，运行构建命令+API 测试）+ 真机 GUI 测试（仅 P0 核心功能：标签重命名/移动/删除等，Vision + Computer Use 操作浏览器，需 Vision 能力模型）`；问题是此前所有 QA 用同一模型/方式，未区分。整改：`P0 核心功能 → 必须真机 GUI`，`P1/P2 常规 → 代码走查 + 自动化测试即可`；后续 QA 任务在 Prompt 中明确标注「真机必测」或「代码走查即可」，Stage Manager 分派时按此分级选用模型/方式（P2-10/P2-11 12 项验证已按此区分通过）。
+- 候选升级位置：`docs/roles/qa.md` 增加“P0 必真机 + QA 三档分工”条目 + `docs/workflow/QUALITY_GATES.md` 硬门控 + `docs/qa/QA_CHECKLIST.md` 为 P0-13 追加 GUI 必测项 + `docs/roles/stage-manager.md` 增加 QA 真机多重保障与分工标注（均待授权，已部分写入）
+
+## 5. 派发子任务后必须进入强制监控循环，防 tui-idle 假死导致工作停滞
+
+- 成熟度：B 候选升级项目规范（可同步作为 C 通用模板候选）
+- 时间：2026-08-28
+- 现象：QA 已启动（`term_6185798f, mimo-v2.5-free` 验 P2-10/P2-11）后无主动巡检，`tui-idle` 假死无感知，任务停滞无超时切换，日志无回溯。
+- 小白解释：就像派人去干活后不去看进度，人卡住了也不知道。要每隔十几秒去敲门看一眼，没动静就换人，确保活一直在干。
+- 技术处理：整改方案确保工作不停止：① 强制监控循环：派发后立即 `while True`，每 15-30s 主动 `orca terminal wait --for tui-idle --timeout-ms 5000 --json | grep "satisfied"` + `orca terminal read --json | python -c` 取 `tail[10:]` ② 完成标志检测：输出中搜索 `完成后停止/等待 QA/已完成` 等关键词 ③ 超时处理：单任务 >10 分钟无进展则重新派发或切换 fallback 模型 ④ 日志记录：每次检查写入 `scratch/monitor-log.md` 便于回溯。当前监控中每 15s 检查一次：`sleep 15; echo "=== QA 进度检查 ==="; orca terminal wait ...; orca terminal read ...`。
+- 可直接给 Agent 的规则：`派发 QA/子任务后必须立即进入 15-30s 轮询的强制监控循环（tui-idle 检测 + 关键词完成检测 + 10分钟超时切 fallback），每次结果 append 到 scratch/monitor-log.md，未完成不得退出循环。`
+- 候选升级位置：`docs/roles/stage-manager.md` 或 `docs/workflow/` 增加“子任务监控”硬约束 + `AGENTS.md §六` 补充监控纪律（待授权）

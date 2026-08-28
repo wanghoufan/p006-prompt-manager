@@ -42,7 +42,7 @@
 | 标签 chip 双写 | 编辑卡片标签 chip `×` 移除时 `handleUpdateMeta` 双写 `card.tags` 与 `promptTags`（`resolveTagIds→setCardTags→syncCardsToPromptTags`），重命名回滚修复（宏任务 `schedulePush` 合并避免 SSE 回声回滚），新建标签父校验 `parentId` 存在性检查；`BUG-NEW-1 CLOSED` |
 | 标签管理 | 标签行 hover 显示 ×（键盘 focus-visible 可达），点击 confirm「将从 N 张卡片中移除标签…卡片本身不会删除」→ 批量从所有含该标签的卡片移除该条目（原文不动），计数归 0 自动消失；demo 视图隐藏 × |
 | 标签添加交互（P0-9） | 详情/预览面板标签区重构为 flomo 风格 `TagEditor`：输入 `#标签名` 后**回车或空格**即自动添加为 chip（禁止逗号/顿号分隔），每次只加一个标签互不干扰；输入时弹出已有标签下拉补全（点选/回车即加）；chip 上 × 移除单个；已达上限（默认 3 个）红色提示；失焦兜底提交未写完标签；与 `handleUpdateMeta` 的 `tagsText` 编辑链路双向兼容（`parseTags`/`join('、')`） |
-| 网格直删 | 卡片 hover 时悬浮胶囊 `absolute top-2 right-2 bg-ink-900/80 backdrop-blur`（`group-hover`/`focus-within`/`bulkActive` 显隐）内含多选/编辑/删除，`text-rust` 删除按 `Settings.confirmDelete` 决定是否 `window.confirm`「确定删除「{title}」？此操作不可撤销。」；标题 `pr-16` 预留位 code 徽标不被盖，正文 `line-clamp-3` 空白回收；demo 隐藏；设置中 Switch 即存 |
+| 网格直删 | 卡片 hover 时悬浮胶囊 `absolute top-2 right-2 bg-ink-900/80 backdrop-blur`（`group-hover`/`focus-within`/`bulkActive` 显隐）内含多选/编辑/删除，`text-rust` 删除按 `Settings.confirmDelete` 决定是否 `window.confirm`「确定删除「{title}」？此操作不可撤销。」；标题 `pr-16` 预留位 code 徽标不被盖，正文 `line-clamp-3` 空白回收；demo 隐藏；设置中 Switch 即存（2026-08-28 12项 PASS） |
 | 排序 | 按更新时间 / 复制次数 / 评分降序；搜索激活时按相关度（标题 4/调取码·标签 3/备注 2/正文 1）置顶，同分二级排序 |
 | 格式规范化 | 保存时自动 `normalizeBody`：逐行去前导 tab、纯空白归一、非空行前导空格最多保留 4 个、去首尾空行、合并连续空行（`\\n{3,}`→`\\n\\n`）；导入（JSON/Markdown）路径同步规范化，保证全篇左对齐 |
 | 重复去重 | 新建提交前 `normalizeBody` 全等比对，命中已有内容弹 `confirm`「检测到内容已存在（标题「X」），是否仍要添加？」— 取消不新增、确认继续；空内容/不同内容不弹，首个命中仅一次 |
@@ -54,7 +54,7 @@
 | 导入详情 | `SkippedCard` + `describeCardFailure` 字段级原因，`parseMarkdownImport` 空正文入 skipped，`parseImport` JSON 部分导入；`Toast` detail 可滚动列表 6s 展示 |
 | 版本节流 | 失焦仅保存不建版（`saveBodyOnly` 全等比较），手动保存/`Ctrl+Enter` 才 `saveBodyWithVersion` 建版，节流合并避免占满 |
 | 撤销栈 | 删除/清空等 4 类危险操作 10s 内 `notifyWithUndo` + `undoRef` 撤销，`Toast`  detail 展示 |
-| 批量管理 | `bulkIds` Set + 卡片 checkbox（`role="checkbox"`）+ 顶部操作栏（打标签/打星/导出/删除/取消） |
+| 批量管理 | `bulkIds` Set + 卡片 checkbox（`role="checkbox"`）+ 顶部操作栏（打标签/打星/导出/删除/取消选择）+ 撤销栈 10s（2026-08-28 12项 PASS，API 33→32） |
 | 移动端抽屉 | `<md` 时预览面板为底部 `fixed` 抽屉（`max-h-[75dvh]` + `onClose` 收起），`md` 恢复侧边栏 |
 | 备注防丢 | `notesTimer` 700ms 防抖，`useEffect` cleanup + 切卡 `commitSave` flush，避免丢字/错卡 |
 | 版本 diff | `VersionDiff` + `lineDiff` LCS 行级 diff，版本历史展开高亮对比 |
