@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Card, Version } from '@/lib/types'
-import { cardDraftChanges, cardDraftFrom, isValidSourceUrl, normalizeBody, normalizeCode, normalizeSourceUrl, parseTags } from '@/lib/cards'
+import { cardDraftChanges, cardDraftFrom, isValidSourceUrl, normalizeBody, normalizeCode, normalizeSourceUrl, parseSourceLink, parseTags } from '@/lib/cards'
 import { Stars } from '@/components/Stars'
 import { Spinner } from '@/components/Spinner'
 import { TagEditor } from '@/components/TagEditor'
@@ -67,6 +67,31 @@ export function CardDetail(props: CardDetailProps) {
 
   const sourceUrl = normalizeSourceUrl(draft.sourceUrl)
   const sourceUrlInvalid = sourceUrl !== '' && !isValidSourceUrl(sourceUrl)
+  const sourceLink = parseSourceLink(sourceUrl)
+  const [sourceTitleLoading, setSourceTitleLoading] = useState(false)
+
+  async function handleSourceUrlBlur() {
+    if (notesTimer.current) window.clearTimeout(notesTimer.current)
+    commitSave(true)
+    const rawSourceUrl = normalizeSourceUrl(draftRef.current.sourceUrl)
+    const link = parseSourceLink(rawSourceUrl)
+    if (!link || link.title) return
+
+    setSourceTitleLoading(true)
+    try {
+      const response = await fetch(`/api/fetch-title?url=${encodeURIComponent(link.url)}`)
+      const data = (await response.json()) as { title?: unknown }
+      const title = typeof data.title === 'string' ? data.title.replace(/[\[\]\r\n]+/g, ' ').replace(/\s+/g, ' ').trim() : ''
+      if (!response.ok || !title || draftRef.current.sourceUrl !== rawSourceUrl) return
+      const formatted = `[${title}](${link.url})`
+      setDraft((current) => (current.sourceUrl === rawSourceUrl ? { ...current, sourceUrl: formatted } : current))
+      if (cardRef.current?.id === card.id) props.onUpdateSourceUrl(card.id, formatted)
+    } catch {
+      // 标题获取失败时已由失焦保存保留原链接。
+    } finally {
+      setSourceTitleLoading(false)
+    }
+  }
 
   function resizeNotesTextarea(textarea = notesTextareaRef.current) {
     if (!textarea) return
@@ -387,16 +412,16 @@ export function CardDetail(props: CardDetailProps) {
                   </p>
                 </div>
               )}
-              {card.sourceUrl && isValidSourceUrl(card.sourceUrl) && (
+              {card.sourceUrl && parseSourceLink(card.sourceUrl) && (
                 <div className="space-y-1.5">
                   <p className="text-xs text-muted">来源链接</p>
                   <a
-                    href={card.sourceUrl}
+                    href={parseSourceLink(card.sourceUrl)?.url}
                     target="_blank"
                     rel="noreferrer"
                     className="block truncate rounded-md border border-line bg-ink-850 px-3 py-2.5 text-sm text-gold-bright hover:underline"
                   >
-                    打开来源网站
+                    {parseSourceLink(card.sourceUrl)?.title ?? '打开来源网站'}
                   </a>
                 </div>
               )}
@@ -503,7 +528,7 @@ export function CardDetail(props: CardDetailProps) {
                 <div className="flex items-center gap-2">
                   <input
                     id="detail-source-url"
-                    type="url"
+                    type="text"
                     className={`field min-w-0 flex-1 text-xs ${sourceUrlInvalid ? 'border-rust/60 focus:border-rust' : ''}`}
                     value={draft.sourceUrl}
                     placeholder="粘贴来源链接"
@@ -512,17 +537,15 @@ export function CardDetail(props: CardDetailProps) {
                       setDraft((d) => ({ ...d, sourceUrl: e.target.value }))
                       scheduleNotesSave()
                     }}
-                    onBlur={() => {
-                      if (notesTimer.current) window.clearTimeout(notesTimer.current)
-                      commitSave(true)
-                    }}
+                    onBlur={() => void handleSourceUrlBlur()}
                   />
-                  {sourceUrl && !sourceUrlInvalid && (
-                    <a href={sourceUrl} target="_blank" rel="noreferrer" className="btn-ghost shrink-0 text-xs">
+                  {sourceLink && (
+                    <a href={sourceLink.url} target="_blank" rel="noreferrer" className="btn-ghost shrink-0 text-xs">
                       打开
                     </a>
                   )}
                 </div>
+                {sourceTitleLoading && <p className="text-[11px] text-muted">正在获取网页标题…</p>}
                 {sourceUrlInvalid && <p className="text-[11px] text-rust">请输入有效的 http:// 或 https:// 链接</p>}
               </div>
               <div className="space-y-1.5">

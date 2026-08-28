@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Card, Version } from '@/lib/types'
-import { cardDraftChanges, cardDraftFrom, isValidSourceUrl, normalizeBody, normalizeCode, normalizeSourceUrl, parseTags } from '@/lib/cards'
+import { cardDraftChanges, cardDraftFrom, isValidSourceUrl, normalizeBody, normalizeCode, normalizeSourceUrl, parseSourceLink, parseTags } from '@/lib/cards'
 import type { CardDraft } from '@/lib/cards'
 import { Stars } from '@/components/Stars'
 import { Spinner } from '@/components/Spinner'
@@ -120,6 +120,32 @@ export function PreviewPanel({
 
   const sourceUrl = normalizeSourceUrl(draft.sourceUrl)
   const sourceUrlInvalid = sourceUrl !== '' && !isValidSourceUrl(sourceUrl)
+  const sourceLink = parseSourceLink(sourceUrl)
+  const [sourceTitleLoading, setSourceTitleLoading] = useState(false)
+
+  async function handleSourceUrlBlur() {
+    if (notesTimer.current) window.clearTimeout(notesTimer.current)
+    commitSave(true)
+    if (!card) return
+    const rawSourceUrl = normalizeSourceUrl(draftRef.current.sourceUrl)
+    const link = parseSourceLink(rawSourceUrl)
+    if (!link || link.title) return
+
+    setSourceTitleLoading(true)
+    try {
+      const response = await fetch(`/api/fetch-title?url=${encodeURIComponent(link.url)}`)
+      const data = (await response.json()) as { title?: unknown }
+      const title = typeof data.title === 'string' ? data.title.replace(/[\[\]\r\n]+/g, ' ').replace(/\s+/g, ' ').trim() : ''
+      if (!response.ok || !title || draftRef.current.sourceUrl !== rawSourceUrl) return
+      const formatted = `[${title}](${link.url})`
+      setDraft((current) => (current.sourceUrl === rawSourceUrl ? { ...current, sourceUrl: formatted } : current))
+      if (cardRef.current?.id === card.id) onUpdateSourceUrl(card.id, formatted)
+    } catch {
+      // 标题获取失败时已由失焦保存保留原链接。
+    } finally {
+      setSourceTitleLoading(false)
+    }
+  }
 
   function resizeNotesTextarea(textarea = notesTextareaRef.current) {
     if (!textarea) return
@@ -500,16 +526,16 @@ export function PreviewPanel({
               </p>
             </div>
           )}
-          {card.sourceUrl && isValidSourceUrl(card.sourceUrl) && (
+          {card.sourceUrl && parseSourceLink(card.sourceUrl) && (
             <div className="border-b border-line px-3 py-1.5">
               <p className="text-[10px] uppercase tracking-wider text-muted">来源链接</p>
               <a
-                href={card.sourceUrl}
+                href={parseSourceLink(card.sourceUrl)?.url}
                 target="_blank"
                 rel="noreferrer"
                 className="mt-0.5 block truncate text-[12px] text-gold-bright hover:underline"
               >
-                打开来源网站
+                {parseSourceLink(card.sourceUrl)?.title ?? '打开来源网站'}
               </a>
             </div>
           )}
@@ -653,7 +679,7 @@ export function PreviewPanel({
             <div className="mt-2 flex items-center gap-2">
               <input
                 id="preview-source-url"
-                type="url"
+                type="text"
                 className={`field min-w-0 flex-1 py-1 text-[12px] ${sourceUrlInvalid ? 'border-rust/60 focus:border-rust' : ''}`}
                 value={draft.sourceUrl}
                 placeholder="粘贴来源链接"
@@ -663,14 +689,11 @@ export function PreviewPanel({
                   setDraft((d) => ({ ...d, sourceUrl: e.target.value }))
                   scheduleNotesSave()
                 }}
-                onBlur={() => {
-                  if (notesTimer.current) window.clearTimeout(notesTimer.current)
-                  commitSave(true)
-                }}
+                onBlur={() => void handleSourceUrlBlur()}
               />
-              {sourceUrl && !sourceUrlInvalid && (
+              {sourceLink && (
                 <a
-                  href={sourceUrl}
+                  href={sourceLink.url}
                   target="_blank"
                   rel="noreferrer"
                   className="btn-ghost shrink-0 text-[10px]"
@@ -679,6 +702,7 @@ export function PreviewPanel({
                 </a>
               )}
             </div>
+            {sourceTitleLoading && <p className="pt-1 text-[10px] text-muted">正在获取网页标题…</p>}
             {sourceUrlInvalid && <p className="pt-1 text-[10px] text-rust">请输入有效的 http:// 或 https:// 链接</p>}
             <div className="mt-2">
               <TagEditor

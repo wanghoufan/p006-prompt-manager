@@ -8,14 +8,31 @@ export function normalizeCode(raw: string): string {
   return raw.trim().toLowerCase().replace(/[^a-z0-9-]/g, '')
 }
 
-/** 来源链接仅允许可在浏览器中安全打开的 HTTP(S) URL。 */
-export function isValidSourceUrl(raw: string): boolean {
+export interface SourceLink {
+  url: string
+  title: string | null
+}
+
+/**
+ * 兼容历史裸 URL 与智能链接生成的 Markdown 格式 `[标题](链接)`。
+ * 不把任意 Markdown 当作链接，避免展示层将不可信文本误作 href。
+ */
+export function parseSourceLink(raw: string): SourceLink | null {
+  const value = raw.trim()
+  const markdownMatch = /^\[([^\]]+)\]\((https?:\/\/\S+)\)$/.exec(value)
+  const url = markdownMatch?.[2] ?? value
   try {
-    const url = new URL(raw.trim())
-    return url.protocol === 'http:' || url.protocol === 'https:'
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null
+    return { url: parsed.href, title: markdownMatch?.[1] ?? null }
   } catch {
-    return false
+    return null
   }
+}
+
+/** 来源链接仅允许可在浏览器中安全打开的 HTTP(S) URL 或智能链接 Markdown。 */
+export function isValidSourceUrl(raw: string): boolean {
+  return parseSourceLink(raw) !== null
 }
 
 export function normalizeSourceUrl(raw: string): string {
