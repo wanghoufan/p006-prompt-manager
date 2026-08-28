@@ -11,6 +11,8 @@ interface SortBarProps {
   scopeLabel: string
   search: string
   onSearchChange: (v: string) => void
+  hasCodeOnly: boolean
+  onHasCodeOnlyChange: (value: boolean) => void
   tagFilterSummary?: string
   onClearTagFilters?: () => void
 }
@@ -29,6 +31,8 @@ export function SortBar({
   scopeLabel,
   search,
   onSearchChange,
+  hasCodeOnly,
+  onHasCodeOnlyChange,
   tagFilterSummary,
   onClearTagFilters,
 }: SortBarProps) {
@@ -58,6 +62,19 @@ export function SortBar({
             </button>
           ))}
         </div>
+        <button
+          type="button"
+          onClick={() => onHasCodeOnlyChange(!hasCodeOnly)}
+          aria-pressed={hasCodeOnly}
+          title="只显示已设置调取码的卡片"
+          className={`cursor-pointer rounded-lg border px-2.5 py-1 text-xs transition-colors ${
+            hasCodeOnly
+              ? 'border-gold/50 bg-gold/15 text-gold-bright'
+              : 'border-line bg-ink-900 text-muted hover:text-paper'
+          }`}
+        >
+          有调取码
+        </button>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         {tagFilterSummary && (

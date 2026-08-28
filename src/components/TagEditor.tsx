@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { parseTags } from '@/lib/cards'
 
 interface TagEditorProps {
@@ -35,6 +35,7 @@ export function TagEditor({
   const [input, setInput] = useState('')
   const [open, setOpen] = useState(false)
   const [highlight, setHighlight] = useState(-1)
+  const isComposingRef = useRef(false)
 
   const atMax = chips.length >= max
 
@@ -112,10 +113,18 @@ export function TagEditor({
           onFocus={() => setOpen(true)}
           onBlur={() => {
             // suggestion 的 mousedown 已 preventDefault 阻止 blur，此处兜底提交未输入完的标签
-            if (input.trim()) addTag(input)
+            if (!isComposingRef.current && input.trim()) addTag(input)
             else setOpen(false)
           }}
+          onCompositionStart={() => {
+            isComposingRef.current = true
+          }}
+          onCompositionEnd={(e) => {
+            isComposingRef.current = false
+            setInput(e.currentTarget.value)
+          }}
           onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing || isComposingRef.current) return
             if (e.key === 'Enter') {
               e.preventDefault()
               if (highlight >= 0 && suggestions[highlight]) addTag(suggestions[highlight])

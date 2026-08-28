@@ -62,7 +62,7 @@ function TagMenu({
   onMove: () => void
   onMerge: () => void
   onCreateChild: () => void
-  onDelete: () => void
+  onDelete: (anchor: DOMRect) => void
   onClose: () => void
 }) {
   return (
@@ -118,8 +118,8 @@ function TagMenu({
         <button
           type="button"
           className="block w-full px-3 py-1.5 text-left text-rust hover:bg-rust/10"
-          onClick={() => {
-            onDelete()
+          onClick={(e) => {
+            onDelete(e.currentTarget.getBoundingClientRect())
             onClose()
           }}
         >
@@ -144,7 +144,7 @@ interface TreeNodeProps {
   onMove: (tag: Tag) => void
   onMerge: (tag: Tag) => void
   onCreateChild: (tag: Tag) => void
-  onDelete: (tag: Tag) => void
+  onDelete: (tag: Tag, anchor: DOMRect) => void
   draggable: boolean
   draggedId: string | null
   onDragStart: (id: string) => void
@@ -271,7 +271,7 @@ function TreeNode({
             onMove={() => onMove(tag)}
             onMerge={() => onMerge(tag)}
             onCreateChild={() => onCreateChild(tag)}
-            onDelete={() => onDelete(tag)}
+            onDelete={(anchor) => onDelete(tag, anchor)}
             onClose={() => setMenuOpen(false)}
           />
         )}
@@ -331,6 +331,7 @@ export function TagPanel({
   const [error, setError] = useState<string | null>(null)
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [dropChoice, setDropChoice] = useState<{ sourceId: string; targetId: string } | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<{ tag: Tag; top: number; left: number } | null>(null)
 
   const toggle = (id: string) => {
     setExpanded((prev) => {
@@ -515,33 +516,21 @@ export function TagPanel({
     }
   }
 
-  function handleDelete(tag: Tag) {
+  function handleDelete(tag: Tag, anchor: DOMRect) {
     if (!onDeleteTag) return
-    const useCount = totalCount(promptTags, new Set([tag.id, ...collectDescendantIds(tags, tag.id)]))
-    const hasKids = childrenOf(tags, tag.id).length > 0
-    const confirmMsg = [
-      `删除标签「${tag.name}」？`,
-      '',
-      `当前有 ${useCount} 条提示词使用此标签${hasKids ? '（或其子标签）' : ''}。`,
-      '',
-      '删除后：',
-      '• 该标签及其关联会被移除',
-      '• 提示词本身不会被删除',
-      '• 其他标签不受影响',
-    ].join('\n')
-    if (!window.confirm(confirmMsg)) return
-
-    let mode: 'self' | 'subtree' = 'self'
-    if (hasKids) {
-      const childNames = childrenOf(tags, tag.id).map((c) => c.name).join('、')
-      mode = window.confirm(
-        `「${tag.name}」下存在子标签：${childNames}\n\n点「确定」= 删除整棵子树（含子标签）\n点「取消」= 仅删除当前标签（子标签提升一级）`,
-      )
-        ? 'subtree'
-        : 'self'
-    }
-    onDeleteTag(tag.id, mode)
     setError(null)
+    const width = 320
+    setDeleteConfirm({
+      tag,
+      top: Math.min(Math.max(8, anchor.top), window.innerHeight - 220),
+      left: anchor.right + width + 8 <= window.innerWidth ? anchor.right + 8 : Math.max(8, anchor.left - width - 8),
+    })
+  }
+
+  function confirmDelete(mode: 'self' | 'subtree') {
+    if (!deleteConfirm || !onDeleteTag) return
+    onDeleteTag(deleteConfirm.tag.id, mode)
+    setDeleteConfirm(null)
   }
 
   function handleDrop(sourceId: string, target: Tag, position: 'before' | 'after' | 'on') {
@@ -717,6 +706,34 @@ export function TagPanel({
           </div>
         </div>
       )}
+      {deleteConfirm && (() => {
+        const children = childrenOf(tags, deleteConfirm.tag.id)
+        const useCount = totalCount(promptTags, new Set([deleteConfirm.tag.id, ...collectDescendantIds(tags, deleteConfirm.tag.id)]))
+        return (
+          <div
+            className="fixed z-40 w-80 rounded-xl border border-rust/40 bg-ink-900 p-3 shadow-2xl shadow-black/50"
+            style={{ top: deleteConfirm.top, left: deleteConfirm.left }}
+            role="dialog"
+            aria-label={`确认删除标签 ${deleteConfirm.tag.name}`}
+          >
+            <p className="text-sm font-medium text-paper">删除「{deleteConfirm.tag.name}」？</p>
+            <p className="mt-1 text-xs leading-relaxed text-muted">
+              当前有 {useCount} 条提示词使用此标签{children.length > 0 ? '或其子标签' : ''}；提示词本身不会被删除。
+            </p>
+            <div className="mt-3 flex flex-wrap justify-end gap-2">
+              <button type="button" className="btn px-2.5 py-1 text-xs" onClick={() => setDeleteConfirm(null)}>取消</button>
+              <button type="button" className="btn px-2.5 py-1 text-xs" onClick={() => confirmDelete('self')}>
+                {children.length > 0 ? '仅删当前标签' : '删除标签'}
+              </button>
+              {children.length > 0 && (
+                <button type="button" className="rounded-md bg-rust/15 px-2.5 py-1 text-xs text-rust transition-colors hover:bg-rust/25" onClick={() => confirmDelete('subtree')}>
+                  删除整棵子树
+                </button>
+              )}
+            </div>
+          </div>
+        )
+      })()}
       <div className="border-t border-line px-4 py-3 text-[11px] leading-relaxed text-muted">
         {offline
           ? '未连接同步服务，已使用本机本地数据'

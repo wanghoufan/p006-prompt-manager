@@ -73,6 +73,7 @@ export default function Home() {
   const [tags, setTags] = useState<Tag[]>([])
   const [promptTags, setPromptTags] = useState<PromptTag[]>([])
   const [sortMode, setSortMode] = useState<SortMode>('updated')
+  const [hasCodeOnly, setHasCodeOnly] = useState(false)
   // 全局搜索（范围 A）：searchQuery 为受控输入即时值，debouncedQuery 为 300ms 防抖后的过滤依据；
   // 搜索词不持久化（刷新即清，仅 useState）
   const [searchQuery, setSearchQuery] = useState('')
@@ -289,16 +290,16 @@ export default function Home() {
     [cards],
   )
 
-  // 过滤链三段：baseCards（视图 + 组合标签）→ 搜索过滤（AND 叠加）→ 排序。
+  // 过滤链三段：baseCards（视图 + 组合标签 + 调取码）→ 搜索过滤（AND 叠加）→ 排序。
   // 三组条件之间也是 AND：(any 命中任一) AND (all 逐个命中) AND (none 全部不命中)。
   const baseCards = useMemo(() => {
     if (effectiveTagFilters.untaggedOnly) {
       const linked = new Set(activePromptTags.map((rt) => rt.prompt_id))
-      return sourceCards.filter((c) => !linked.has(c.id))
+      return sourceCards.filter((c) => !linked.has(c.id) && (!hasCodeOnly || Boolean(c.code?.trim())))
     }
     const hasTagConditions =
       effectiveTagFilters.any.length + effectiveTagFilters.all.length + effectiveTagFilters.none.length > 0
-    if (!hasTagConditions) return sourceCards
+    if (!hasTagConditions) return hasCodeOnly ? sourceCards.filter((card) => Boolean(card.code?.trim())) : sourceCards
 
     const promptTagIds = new Map<string, Set<string>>()
     for (const relation of activePromptTags) {
@@ -322,9 +323,9 @@ export default function Home() {
       const passesAny = anyConditions.length === 0 || anyConditions.some((condition) => matches(card.id, condition))
       const passesAll = allConditions.every((condition) => matches(card.id, condition))
       const passesNone = noneConditions.every((condition) => !matches(card.id, condition))
-      return passesAny && passesAll && passesNone
+      return passesAny && passesAll && passesNone && (!hasCodeOnly || Boolean(card.code?.trim()))
     })
-  }, [sourceCards, effectiveTagFilters, activeTags, activePromptTags])
+  }, [sourceCards, effectiveTagFilters, activeTags, activePromptTags, hasCodeOnly])
 
   const tagFilterSummary = useMemo(() => {
     if (effectiveTagFilters.untaggedOnly) return '无标签'
@@ -1061,6 +1062,8 @@ export default function Home() {
               scopeLabel={tagFilterSummary || (isDemoView ? '示例知识库' : '全部')}
               search={searchQuery}
               onSearchChange={setSearchQuery}
+              hasCodeOnly={hasCodeOnly}
+              onHasCodeOnlyChange={setHasCodeOnly}
               tagFilterSummary={tagFilterSummary}
               onClearTagFilters={resetTagFilters}
             />
