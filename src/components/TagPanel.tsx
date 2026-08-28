@@ -529,8 +529,8 @@ export function TagPanel({
       </nav>
       <div className="border-t border-line px-4 py-3 text-[11px] leading-relaxed text-muted">
         {offline
-          ? '未连接同步服务，已使用本机缓存数据（不同步）'
-          : '局域网实时同步（服务端共享存储），离线回退本机缓存'}
+          ? '未连接同步服务，已使用本机本地数据'
+          : '已开启局域网实时同步（服务端共享存储），离线时回退本机缓存'}
       </div>
     </aside>
   )

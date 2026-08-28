@@ -26,6 +26,20 @@
   3. 新建父校验提示：`handleCreateTag:516-518` `!tags.some(t=>t.id===parentId)`→`父标签不存在`（非环检测），与重命名/移动校验区分
 - 结论：Fix 3项已验证通过，BUG-NEW-1保持CLOSED，Vision必选通过；无新增P1，阻断项：无
 
+## P1 产品验收（文案/草稿/导入/冲突 — 2026-08-28 第十六次）
+
+- 时间：2026-08-28（产品验收 — P1-1~P1-4 四项打包）
+- 模式：Product Reviewer · 产品验收（Token高效版，代码走查 + 文案一致性校验）
+- 结果：**PASS** — 4项全通过，无新增 P1/P2 阻断项（QA 第十六次 2026-08-28 ALL PASS 为输入）
+- 输入：`docs/qa/BUGS.md:474-522` 第十六次 QA PASS（4项全绿，tsc/lint 0 错误）+ 定点源码 `src/components/TagPanel.tsx:530-534`（在线/离线文案分支）+ `src/components/CardDetail.tsx:143-160`（handleClose + cleanup flush）+ `src/components/PreviewPanel.tsx:150-237`（handleClose + [card] flush + cleanup）+ `src/components/TopBar.tsx:63,70`（accept/title）+ `src/lib/storage.ts`/`src/app/page.tsx:253-256`（allCodes 一致）
+- 体验方式：定点走查（≤4000 token）+ 文案与架构一致性核对 + 探活；未改业务代码/UI，未提交 Git（由本轮工程收尾统一提交）
+- 覆盖维度：
+  1. P1-1 文案与架构一致：TagPanel 底部 `offline ? '未连接同步服务，已使用本机本地数据' : '已开启局域网实时同步（服务端共享存储），离线时回退本机缓存'`，与 README/HANDOFF/CURRENT_STAGE 所述「服务端 `data/store.json` 为同步源 + localStorage 离线兜底 + SSE 实时同步」一致，消除原「数据仅存于本机」误导 ✅
+  2. P1-2 关闭/切卡不丢稿：CardDetail `handleClose` 先 `clearTimeout(notesTimer)` + `commitSave(true)` 再 `onClose`（Esc/蒙层/关闭按钮）；PreviewPanel `[card]` 切换前 flush + cleanup 兜底 + `handleClose` 收起前 flush + `clearTimeout(notesTimer)` 全路径闭环，700ms 防抖备注不丢、不串卡 ✅
+  3. P1-3 导入支持 .md：`TopBar.tsx:70` `accept=".json,.md,application/json,text/markdown"` + `title="导入备份（支持 JSON 与 Markdown）"`，与 `buildMarkdownExport`（导出 .md）+ `parseImport`（Markdown 回导）形成可逆闭环，picker 可选 .md ✅
+  4. P1-4 冲突语义统一：CardDetail 与 PreviewPanel `saveThrough` 均为「跳过冲突 code、其余照存」+ 红字常驻提示「该调取码已被其他卡片使用」+ 保存 toast「调取码与其他卡片冲突，其余修改已保存，请更换调取码后重试」，`allCodes` 同源 `page.tsx:253-256`，不再有 Detail 整单阻断 ✅
+- 结论：P1 4项已验证通过，移入「已完成」；无新增 P1，阻断项：无；待工程收尾统一提交
+
 ## P0 用户反馈（最高优先级 · 2026-08-27 新增，直接来自用户口述与截图）
 
 > 规则：此 P0 段为**最高优先级**，高于一切 P1/P2/P3；后续新增用户反馈均置顶于此，进入当前 PLAN 即时排期。
@@ -78,41 +92,25 @@
 
 ## P1 产品缺陷（虽无代码 Bug，但明显影响正常使用，建议当前版本修复）
 
-### P1-1 TagPanel 底部文案与真实存储架构矛盾
+### P1-1 TagPanel 底部文案与真实存储架构矛盾 — CLOSED 2026-08-28（P1 产品验收 PASS）
+
 - 问题：`src/components/TagPanel.tsx:56` 仍显示“数据仅存于本机浏览器（localStorage）”，与 `README.md` / `HANDOFF.md` / `CURRENT_STAGE.md` 所述“服务端 `data/store.json` 为同步源 + localStorage 仅作离线兜底 + SSE 实时同步”不一致。
-- 用户场景：用户在 A 电脑整理后到 B 电脑未看到同步，或看到同步却被文案误导以为数据仅本地，不信任跨端能力。
-- 为什么是问题：信息架构失真，直接削弱“局域网实时同步”这一核心卖点可信度；FAQ 与界面互斥增加支持成本。
-- 建议方案：将文案改为“已开启局域网实时同步（服务端共享存储），离线时回退本机缓存”；离线态（`isServerAvailable()==false`）再显示“未连接同步服务，已使用本机本地数据”。
-- 预期收益：心智模型与实现一致，减少“我以为只存本地”的误判。
-- 实现成本：低
-- 优先级：P1
+- 修复：`TagPanel.tsx:530-534` 底部文案改为在线「已开启局域网实时同步（服务端共享存储），离线时回退本机缓存」、离线（`offline` prop，`serverOnline===false`）「未连接同步服务，已使用本机本地数据」，与架构一致，QA 第十六次 PASS。
 
-### P1-2 未保存草稿在关闭详情 / 切换卡片时静默丢失
-- 问题：`PreviewPanel.tsx:139-165` 与 `CardDetail.tsx:100-130` 采用“失焦即存（腾讯文档式）”+ 备注 700ms 防抖。`CardDetail` 的 `Esc` 与蒙层点击直接 `onClose()`（`page.tsx:412-431` / `CardDetail.tsx:88-98,189`），`PreviewPanel` 切换选中卡片时以 `key={previewCard?.id}` 重挂并用 `setDraft(cardDraftFrom(card))` 覆盖草稿；均未在关闭/切换前 `commitSave(true)` 或二次确认。
-- 用户场景：用户在详情或右侧面板改了标题/标签/正文但未失焦（光标仍在输入框），直接按 Esc / 点蒙层 / 点另一张卡 → 修改丢失，无提示。备注快速输入后 700ms 内切换卡片亦可能丢失或（定时器未清理）串卡。
-- 为什么是问题：与“失焦自动保存”的用户预期相悖——用户以为“已输入即安全”，实则未失焦就不落地；丢失不可恢复（无撤销）。
-- 建议方案：① `onClose` / 切换选中前先 `commitSave(true)`（有变更即落库并生成版本）；或 ② 若有 `cardDraftChanges().anyChanged` 未落库，弹窗确认“有未保存修改，是否保存并关闭 / 丢弃 / 取消”。备注定时器需在 `useEffect` 清理中 `clearTimeout` 并在卸载/切换时 flush。
-- 预期收益：杜绝静默丢数据，符合腾讯文档/飞书“离开即存或提示”的一致心智。
-- 实现成本：中
-- 优先级：P1
+### P1-2 未保存草稿在关闭详情 / 切换卡片时静默丢失 — CLOSED 2026-08-28（P1 产品验收 PASS）
 
-### P1-3 导入选择器仅接受 `.json`，导致 Markdown 备份无法通过 UI 导入
+- 问题：`PreviewPanel.tsx:139-165` 与 `CardDetail.tsx:100-130` 采用“失焦即存（腾讯文档式）”+ 备注 700ms 防抖。`CardDetail` 的 `Esc` 与蒙层点击直接 `onClose()`，`PreviewPanel` 切换选中卡片时以 `key={previewCard?.id}` 重挂并用 `setDraft(cardDraftFrom(card))` 覆盖草稿；均未在关闭/切换前 `commitSave(true)`。
+- 修复：CardDetail `handleClose` 先 `clearTimeout(notesTimer)` + `commitSave(true)` 再 `onClose`；PreviewPanel 新增 `handleClose` 收起前 flush + `[card]` useEffect 切换前 flush + 两组件 cleanup 兜底 `clearTimeout(notesTimer)` + `saveThrough(true,true)`，QA 第十六次 PASS。
+
+### P1-3 导入选择器仅接受 `.json`，导致 Markdown 备份无法通过 UI 导入 — CLOSED 2026-08-28（P1 产品验收 PASS）
+
 - 问题：`src/components/TopBar.tsx:68-76` 的 `<input accept=".json,application/json">` 仅允许 JSON，而 `src/lib/storage.ts:95-235` 的 `buildMarkdownExport` 导出为 Markdown、`parseImport` 已支持 Markdown 回导；`README.md:130` 亦称支持 JSON/Markdown，但入口被文件类型过滤截断。
-- 用户场景：用户按指引“导出 Markdown”得到 `.md` 文件，换机后想“导入”恢复，却无法在文件 picker 中选中 `.md`。
-- 为什么是问题：备份闭环断裂，违背完整性——“能导出却不能导入”属功能缺陷；用户需改后缀或手动粘贴才行。
-- 建议方案：将 `accept` 扩大为 `.json,.md,application/json,text/markdown`，并在空态文案或导入按钮 `title` 明确“支持 JSON 与 Markdown 备份”。
-- 预期收益：导入导出真正可逆，降低备份失败投诉。
-- 实现成本：低
-- 优先级：P1
+- 修复：`TopBar.tsx:70` `accept=".json,.md,application/json,text/markdown"` + `title="导入备份（支持 JSON 与 Markdown）"`，与导出 Markdown 闭环一致，QA 第十六次 PASS。
 
-### P1-4 调取码冲突时两处保存语义不一致，且 Detail 会整单阻断保存
+### P1-4 调取码冲突时两处保存语义不一致，且 Detail 会整单阻断保存 — CLOSED 2026-08-28（P1 产品验收 PASS）
+
 - 问题：`PreviewPanel.tsx:157-164` 冲突时跳过 code 字段但仍保存标题/标签/备注/正文；`CardDetail.tsx:101-129` 冲突时直接 `return` 阻断所有字段保存。同为“失焦自动保存”，行为分叉。
-- 用户场景：用户同时改了标题与调取码且调取码冲突，右侧面板能保存标题而弹窗不能，用户在两处得到相反结果，误以为“保存按钮坏了”。
-- 为什么是问题：一致性破坏；危险操作（冲突）处理应统一，避免用户反复尝试。
-- 建议方案：统一为 PreviewPanel 的“跳过冲突字段、其余照存”策略，并在顶部常驻冲突提示 + 禁用保存时说明“调取码冲突，其余修改已保存，请更换调取码后重试”。
-- 预期收益：可预期、可解释的容错行为。
-- 实现成本：低
-- 优先级：P1
+- 修复：CardDetail 与 PreviewPanel 统一为「跳过冲突 code、其余照存」+ 常驻冲突提示「该调取码已被其他卡片使用」+ 保存 toast「调取码与其他卡片冲突，其余修改已保存，请更换调取码后重试」，`allCodes` 同源 `page.tsx:253-256`，QA 第十六次 PASS。
 
 ---
 
@@ -296,3 +294,4 @@
 - **P0-6 高亮重开整改（遮挡修复）**（2026-08-28 完成：`globals.css:95-113` mark根因 `text-highlight`→`--color-highlight-text` 修复，亮`--color-highlight:#fcd34d` + `html.light mark` 50%半透明 + `color:var(--color-highlight-text)#451a03` 深棕强描边，暗`--color-highlight:#fbbf24`实底+`#111`黑字+`--color-highlight-ring/box-shadow`外发光，亮≈12.5:1暗≈11.3:1≥AA；`CardItem.tsx:37` mark无类名走全局mark）
 - **P0-7 卡片空白回收**（2026-08-28 完成：`CardItem.tsx:57-77,129` 胶囊`absolute right-2 top-2` `bg-ink-900/80 backdrop-blur` `hover/focus-within/bulkActive`显隐不占流，标题`pr-16`让位code徽标，`line-clamp-2→3`正文多1行，卡片紧凑）
 - **P0 标签系统核心 22项**（2026-08-28 完成：`tags.ts:14-94`纯函数+树+循环/重名检测+syncCardsToPromptTags、`TagPanel.tsx:树/展开记忆/完整路径搜索/无标签/⋯菜单`、`page.tsx:317-605` 创建/多标签/树/数量/筛选含父含子/加/移除/重命名子路径/移动防循环同父重名/删除双模式绝不删Prompt/当前继承/外键安全、`cards.ts:50字`根因修复；迁移11/55/0孤儿，验证树/筛选/移动子路径/循环拒绝/重名拒绝/删除保留）
+- **P1-1~P1-4 四项打包（文案/草稿/导入/冲突）**（2026-08-28 完成：P1-1 TagPanel 在线/离线文案与服务端共享存储架构一致、P1-2 CardDetail/PreviewPanel 关闭·切换前 `clearTimeout+commitSave` 丢稿闭环、P1-3 TopBar `accept=".json,.md"` 与 Markdown 导出可逆、P1-4 Detail/Preview 统一「跳过冲突 code、其余照存」+ 同一 toast；QA 第十六次 4项 PASS、产品验收 PASS）

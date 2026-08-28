@@ -229,6 +229,13 @@ export function PreviewPanel({
     commitSave(false)
   }
 
+  // P1-2：收起移动端抽屉前 flush 未保存草稿，避免「光标仍在输入框」直接收起导致修改丢失
+  function handleClose() {
+    if (notesTimer.current) window.clearTimeout(notesTimer.current)
+    commitSave(true)
+    onClose?.()
+  }
+
   // 备注边输入边存：停手 700ms 后自动落库
   function scheduleNotesSave() {
     if (notesTimer.current) window.clearTimeout(notesTimer.current)
@@ -327,7 +334,7 @@ export function PreviewPanel({
       {card && onClose && (
         <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-1.5 md:hidden">
           <span className="min-w-0 flex-1 truncate text-xs text-paper">{card.title}</span>
-          <button type="button" className="btn-ghost shrink-0 text-[10px]" onClick={onClose}>
+          <button type="button" className="btn-ghost shrink-0 text-[10px]" onClick={handleClose}>
             收起
           </button>
         </div>

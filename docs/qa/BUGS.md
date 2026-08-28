@@ -468,3 +468,56 @@
 - 失焦自动保存：测试过程中"已自动保存"角标持续显示，未出现丢稿 ✅
 - 同步链路：sop 计数从 3→2、qa基线 7→8、qa验收 0→1、+新标签 1，均为失焦即落库并 SSE 推送，无回声刷新现象 ✅
 - 新增 BUG：无
+
+---
+
+## P1 打包验证（2026-08-28，第十六次）
+
+- **日期**：2026-08-28
+- **模式**：QA Acceptance（代码走查 + 构建门禁）
+- **执行者**：QA / Test Agent
+- **范围**：P1-1 / P1-2 / P1-3 / P1-4 四项打包验证
+- **结果**：**ALL PASS**（4 项全通过，无新增 Bug）
+- **构建门禁**：`npx tsc --noEmit` ✅ 0 错误、`npm run lint` ✅ 0 错误
+- **commit 验证**：未提交
+
+### P1-1 TagPanel 底部文案与同步架构一致
+
+- `TagPanel.tsx:530-534`：底部文案根据 `offline` prop 分支渲染
+  - 在线态：`已开启局域网实时同步（服务端共享存储），离线时回退本机缓存`
+  - 离线态：`未连接同步服务，已使用本机本地数据`
+- 文案与 README / HANDOFF / CURRENT_STAGE 所述"服务端 data/store.json 为同步源 + localStorage 仅作离线兜底 + SSE 实时同步"一致
+- **结论**：PASS ✅
+
+### P1-2 关闭/切卡不再静默丢稿
+
+- `CardDetail.tsx:155-160`：`handleClose()` 先 `clearTimeout(notesTimer)` + `commitSave(true)` flush 未保存草稿，再调 `props.onClose()`
+- `CardDetail.tsx:143-153`：useEffect cleanup 兜底 flush（覆盖非关闭按钮的外部卸载路径）
+- `PreviewPanel.tsx:150-163`：`[card]` useEffect 在外部数据覆盖草稿前先 `clearTimeout(notesTimer)` + `commitSave(true)`，再 `setDraft(cardDraftFrom(card))`
+- `PreviewPanel.tsx:216-226`：useEffect cleanup 兜底 flush + clearTimeout + abort AI 请求
+- `PreviewPanel.tsx:232-237`：`handleClose()`（移动端抽屉收起）先 flush 再关闭
+- 备注定时器 700ms 防抖在所有卸载/切换路径均被 clearTimeout 清理
+- **结论**：PASS ✅
+
+### P1-3 导入选择器支持 .md
+
+- `TopBar.tsx:70`：`accept=".json,.md,application/json,text/markdown"` — 支持 JSON 与 Markdown
+- `TopBar.tsx:63`：`title="导入备份（支持 JSON 与 Markdown）"` — 按钮 hover 提示明确
+- 文件选择器可同时选中 `.json` 和 `.md` 文件
+- **结论**：PASS ✅
+
+### P1-4 调取码冲突语义统一
+
+- **PreviewPanel.tsx:179,198-199,205-206**：冲突时跳过 code 字段 `if (changes.codeChanged && !conflict) onUpdateCode(...)`，其余字段照存，toast `调取码与其他卡片冲突，其余修改已保存，请更换调取码后重试`
+- **CardDetail.tsx:106,125-126,131-133**：完全一致的策略 — 冲突时跳过 code，其余照存，同一 toast 文案
+- **allCodes 来源**：page.tsx:253-256 统一计算 `cards.map(c => c.code).filter(Boolean)`，两个组件接收相同的 allCodes prop
+- 两处 saveThrough 函数逻辑完全对齐：冲突检测 → 跳过 code → 保存其余 → toast 提示
+- **结论**：PASS ✅
+
+### 既有回归
+
+- P0-1~P0-7（含 11合1 总验收 + 2合1）：本轮未触碰相关代码，路径不变 ✅
+- P0 标签系统 22 项：本轮未触碰相关代码，路径不变 ✅
+- BUG-NEW-1（chip 移除双写）：仍 CLOSED ✅
+- tsc --noEmit 零错误 ✅
+- npm run lint 零错误 ✅

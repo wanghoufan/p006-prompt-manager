@@ -1,7 +1,7 @@
 # 实施计划（PLAN）
 
 > 当前需求的验收标准与实施方案。由技术规划师（Planner）维护；完成 `PLAN.md` 后须检查并按需建立 / 补充 `docs/qa/QA_CHECKLIST.md` 核心回归基线。
-> 上一轮 P0-6 重开 + P0-7 打包（2026-08-28）已交付。上上轮：**P0 标签系统核心实现（22 项）**，对齐交接 §38-§43 + 迁移方案 §二-§八。本轮：**P0-8 标签重命名**（对齐交接 §7/§8 + PRODUCT_BACKLOG P0-8 段）。
+> 上一轮 P0-8 标签重命名（2026-08-28）已交付。上上轮：P0-6 重开 + P0-7 打包。本轮：**P1 产品缺陷 4 项打包（P1-1~P1-4，低成本单工位闭环）**（对齐 PRODUCT_BACKLOG P1 段）。
 
 ## 当前目标
 
@@ -52,10 +52,18 @@
 
 ## 进行中 / 待办
 
-- P0-8 标签重命名已实现，待【节奏】触发 QA Acceptance。
-- 本轮 22 项完成，待【节奏】触发 QA Acceptance
+- P1 四项目已实现，待【节奏】触发 QA Acceptance。
 
 ---
+
+## 已收口（2026-08-28，P1 产品缺陷 4 项打包）
+
+- **P1-1 TagPanel 底部文案与同步架构一致**：`TagPanel.tsx` 底部文案改为在线「已开启局域网实时同步（服务端共享存储），离线时回退本机缓存」、离线（`offline` prop，`serverOnline===false`）「未连接同步服务，已使用本机本地数据」。验证原「数据仅存于本机」误导已消除，文案与 README/HANDOFF/CURRENT_STAGE 所述服务端共享存储 + localStorage 离线兜底 + SSE 实时同步一致。
+- **P1-2 关闭/切卡不再静默丢稿**：CardDetail `handleClose`（Esc / 蒙层 / 关闭按钮）先 `clearTimeout(notesTimer)` + `commitSave(true)` 再 `onClose`；PreviewPanel 移动端抽屉「收起」新增 `handleClose` 同样先 flush；切换选中经 `key={previewCard?.id}` 重挂 + 卸载 effect flush 兜底；两组件卸载 effect 均 `clearTimeout(notesTimer)` + `saveThrough(true,true)`。杜绝光标仍在输入框时 Esc / 收起 / 切卡导致的修改丢失。
+- **P1-3 导入选择器支持 .md**：`TopBar.tsx:70` `accept=".json,.md,application/json,text/markdown"`，按钮 `title`「导入备份（支持 JSON 与 Markdown）」——与 `parseImport`/`buildMarkdownExport` 导出 Markdown 闭环一致（本项代码已在库中，本次核验确认）。
+- **P1-4 调取码冲突语义统一**：CardDetail 与 PreviewPanel 均为「跳过冲突 code 字段、其余字段照存」+ 冲突提示「该调取码已被其他卡片使用，请更换」+ 保存时 toast「调取码与其他卡片冲突，其余修改已保存，请更换调取码后重试」（两组件 saveThrough 逻辑一致，本项核验确认）。
+- 涉及文件：`src/components/TagPanel.tsx`、`src/components/PreviewPanel.tsx`（本次修改）；`src/components/TopBar.tsx`、`src/components/CardDetail.tsx`（核验既有实现）。
+- 验证：`npx tsc --noEmit` 零错误；`npm run lint` 零错误零警告。
 
 ## 已收口（2026-08-27，P0 标签系统 22 项）
 

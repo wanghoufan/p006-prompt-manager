@@ -80,6 +80,14 @@
 - [x] 导入选择器支持 `.md`（`accept=".json,.md"`）
 - [x] 调取码冲突语义统一（跳过冲突字段、其余照存、冲突提示）
 
+### P1 打包验证 - 2026-08-28 验证（第十六次）
+
+- [x] P1-1 TagPanel 底部文案：`TagPanel.tsx:530-534`，online 态「已开启局域网实时同步…离线回退本机缓存」，offline 态「未连接同步服务，已使用本机本地数据」，`offline` prop 区分
+- [x] P1-2 关闭/切卡丢稿修复：CardDetail handleClose 先 commitSave(true) 再关闭；PreviewPanel [card] useEffect 切换前 flush + cleanup 兜底 flush + clearTimeout notesTimer
+- [x] P1-3 导入选择器 .md：`TopBar.tsx:70` accept=".json,.md,application/json,text/markdown"，title 明确"支持 JSON 与 Markdown"
+- [x] P1-4 冲突语义统一：CardDetail + PreviewPanel saveThrough 逻辑完全对齐（跳过 code、其余照存、同一 toast 文案），allCodes 统一来源 page.tsx:253-256
+- [x] 构建门禁：tsc --noEmit ✅ 0 错误、npm run lint ✅ 0 错误
+
 ### 全局搜索（P2-2）- 2026-08-26 验证
 - [x] SortBar 搜索框：放大镜 + 清除按钮 + placeholder「搜索标题/正文/标签/备注 · @code 直达」
 - [x] 过滤链三段：baseCards → 搜索过滤 → 排序，AND 叠加
