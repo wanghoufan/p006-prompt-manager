@@ -51,11 +51,11 @@ const MCP_SCENARIOS: McpScenario[] = [
 
 1. 环境检测：确认 Node.js 可用（node --version），并定位项目根目录。优先使用：${MCP_PROJECT_ROOT}；若路径不存在，查找包含 mcp/prompt-server/package.json 的项目目录。
 2. 构建：进入 <项目根>/mcp/prompt-server，执行 npm install 和 npm run build；确认 dist/index.js 已生成。解析 command -v node，后续配置必须使用该绝对路径。
-3. Orca 配置检测：执行 orca --help，并查询 MCP 相关帮助或读取当前 Orca 的 MCP 配置；确认该安装版本使用的配置命令/文件和现有格式。不要凭空创建不被当前版本识别的配置文件。
-4. 配置写入：按当前 Orca 版本实际支持的方式，保留已有 MCP 服务器并新增或更新唯一的 prompt-manager 条目。command 使用 Node 的绝对路径，args 为 ["<项目根>/mcp/prompt-server/dist/index.js"]，description 为“本地提示词管理库：通过调取码激活卡片为系统提示词”。写入后执行该版本可用的配置校验或列表命令。
-5. 完成后告诉我实际项目路径、配置位置/执行命令和构建结果，然后提示我完全新开一个 Orca 会话，使 MCP 工具重新加载。
+3. Orca MCP 宿主检测：先执行 orca --help 与 orca status --json，确认 Orca 1.4.x 本身无 mcp 子命令；再执行 opencode mcp list 与 opencode debug config，确认实际 MCP 宿主为 opencode。项目级配置为 <项目根>/opencode.jsonc（全局为 ~/.config/opencode/opencode.jsonc），不要凭空创建 Orca 不识别的配置文件。
+4. 配置写入：往上述 opencode.jsonc 的 mcp 中保留已有项并新增或更新唯一的 prompt-manager：{ "type": "local", "command": [Node绝对路径, "<项目根>/mcp/prompt-server/dist/index.js"], "enabled": true }。写入后执行 opencode mcp list 校验为 connected。
+5. 完成后告诉我实际项目路径、配置位置（精确到 opencode.jsonc 路径）与执行命令、构建结果，然后提示我完全新开一个 Orca 会话（opencode TUI 重进），使 MCP 工具重新加载。
 
-连接后，我会用“调取 <调取码>”调用 prompt_manager_activate_prompt。`,
+连接后，我会用"调取 <调取码>"调用 prompt_manager_activate_prompt（在 opencode 侧显示为 prompt-manager_prompt_manager_activate_prompt）。`,
   },
 ]
 
