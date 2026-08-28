@@ -2,6 +2,30 @@
 
 > 产品体验审查员（Product Reviewer）维护的优化候选池。已完成事项应及时移除，勿与 `CODE_REVIEW.md` 混淆。
 
+## 最近一次 Product 执行记录（Composer 交互重构 — 2026-08-28）
+
+- 时间：2026-08-28（产品审核 — Composer 交互重构）
+- 模式：Product Reviewer · 产品审核（定点代码走查 `src/components/Composer.tsx:1-144` + `src/components/SettingsModal.tsx:159-175` + `src/lib/types.ts:36` + `src/lib/storage.ts:96-120` + `src/app/page.tsx:430-469,1095-1101` + 真机 SSR 探活 `curl localhost:3000 200` + QA PARTIAL 报告 `docs/qa/BUGS.md:7-24` 交叉验证；未改业务代码）
+- 结果：**PASS（有条件通过）** — 5 维度检查项功能闭环 8/9 通过（仅第 9 项“后台 AI 标题/标签”受 AI 未配置阻断，符合已知问题说明）；提出 4 项 P2 + 4 项 P3 优化建议，无新增 P0/P1 阻断
+- 输入：`Composer.tsx` 重构 diff `8fab261`（勾选框+始终可见按钮+后台 enrich + Enter 快捷）+ `SettingsModal.tsx` 添加模式下拉 + `page.tsx` `handleCreate→id` + `handleApplyGeneratedMeta` 后台补全 + QA 2026-08-28 PARTIAL（1-8 ✅，9 ❌ AI 未生效）
+- 体验方式：定点走查（≤4000 token）+ 文案/交互一致性校验 + 真机 SSR HTML 结构核验（`field resize-none` + `accent-gold` + `btn-gold disabled:opacity-50` + placeholder 双分支）；未做持久化写入与 Git 提交；AI 标题/标签后台生成受“AI 服务未配置”限制未真机触发，仅验证 enrich 链路与降级 toast
+- 覆盖维度：
+  1. Composer 区域可见性（PM）：「自动生成标签」`Composer.tsx:114-122` + 「自动生成标题」`123-131` 均 `checked=true` 默认勾选，`accent-gold` + `cursor-pointer` 清晰可见 ✅；「生成卡片 (Enter)」`133-140` 始终渲染，空内容 `disabled` + `opacity-50` 禁用态可见 ✅；按钮文字含 `(Enter)` 提示 ✅；`aria` 与 hit area 达标，但两勾选框与前导文案挤在 `flex-wrap gap-x-3` 小容器中，`text-xs text-muted` 对比度弱于正文，且与设置项语义重叠（见 P2-C4）
+  2. 交互流程（UX）：默认直接添加 `handlePaste:78-84` 粘贴即 `preventDefault → createCard(pasted)` 立即建卡 ✅（QA 4 `composer-real-paste-auto-qa` PASS）；手动确认 `addMode !== 'auto' → return` 粘贴仅插入不建卡，需 `click` `onClick:137` 或 `Enter` `handleKeyDown:86-90` 才建卡 ✅（QA 5/6 `composer-manual-click/enter-qa` PASS）；短内容修复 `createCard:66-76` `trim()` 非空即建 + `onCreate→id` 可回滚，取消 confirm 后不清空 ✅；但 `Enter=建卡 / Shift+Enter=换行` 与常规 textarea（Enter=换行）相反且无显式提示，首次用户误触风险高（见 P2-C1）
+  3. 设置清晰度（信息架构）：「添加模式」`SettingsModal.tsx:160-175` `label#settings-composer-add-mode` + 副文案「默认直接添加会在粘贴后立即建卡；手动确认则需点击生成按钮或按 Enter。」描述准确 ✅；两选项「默认直接添加」/「手动确认」文案与 `types.ts:36` `composerAddMode: auto|manual` + `storage.ts:111,118` 归一化一致 ✅；`DEFAULT_SETTINGS.composerAddMode='auto'` 默认值正确 ✅；但入口深（设置弹窗第二卡片），Composer 区域内无模式指示，用户需往返才能确认当前模式（见 P2-C2）
+  4. 一致性/状态反馈：重构将“创建”与“AI 补全”解耦为乐观建卡 `notify('已创建卡片')` + 后台 `enrichCard:42-64` `fetch /api/ai/generate-meta` → `onApplyGeneratedMeta:462-468` 仅当卡片仍为 `未命名提示词`/空标签时覆盖，避免覆盖用户刚完成的手动编辑 ✅；失败时 `notify('卡片已创建，生成失败…')` 降级可接受 ✅；但旧版 `Spinner + 重试/直接创建` 的强反馈被移除，后台状态仅靠 2.2s toast，用户在 AI 未配置环境下连续看到“已创建”后无标题/标签变化，易误判为 Bug（见 P2-C3）
+  5. 真实用户/高频用户效率：高频粘贴用户在 `auto` 模式下粘贴→建卡 0 步确认，效率显著提升；`manual` 模式给予编辑机会，符合“先贴后改”场景 ✅；占位文案按模式切换 `placeholder:106` `将立即创建卡片…` vs `粘贴或输入…` 有区分 ✅；但高频场景下“误粘贴立即建卡无撤销”与“多行正文 Enter 误建卡”两类容错缺口并存（见 P2-C1/P3-C4）
+- 结论：Composer 重构 5 项检查全部实现且与需求文档 `PRD 5.1`（粘贴自动生成标题/标签 `page.tsx:461` 后台补全语义）一致；AI 未生效为已知外部依赖，不计入阻断。建议按下列 P2/P3 择机微调后即可认为该重构达到可发布状态
+- 优化建议（不阻断，入候选）：
+  - **P2-C1 Enter/Shift+Enter 显式提示**：`Composer.tsx:106` placeholder 改为「在这里粘贴或输入提示词正文…（Enter 创建 · Shift+Enter 换行）」+ 按钮 `title="Enter 创建卡片，Shift+Enter 换行"`，`handleKeyDown:87` 已支持 `e.shiftKey` 分支，无需改逻辑。位置：`Composer.tsx:99-107,133`
+  - **P2-C2 Composer 内模式指示/快捷切换**：在 `Composer.tsx:111` 前导文案旁增加小 pill「当前：自动粘贴建卡」或「手动确认」+ 链接「去设置切换」，点击 `onOpenSettings`；避免用户为确认模式往返弹窗。成本：低（prop 透传 `onOpenSettings`）
+  - **P2-C3 后台补全状态轻反馈**：`enrichCard` 发起时在 Composer 底部或卡片标题旁显示 muted 小字「后台生成中…」2-3s，成功后 `onApplyGeneratedMeta` 静默更新，失败沿用现有 toast；当两勾选框均关闭时 `enrichCard` 直接 return 的静默行为符合预期，无需提示
+  - **P2-C4 文案去歧义**：将 `Composer.tsx:113` 「粘贴正文后全自动生成」改为「创建后后台补全」或「勾选后后台补全标题/标签」，与设置项「添加模式（粘贴建卡）」解耦，避免用户误以为取消勾选即关闭自动建卡。`SettingsModal.tsx:163` 副文案已准确，保留
+  - **P3-C1 勾选框可点击区与对比度**：`label.text-paper-dim` 在暗色 `#a7adba` 略淡，改为 `text-paper` 或 `hover:text-paper`；`accent-gold` 保留，`gap-1.5` 命中区可增至 `py-1` 扩大点击
+  - **P3-C2 空态按钮 tooltip**：`disabled` 时 `title="请输入正文后生成"`，与 `disabled:cursor-not-allowed` 配合，降低“按钮为何点不动”困惑
+  - **P3-C3 AI 未配置时降级提示**：若 `/api/ai/generate-meta` 连续失败或 `DEEPSEEK_API_KEY` 缺失，可在两勾选框旁显示 `text-rust text-[11px]`「AI 未配置，仅创建空白卡片（可在设置中后续补全）」3s，或将 checkbox 置 `title` 提示，避免每卡一次失败 toast 刷屏
+  - **P3-C4 刚创建卡片的 10s 撤销**：`handleCreate` 回传 `id` 已具备，建议 `page.tsx:74-75` `notifyWithUndo('已创建卡片', undoDelete)`，使误粘贴可一键撤销，与现有批量/单删撤销栈一致，弥补 auto 模式零确认风险
+
 ## 最近一次 Product 执行记录（P0-I 正文格式整理 — 2026-08-28）
 
 - 时间：2026-08-28（产品验收 — P0-I 正文区域格式整理功能）
