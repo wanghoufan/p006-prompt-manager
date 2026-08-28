@@ -131,3 +131,28 @@
 - 技术处理：补两条操作级约束：① **普通网页功能优先 Playwright 或 Orca Built-in Browser**（`src/app/page.tsx` 内组件、列表、弹窗、路由等）② **仅验证真实桌面、快捷键、权限、剪贴板、跨应用等场景时使用 Computer Use**。Stage Manager 在 QA Prompt 中按此分流标注工具选型，QA 不为普通网页功能滥用 Computer Use。
 - 可直接给 Agent 的规则：`QA/验收对普通网页功能必须优先用 Playwright 或 Orca Built-in Browser；仅当验证真实桌面/快捷键/权限/剪贴板/跨应用时才用 Computer Use，并在 Prompt 中显式标注工具选型。`
 - 候选升级位置：`docs/roles/qa.md` 增加“工具选型两条约束” + `docs/workflow/QUALITY_GATES.md` 补充操作级门控 + `AGENTS.md §三` 角色能力分工（待授权）
+
+## 11. Stage Manager 必须按 AI 模型执行指南输出模型决策块
+
+- 成熟度：A 本项目保留（已验证可复用）
+- 时间：2026-08-28
+- 现象：Stage Manager 派工时未按规范输出模型决策块，直接选择模型，不符合用户级模型治理要求。
+- 小白解释：就像招聘时没有按规范列出所有符合条件的候选人，直接录用了一个，不合规。
+- 技术处理：Stage Manager 在每次生成「当前唯一执行 Prompt」前，必须先输出模型决策块，格式如下：
+```text
+当前任务：<S/A/B/C>｜<前端/软件工程/Agent/文档/视觉等>
+
+符合模型：
+- <厂商>：<精确模型 ID> / <思考强度>｜开发成本：<低/中/高>｜<任务侧写>
+...
+- <厂商>：暂无合格型号｜原因：<证据或稳定性原因>
+```
+- 硬要求：
+  - 对该档的每一家厂商必须逐家输出一行
+  - 仅输出标为"自动推荐"的模型
+  - 不得输出排序措辞
+  - 模型决策块之后才输出「当前唯一执行 Prompt」
+- 免费模型白名单：MiMo V2.5 Free（日常QA）、Muse Spark 1.2 Free（UI-heavy开发）
+- 永久排除名单：Ox Alpha Free (Unlimited)、OpenCode Zen max
+- 可直接给 Agent 的规则：`Stage Manager 派工前必须先输出模型决策块，按 AI_MODEL_GUIDE.md 规范选择模型，不得使用永久排除模型，不得输出排序措辞。`
+- 候选升级位置：`docs/roles/stage-manager.md §模型决策块` 增加"按 AI_MODEL_GUIDE.md 规范输出"硬约束（待授权）
