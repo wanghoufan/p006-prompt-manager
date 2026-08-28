@@ -179,6 +179,52 @@ export function syncCardsToPromptTags(cards: Card[], tags: Tag[], promptTags: Pr
   })
 }
 
+// ===================== 服务端写入前校验（P0-A 安全闭环） =====================
+// 与客户端 CRUD 守卫（isNameUnique / assertNoCycle / setCardTags 去重）同源，
+// 服务端落盘前对整份快照做完整性校验，拒绝非法数据，杜绝「最后写入覆盖」污染共享库。
+// 返回 null 表示合法；否则返回可读的错误原因。
+
+export function validateTagGraph(
+  tags: Tag[],
+  promptTags: PromptTag[],
+  cardIds: Set<string>,
+): string | null {
+  // ① 同父无重名（交接 §28：不同父级允许同名）
+  const nameKey = new Set<string>()
+  for (const t of tags) {
+    const key = `${t.parent_id ?? ''}\u0000${t.name}`
+    if (nameKey.has(key)) return `同一父级下存在重名标签「${t.name}」`
+    nameKey.add(key)
+  }
+  // ② 父级存在（不悬空）+ ③ 无环
+  const byId = new Map(tags.map((t) => [t.id, t]))
+  if (byId.size !== tags.length) return '标签 id 重复'
+  for (const t of tags) {
+    if (t.parent_id !== null && !byId.has(t.parent_id)) {
+      return `标签「${t.name}」的父标签不存在`
+    }
+    let cur: string | null = t.parent_id
+    const guard = new Set<string>()
+    while (cur !== null) {
+      if (guard.has(cur) || cur === t.id) return '标签层级存在循环'
+      guard.add(cur)
+      const p = byId.get(cur)
+      if (!p) break
+      cur = p.parent_id
+    }
+  }
+  // ④ 关联不悬空 + ⑤ (prompt_id, tag_id) 唯一
+  const seen = new Set<string>()
+  for (const rt of promptTags) {
+    if (!byId.has(rt.tag_id)) return '标签关联指向不存在的标签'
+    if (!cardIds.has(rt.prompt_id)) return '标签关联指向不存在的提示词'
+    const key = `${rt.prompt_id}\u0000${rt.tag_id}`
+    if (seen.has(key)) return '(prompt_id, tag_id) 关联重复'
+    seen.add(key)
+  }
+  return null
+}
+
 // ===================== Mutation 纯函数 =====================
 
 /** 创建标签。返回 [新 tags 数组, 新 tag]。不做重名/空名校验（由调用方先 isNameUnique）。 */

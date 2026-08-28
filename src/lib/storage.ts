@@ -372,6 +372,8 @@ const SYNC_URL = '/api/sync'
 const STREAM_URL = '/api/sync/stream'
 
 let serverMode = false
+/** P0-A 版本号提交：本次本地快照基于的服务端版本。loadFromServer/pushToServer 成功后同步更新。 */
+let knownVersion: number | null = null
 let lastPushedVersion: number | null = null
 let cacheCards: Card[] = []
 let cacheSettings: Settings = { ...DEFAULT_SETTINGS }
@@ -379,6 +381,9 @@ let cacheTags: Tag[] = []
 let cachePromptTags: PromptTag[] = []
 let pushInFlight = false
 let pushPending = false
+
+/** P0-A 冲突回调：版本冲突并刷新到服务端权威数据后，通知页面重载视图并提示用户。 */
+let onConflictRefresh: ((data: ServerSnapshot) => void) | null = null
 
 function trySave(key: string, value: unknown): boolean {
   try {
@@ -417,7 +422,16 @@ function schedulePush() {
 
 async function doPush() {
   try {
-    await pushToServer(cacheCards, cacheSettings, cacheTags, cachePromptTags)
+    const result = await pushToServer(cacheCards, cacheSettings, cacheTags, cachePromptTags)
+    if (result === 'conflict') {
+      // P0-A 版本已变化：拒绝本次写入 → 刷新到服务端权威数据（更新 knownVersion）→ 基于最新版本重试。
+      // 本地刚执行的未落盘操作由冲突回调通知页面重载视图，用户可见并可按需重做。
+      const fresh = await loadFromServer()
+      if (fresh) {
+        onConflictRefresh?.(fresh)
+        await pushToServer(fresh.cards, fresh.settings, fresh.tags, fresh.promptTags)
+      }
+    }
   } finally {
     pushInFlight = false
     if (pushPending) {
@@ -437,11 +451,42 @@ export async function isServerAvailable(): Promise<boolean> {
   return serverMode
 }
 
-export async function loadFromServer(): Promise<{ cards: Card[]; settings: Settings; tags: Tag[]; promptTags: PromptTag[] } | null> {
+export type ServerSnapshot = {
+  cards: Card[]
+  settings: Settings
+  tags: Tag[]
+  promptTags: PromptTag[]
+  version: number | null
+}
+
+/** P0-A 净化关联：剔除指向不存在卡片/标签的关系并去重，保证推送到服务端的数据满足
+ *  「关联不悬空 + (prompt_id, tag_id) 唯一」，避免服务端校验拒绝（自愈旧数据产生的悬空关系）。 */
+export function sanitizePromptTags(promptTags: PromptTag[], cards: Card[], tags: Tag[]): PromptTag[] {
+  const cardIds = new Set(cards.map((c) => c.id))
+  const tagIds = new Set(tags.map((t) => t.id))
+  const seen = new Set<string>()
+  const out: PromptTag[] = []
+  for (const rt of promptTags) {
+    if (!cardIds.has(rt.prompt_id) || !tagIds.has(rt.tag_id)) continue
+    const key = `${rt.prompt_id}\u0000${rt.tag_id}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(rt)
+  }
+  return out
+}
+
+export async function loadFromServer(): Promise<ServerSnapshot | null> {
   try {
     const res = await fetch(SYNC_URL, { cache: 'no-store' })
     if (!res.ok) return null
-    const data = (await res.json()) as { cards?: unknown; settings?: unknown; tags?: unknown; promptTags?: unknown }
+    const data = (await res.json()) as {
+      cards?: unknown
+      settings?: unknown
+      tags?: unknown
+      promptTags?: unknown
+      version?: unknown
+    }
     const cards = Array.isArray(data.cards)
       ? (data.cards.filter(isCard).map(normalizeCard) as Card[])
       : []
@@ -453,35 +498,63 @@ export async function loadFromServer(): Promise<{ cards: Card[]; settings: Setti
     cacheCards = cards
     cacheSettings = settings
     cacheTags = tags
-    cachePromptTags = promptTags
-    return { cards, settings, tags, promptTags }
+    // 净化悬空/重复关联后再入缓存与视图，杜绝旧数据污染计数与触发服务端校验拒绝
+    const cleanPromptTags = sanitizePromptTags(promptTags, cards, tags)
+    cachePromptTags = cleanPromptTags
+    if (typeof data.version === 'number') knownVersion = data.version
+    return { cards, settings, tags, promptTags: cleanPromptTags, version: typeof data.version === 'number' ? data.version : null }
   } catch {
     serverMode = false
     return null
   }
 }
 
+export type PushResult = 'ok' | 'conflict' | 'error'
+
 export async function pushToServer(
   cards: Card[],
   settings: Settings,
   tags: Tag[] = [],
   promptTags: PromptTag[] = [],
-): Promise<boolean> {
-  if (!serverMode) return false
+): Promise<PushResult> {
+  if (!serverMode) return 'error'
   try {
     const res = await fetch(SYNC_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cards, settings, tags, promptTags }),
+      // P0-A 带版本号提交：声明本次写入基于 knownVersion；服务端版本已变化则 409/拒绝
+      body: JSON.stringify({
+        cards,
+        settings,
+        tags,
+        promptTags: sanitizePromptTags(promptTags, cards, tags),
+        baseVersion: knownVersion,
+      }),
     })
-    if (!res.ok) return false
-    const data = (await res.json()) as { version?: number }
-    if (typeof data.version === 'number') lastPushedVersion = data.version
-    return true
+    if (!res.ok) {
+      serverMode = false
+      return 'error'
+    }
+    const data = (await res.json()) as { version?: unknown }
+    if (typeof data.version === 'number') {
+      knownVersion = data.version
+      lastPushedVersion = data.version
+      return 'ok'
+    }
+    // 服务端拒绝时 route.ts 恒为 200，setState 的 union 结果透传在 version 字段内
+    const err = data.version as { ok?: boolean; error?: string; conflict?: boolean } | undefined
+    if (err && err.ok === false) return err.conflict ? 'conflict' : 'error'
+    serverMode = false
+    return 'error'
   } catch {
     serverMode = false
-    return false
+    return 'error'
   }
+}
+
+/** 注册/注销版本冲突回调（冲突刷新后通知页面重载视图并提示）。 */
+export function setConflictRefreshHandler(cb: ((data: ServerSnapshot) => void) | null) {
+  onConflictRefresh = cb
 }
 
 // 订阅服务端变更；远程有更新时通过 onRemote 回调把最新数据交回页面。

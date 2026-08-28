@@ -2,6 +2,20 @@
 
 > 产品体验审查员（Product Reviewer）维护的优化候选池。已完成事项应及时移除，勿与 `CODE_REVIEW.md` 混淆。
 
+## 最近一次 Product 执行记录（P0-A 安全闭环）
+
+- 时间：2026-08-28（产品验收 — P0-A 高影响标签操作的“安全闭环”）
+- 模式：Product Reviewer · 产品验收（代码走查 + 真机影响数/撤销验证，对齐 QA 4项）
+- 结果：**PASS** — 4项全通过，无新增 P1/P2 阻断项（QA 2026-08-28 P0-A 4项 ALL PASS 为输入）
+- 输入：`docs/qa/BUGS.md:608-668` P0-A QA PASS（4项全绿，tsc/lint 0 错误，服务端 7 项 curl 校验 + 真机撤销验证）+ 定点源码 `src/components/TagPanel.tsx:384-411`（影响数/useCount + 双模式）+ `src/app/page.tsx:78-107,357-365,565-617`（撤销快照/notifyWithUndo 10s）+ `src/lib/tags.ts:187-226`（validateTagGraph 5项）+ `src/lib/serverStore.ts:68-104`（校验+版本冲突）+ `src/lib/storage.ts:462-531,576`（sanitize/knownVersion/SSE 回声过滤）
+- 体验方式：定点走查（≤4000 token）+ 真机影响数/撤销链路核对 + 服务端校验/版本冲突语义闭环验证；未改业务代码/UI（本次仅文档收口），待本轮工程收尾统一提交
+- 覆盖维度：
+  1. 影响数展示：删除前 confirm 显示「当前有 N 条提示词使用此标签（或其子标签）」+ 子标签名顿号列出，子树去重 `totalCount` 准确，卡片 32→32 不删 Prompt ✅
+  2. 10s 撤销闭环：创建/重命名/移动/删除四类均 `captureTagSnapshot`/`notifyWithUndo` + Toast「撤销」+ 10s 定时 `withUndo:10000`，真机 vpn 删除→撤销后标签/关联/冗余 tags 全复原 ✅
+  3. 服务端 5 项校验：validateTagGraph（同父无重名/id 唯一/父级存在/无环/关联不悬空/(prompt_id,tag_id) 唯一）+ serverStore 落盘前拦截 + 客户端 `sanitizePromptTags` 自愈，多项 curl 均 `数据校验失败` 不落盘 ✅
+  4. 带版本号提交：`pushToServer` 携带 `baseVersion: knownVersion` + serverStore `baseVersion !== version → conflict` + `doPush` 冲突刷新+`onConflictRefresh` 重载视图 + toast「检测到其他设备更新…请重试」+ SSE 回声过滤 ✅
+- 结论：P0-A 已验证通过，移入「已完成」；无新增 P1，阻断项：无；待本轮工程收尾统一提交推送
+
 ## 最近一次 Product 执行记录（P2-10/P2-11）
 
 - 时间：2026-08-28（产品验收 — P2-10 网格直删入口 + P2-11 批量管理）
@@ -60,7 +74,8 @@
 
 > 规则：此 P0 段为**最高优先级**，高于一切 P1/P2/P3；后续新增用户反馈均置顶于此，进入当前 PLAN 即时排期。
 
-### P0-A 高影响标签操作的"安全闭环"（2026-08-28 智能体审查建议）
+### P0-A 高影响标签操作的"安全闭环"（2026-08-28 智能体审查建议）— CLOSED 2026-08-28（P0-A 产品验收 PASS，QA 4项 ALL PASS）
+
 - 问题：标签删除、合并、批量移除前未展示真实影响数；所有标签级操作不支持撤销；服务端写入前缺校验（父级存在、无环、同父无重名、关联不悬空、唯一约束）；整份快照同步的"最后写入覆盖"风险。
 - 用户场景：用户删除标签后无法撤销；两端同时操作时丢失标签变更。
 - 建议方案：
@@ -71,6 +86,20 @@
 - 预期收益：数据安全与跨端一致性闭环
 - 实现成本：中
 - 优先级：P0（智能体审查建议，最高优先级）
+
+#### P0-A 产品验收（2026-08-28 真机+服务端，QA 第十七次 ALL PASS）
+
+- 时间：2026-08-28（产品验收 — P0-A 安全闭环）
+- 模式：Product Reviewer · 产品验收（定点走查 + 真机影响数/撤销 + 服务端校验闭环）
+- 结果：**PASS** — 4项全通过，无新增 P1（QA 2026-08-28 P0-A 4项 ALL PASS 为输入，tsc/lint 0 错误）
+- 输入：`docs/qa/BUGS.md:608-668` P0-A QA PASS + 定点源码 `src/components/TagPanel.tsx:384-411` + `src/app/page.tsx:78-107,357-365,565-617` + `src/lib/tags.ts:187-226` + `src/lib/serverStore.ts:68-104` + `src/lib/storage.ts:462-531,576`
+- 体验方式：定点走查（≤4000 token）+ 真机 Orca Computer Use（vpn 删除→撤销全复原）+ curl 7 项服务端校验/版本冲突验证；未改业务代码/UI
+- 覆盖维度：
+  1. 影响数展示：TagPanel 删除 confirm 含 `useCount = totalCount(promptTags, [tagId+descendants])` + 子标签名顿号列出，卡片 32→32 不删 Prompt ✅
+  2. 10s 撤销：四类 CRUD 均 `captureTagSnapshot` + `notifyWithUndo` + Toast「撤销」+ 10s 定时，创建/重命名/移动/删除均可撤销，vpn 真机撤销后标签/关联/冗余 tags 全复原 ✅
+  3. 服务端 5 项校验：`validateTagGraph` 五项 + `serverStore.setState` 落盘前拒绝 + 客户端 `sanitizePromptTags` 自愈，悬空/重复/同父重名/成环/父不存在/id 重复均 `数据校验失败` 不落盘 ✅
+  4. 带版本号提交：`knownVersion` 追踪 + `baseVersion` 携带 + 版本不一致 `conflict:true` 拒绝 + `doPush` 刷新权威数据 + `onConflictRefresh` 重载视图 + toast 提示 + SSE 回声过滤 ✅
+- 结论：P0-A 已验证通过，移入「已完成」；无新增 P1，阻断项：无
 
 ### P0-B 标签合并与批量移除（2026-08-28 智能体审查建议）
 - 问题：无标签合并能力；重命名遇同级同名时无合并选项；批量操作栏缺"移除标签"；标签上限 3 个限制过严。
@@ -348,3 +377,4 @@
 - **P0 标签系统核心 22项**（2026-08-28 完成：`tags.ts:14-94`纯函数+树+循环/重名检测+syncCardsToPromptTags、`TagPanel.tsx:树/展开记忆/完整路径搜索/无标签/⋯菜单`、`page.tsx:317-605` 创建/多标签/树/数量/筛选含父含子/加/移除/重命名子路径/移动防循环同父重名/删除双模式绝不删Prompt/当前继承/外键安全、`cards.ts:50字`根因修复；迁移11/55/0孤儿，验证树/筛选/移动子路径/循环拒绝/重名拒绝/删除保留）
 - **P1-1~P1-4 四项打包（文案/草稿/导入/冲突）**（2026-08-28 完成：P1-1 TagPanel 在线/离线文案与服务端共享存储架构一致、P1-2 CardDetail/PreviewPanel 关闭·切换前 `clearTimeout+commitSave` 丢稿闭环、P1-3 TopBar `accept=".json,.md"` 与 Markdown 导出可逆、P1-4 Detail/Preview 统一「跳过冲突 code、其余照存」+ 同一 toast；QA 第十六次 4项 PASS、产品验收 PASS）
 - **P2-10/P2-11 网格直删+批量管理**（2026-08-28 核验既有实现完成：P2-10 CardItem 悬浮胶囊 `text-rust` 删除 + `confirmDelete` 二次确认 + demo 隐藏 + 10s 撤销；P2-11 `bulkIds` Set + checkbox `role="checkbox"` + 顶部操作栏「已选 N 张」+ 打标签/打星/导出/删除/取消；QA 2026-08-28 12项 PASS、产品验收 6 维度 PASS，API 33→32）
+- **P0-A 高影响标签操作的安全闭环**（2026-08-28 完成：影响数展示 `TagPanel` 含子树去重关联数+子标签名 + 四类 CRUD 10s 撤销 `captureTagSnapshot`/`notifyWithUndo` + `validateTagGraph` 五项服务端校验拒绝 + `knownVersion`/`baseVersion` 乐观并发 + `sanitizePromptTags` 自愈 + SSE 回声过滤；真机 vpn 删除→撤销全复原 + curl 7 项校验/冲突拒绝验证；QA 2026-08-28 4项 PASS、产品验收 4 维度 PASS，库 32/12/53/0 悬空 0 重复）

@@ -297,3 +297,19 @@
 - [x] P2-11 批量打星：prompt 输入 0-5 整数 → 校验 → 批量设置评分
 - [x] P2-11 批量导出：筛选选中卡片 → 生成 Markdown 备份 → 下载文件
 - [x] P2-11 取消选择：点击「取消选择」按钮清空 bulkIds Set，批量操作栏消失
+
+### P0-A 安全闭环 - 2026-08-28 验证
+
+- [x] P0-A 影响数展示：TagPanel.tsx:386 totalCount(promptTags, [tagId + ...descendants]) → confirm 显示「当前有 N 条提示词使用此标签（或其子标签）」
+- [x] P0-A 子标签名列出：TagPanel.tsx:402 childrenOf().map(c=>c.name).join('、') 列出子标签名
+- [x] P0-A 两种删除模式 confirm：hasKids 时二次 confirm「删除整棵子树 / 仅删自身（子标签提升）」
+- [x] P0-A 10s 撤销：captureTagSnapshot + restoreTagSnapshot（page.tsx:357-365）；notifyWithUndo + withUndo:10000ms 定时（page.tsx:85-107）
+- [x] P0-A 四项标签 CRUD 全部有撤销：create(565-568) rename(583-587) move(602-604) delete(613-617)
+- [x] P0-A 服务端校验：validateTagGraph(tags.ts:187-226) ①同父无重名 ②id唯一 ③父级存在 ④无环 ⑤关联不悬空 ⑥(prompt_id,tag_id)唯一
+- [x] P0-A 校验拦截：serverStore.ts:77-79 setState 落盘前调用 validateTagGraph，失败返回 { ok:false, error }
+- [x] P0-A 客户端自愈：sanitizePromptTags(storage.ts:462-477) 推送前剔除悬空/重复关联
+- [x] P0-A 版本号提交：pushToServer 发送 baseVersion:knownVersion（storage.ts:531）
+- [x] P0-A 版本冲突拒绝：serverStore.ts:99-104 baseVersion !== s.version → reject + conflict:true
+- [x] P0-A 冲突刷新重试：doPush 冲突时 loadFromServer → onConflictRefresh → page 重载三集合 + notify（storage.ts:426-433, page.tsx:214-223）
+- [x] P0-A SSE 回声过滤：lastPushedVersion 匹配跳过（storage.ts:576）
+- [x] 构建门禁：tsc --noEmit ✅ 0 错误、npm run lint ✅ 0 错误（2026-08-28 验证）

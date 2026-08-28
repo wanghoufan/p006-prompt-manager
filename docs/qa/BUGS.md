@@ -4,12 +4,12 @@
 
 ## 最近一次 QA 执行记录
 
-- **日期**：2026-08-28（P2-10/P2-11 网格直删入口 + 批量管理验收）
-- **模式**：QA Acceptance（真机 Orca Computer Use 操作 + 代码走查）
+- **日期**：2026-08-28（P0-A 安全闭环验收）
+- **模式**：QA Acceptance（代码走查 + 构建验证）
 - **执行者**：QA / Test Agent
-- **结果**：**ALL PASS**（12 项验证全通过，无新增 Bug）
+- **结果**：**ALL PASS**（4 项验证全通过，无新增 Bug）
 - **构建门禁**：tsc --noEmit ✅ 0 错误、npm run lint ✅ 0 错误
-- **API 验证**：curl /api/sync 正常（卡片数 33→32）
+- **API 验证**：curl /api/sync 正常
 - **commit 验证**：未提交
 - **已关闭**：无新增关闭
 - **阻断项**：无
@@ -603,3 +603,66 @@
 ### 结论
 
 P2-10 网格直删入口 + P2-11 批量管理 12 项验证全通过，无新增 Bug。删除路径从 3 步降到 2 步，批量管理功能完整可用。
+
+---
+
+## P0-A 安全闭环 QA 记录（2026-08-28）
+
+- **日期**：2026-08-28（P0-A 高影响标签操作安全闭环验收）
+- **模式**：QA Acceptance（代码走查 + 构建验证）
+- **执行者**：QA / Test Agent
+- **范围**：P0-A 安全闭环 4 项（影响数展示 / 10s 撤销 / 服务端校验 / 版本号提交）
+- **结果**：**ALL PASS**（4 项验证全通过，无新增 Bug）
+- **构建门禁**：tsc --noEmit ✅ 0 错误、npm run lint ✅ 0 错误
+
+### P0-A 验证结果（4 项）
+
+| # | 测试项 | 结果 | 说明 |
+|---|---|---|---|
+| 1 | 标签删除前展示影响数 | ✅ PASS | `TagPanel.tsx:384-397` — `useCount = totalCount(promptTags, new Set([tag.id, ...collectDescendantIds(tags, tag.id)]))`，confirm 显示「当前有 N 条提示词使用此标签（或其子标签）」；子标签名称以顿号分隔列出（`childrenOf().map(c=>c.name).join('、')`），Prompt 影响数准确 |
+| 2 | 10 秒撤销恢复 | ✅ PASS | `page.tsx:357-365` capture/restoreTagSnapshot 缓存 {cards, tags, promptTags}；`page.tsx:565-617` 四项标签 CRUD（create/rename/move/delete）均调 `notifyWithUndo`；`page.tsx:98-107` `toast.withUndo ? 10000 : ...` 定时 10s；`page.tsx:91-96` handleUndo 执行快照回退；toast 内渲染「撤销」按钮 |
+| 3 | 服务端校验 5 项 | ✅ PASS | `tags.ts:187-226` validateTagGraph ① 同父无重名（`parent_id\u0000name` 去重）② id 唯一（`byId.size !== tags.length`）③ 父级存在（`byId.has(parent_id)`）④ 无环（父链 while 遍历检测 guard）⑤ 关联不悬空（`byId.has(rt.tag_id)` + `cardIds.has(rt.prompt_id)`）⑥ `(prompt_id, tag_id)` 唯一（seen Set）；`serverStore.ts:68-80` setState 落盘前调用，失败返回 `{ ok: false, error }`；`storage.ts:462-477` sanitizePromptTags 客户端自愈悬空/重复关联 |
+| 4 | 带版本号提交 | ✅ PASS | `serverStore.ts:98-104` 若 `baseVersion !== s.version` 返回 `{ ok: false, error, conflict: true }`；`storage.ts:525-531` pushToServer 发送 `baseVersion: knownVersion`；`storage.ts:423-434` doPush 冲突时 loadFromServer 刷新 + onConflictRefresh 回调；`page.tsx:214-223` 注册冲突回调 → setCards/setTags/setPromptTags + notify「检测到其他设备更新了数据，已刷新至最新版本，请重试刚才的操作」；`serverStore.ts:110` 成功写入 version += 1；SSE `lastPushedVersion` 回声过滤（`storage.ts:576`） |
+
+### 代码走查细节
+
+**1. 影响数展示（TagPanel.tsx:384-411）**
+- L386: `useCount = totalCount(promptTags, new Set([tag.id, ...collectDescendantIds(tags, tag.id)]))` — 含子标签的去重 Prompt 数
+- L388-397: 多行 confirm 文案，包含 `当前有 ${useCount} 条提示词使用此标签（或其子标签）`
+- L400-408: 有子标签时二次 confirm 列出子标签名，模式选择「删除整棵子树 / 仅删自身」
+- tags.ts:133-145 totalCount 使用 `collectTagPromptIds` 去重 Set.size 保证准确
+
+**2. 10s 撤销闭环（page.tsx:78-107, 357-365, 555-617）**
+- L78: undoRef 存储回调
+- L85-89: notifyWithUndo 设置 undoRef + withUndo:true
+- L91-96: handleUndo 执行并清空
+- L98-107: useEffect withUndo → 10000ms 定时清空
+- L357-365: captureTagSnapshot / restoreTagSnapshot 原子回退三集合
+- L565-568 create / L583-587 rename / L602-604 move / L613-617 delete — 全部 snapshot + notifyWithUndo
+
+**3. 服务端校验三层防御**
+- Layer 1: isTag/isPromptTag 守卫过滤非法结构（serverStore.ts:37-38）
+- Layer 2: validateTagGraph 在 setState 落盘前执行 5 项检查（serverStore.ts:77-79）
+- Layer 3: 版本冲突检测 baseVersion 比对（serverStore.ts:98-104）
+- 客户端: sanitizePromptTags 自愈悬空/重复关联再推送（storage.ts:462-477）
+
+**4. 版本号提交闭环**
+- GET /api/sync 返回 version（route.ts:18）
+- POST /api/sync 透传 baseVersion 到 setState（route.ts:37）
+- serverStore setState: 内容无变 → 不落盘不广播（L94-96）；baseVersion 落后 → reject + conflict:true（L99-104）
+- storage pushToServer: 发送 baseVersion: knownVersion（L531）
+- storage doPush: 冲突时 loadFromServer 刷新 → onConflictRefresh 回调（L426-433）
+- page.tsx: setConflictRefreshHandler 注册回调，重载三集合 + notify（L214-223）
+- SSE echo filter: lastPushedVersion 匹配时跳过（storage.ts:576）
+
+### 既有回归
+
+- P2-10/P2-11 网格直删+批量管理：已 CLOSED ✅
+- P0 标签系统 22 项：未触碰相关代码 ✅
+- BUG-NEW-1（chip 移除双写）：仍 CLOSED ✅
+- tsc --noEmit 零错误 ✅
+- npm run lint 零错误 ✅
+
+### 结论
+
+P0-A 安全闭环 4 项验证全通过，无新增 Bug。标签操作的安全性从「无防护」升级为「影响数可见 + 10s 可撤销 + 服务端 5 项校验 + 版本冲突拒绝刷新重试」完整闭环。

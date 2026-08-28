@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Card, Settings, SortMode, Tag, PromptTag } from '@/lib/types'
-import { loadCards, loadSettings, loadTags, loadPromptTags, parseImport, saveCards, saveSettings, saveTags, savePromptTags, buildMarkdownExport, isServerAvailable, loadFromServer, pushToServer, subscribeSync } from '@/lib/storage'
+import { loadCards, loadSettings, loadTags, loadPromptTags, parseImport, saveCards, saveSettings, saveTags, savePromptTags, buildMarkdownExport, isServerAvailable, loadFromServer, pushToServer, subscribeSync, sanitizePromptTags, setConflictRefreshHandler } from '@/lib/storage'
 import { createCard, normalizeBody, parseTags, rollbackToVersion, saveBodyOnly, saveBodyWithVersion } from '@/lib/cards'
 import { DEMO_CARDS } from '@/lib/demo'
 import { nowIso } from '@/lib/util'
@@ -162,11 +162,13 @@ export default function Home() {
     if (remote.cards.length === 0) {
       const local = loadCards()
       if (local.length > 0) {
-        await pushToServer(local, loadSettings(), loadTags(), loadPromptTags())
+        const localTags = loadTags()
+        const localPromptTags = loadPromptTags()
+        await pushToServer(local, loadSettings(), localTags, localPromptTags)
         setCards(local)
         setSettings(loadSettings())
-        setTags(loadTags())
-        setPromptTags(loadPromptTags())
+        setTags(localTags)
+        setPromptTags(sanitizePromptTags(localPromptTags, local, localTags))
       }
     } else {
       setCards(remote.cards)
@@ -208,6 +210,17 @@ export default function Home() {
       return () => window.clearTimeout(timer)
     }
   }, [cards, hydrated, notify])
+
+  // P0-A 版本冲突回调：另一设备已更新且本次写入被拒绝 → 重载服务端权威视图并提示用户重试
+  useEffect(() => {
+    setConflictRefreshHandler((data) => {
+      setCards(data.cards)
+      setSettings(data.settings)
+      setTags(data.tags)
+      setPromptTags(data.promptTags)
+      notify('检测到其他设备更新了数据，已刷新至最新版本，请重试刚才的操作')
+    })
+  }, [notify])
 
   useEffect(() => {
     if (hydrated) saveSettings(settings)
@@ -341,6 +354,16 @@ export default function Home() {
     setCards((prev) => syncCardsToPromptTags(prev, nextTags, nextPromptTags))
   }
 
+  // P0-A 标签级操作撤销快照：缓存操作前 tags/promptTags/cards，10s 内整体回退
+  function captureTagSnapshot() {
+    return { cards, tags, promptTags }
+  }
+  function restoreTagSnapshot(snap: { cards: Card[]; tags: Tag[]; promptTags: PromptTag[] }) {
+    setCards(snap.cards)
+    setTags(snap.tags)
+    setPromptTags(snap.promptTags)
+  }
+
   function handleCreate(body: string, title: string, aiTags: string[]) {
     // P0-3 重复内容去重：normalizeBody 全等比对（大小写敏感、空白归一后），命中首个提示二次确认；
     // 空内容（bodyNorm 为空）不触发
@@ -373,14 +396,25 @@ export default function Home() {
       return
     }
     // P2-5：缓存替换前快照，10s 内可撤销回退
-    const snapshot = cards
-    setCards(DEMO_CARDS.map((c) => ({ ...c })))
+    const snapshotCards = cards
+    const snapshotTags = tags
+    const snapshotPromptTags = promptTags
+    const demo = DEMO_CARDS.map((c) => ({ ...c }))
+    // P0-A 关联不悬空：载入示例后按其卡片重建标签实体与关联，避免旧关联悬空
+    const derived = deriveTagsFromCards(demo)
+    setCards(demo)
+    setTags(derived.tags)
+    setPromptTags(derived.promptTags)
     setView('mine')
     setSelectedTag(null)
     setSelectedId(null)
     setDetailId(null)
     clearBulk()
-    notifyWithUndo(`已载入 ${DEMO_CARDS.length} 张示例卡片`, () => setCards(snapshot))
+    notifyWithUndo(`已载入 ${DEMO_CARDS.length} 张示例卡片`, () => {
+      setCards(snapshotCards)
+      setTags(snapshotTags)
+      setPromptTags(snapshotPromptTags)
+    })
   }
 
   function handleClearRepo() {
@@ -392,13 +426,19 @@ export default function Home() {
       return
     }
     // P2-5：缓存清空前快照，10s 内可撤销回退
-    const snapshot = cards
+    const snapshotCards = cards
+    const snapshotPromptTags = promptTags
     setCards([])
+    // P0-A 关联不悬空：清空卡片后一并清除全部标签关联（标签实体保留，关联归零）
+    setPromptTags([])
     setSelectedTag(null)
     setSelectedId(null)
     setDetailId(null)
     clearBulk()
-    notifyWithUndo('仓库已清空', () => setCards(snapshot))
+    notifyWithUndo('仓库已清空', () => {
+      setCards(snapshotCards)
+      setPromptTags(snapshotPromptTags)
+    })
   }
 
   function handleSwitchView(next: ViewMode) {
@@ -492,8 +532,11 @@ export default function Home() {
     if (!card) return
     if (settings.confirmDelete && !window.confirm(`确定删除「${card.title}」？此操作不可撤销。`)) return
     // P2-5：缓存删除前快照，10s 内可撤销回退
-    const snapshot = cards
+    const snapshotCards = cards
+    const snapshotPromptTags = promptTags
+    // P0-A 关联不悬空：删除卡片时一并清除其标签关联，避免服务端校验拒绝 / 标签计数虚高
     setCards((prev) => prev.filter((c) => c.id !== id))
+    setPromptTags((prev) => prev.filter((rt) => rt.prompt_id !== id))
     setDetailId(null)
     if (selectedId === id) setSelectedId(null)
     setBulkIds((prev) => {
@@ -501,7 +544,10 @@ export default function Home() {
       next.delete(id)
       return next
     })
-    notifyWithUndo('卡片已删除', () => setCards(snapshot))
+    notifyWithUndo('卡片已删除', () => {
+      setCards(snapshotCards)
+      setPromptTags(snapshotPromptTags)
+    })
   }
 
   // ===== 标签实体 CRUD（ID 解耦，绝不删 Prompt）=====
@@ -516,9 +562,10 @@ export default function Home() {
     if (parentId !== null && !tags.some((t) => t.id === parentId)) {
       return { ok: false, error: '父标签不存在' }
     }
+    const snapshot = captureTagSnapshot()
     const [nextTags, tag] = createTag(tags, trimmed, parentId)
     setTags(nextTags)
-    notify(`已创建标签「${tag.name}」`)
+    notifyWithUndo(`已创建标签「${tag.name}」`, () => restoreTagSnapshot(snapshot))
     return { ok: true }
   }
 
@@ -533,10 +580,11 @@ export default function Home() {
     if (!isNameUnique(tags, tag.parent_id, trimmed, id)) {
       return { ok: false, error: `同一父级下已存在标签「${trimmed}」` }
     }
+    const snapshot = captureTagSnapshot()
     const nextTags = renameTag(tags, id, trimmed)
     // P0-8 原子落盘：tags（仅改 Tag.name）+ promptTags（不变）+ Card.tags 冗余字段整体重建（方案 A 双写一致）
     applyTags(nextTags, promptTags)
-    notify(`标签已重命名为「${trimmed}」`)
+    notifyWithUndo(`标签已重命名为「${trimmed}」`, () => restoreTagSnapshot(snapshot))
     return { ok: true }
   }
 
@@ -551,8 +599,9 @@ export default function Home() {
     if (newParentId !== null && !isNameUnique(tags, newParentId, tag.name, id)) {
       return { ok: false, error: `目标父级下已存在标签「${tag.name}」` }
     }
+    const snapshot = captureTagSnapshot()
     setTags(moveTag(tags, id, newParentId))
-    notify('标签已移动')
+    notifyWithUndo('标签已移动', () => restoreTagSnapshot(snapshot))
     return { ok: true }
   }
 
@@ -561,10 +610,11 @@ export default function Home() {
   function handleDeleteTag(id: string, mode: 'self' | 'subtree' = 'self') {
     const tag = tags.find((t) => t.id === id)
     if (!tag) return
+    const snapshot = captureTagSnapshot()
     const { tags: nextTags, promptTags: nextPromptTags } = deleteTag(tags, promptTags, id, mode === 'subtree')
     applyTags(nextTags, nextPromptTags)
     if (selectedTag === id) setSelectedTag(null)
-    notify(`已删除标签「${tag.name}」（提示词未受影响）`)
+    notifyWithUndo(`已删除标签「${tag.name}」（提示词未受影响）`, () => restoreTagSnapshot(snapshot))
   }
 
   // ===== P2-11 批量管理 =====
@@ -590,14 +640,20 @@ export default function Home() {
     ) {
       return
     }
-    const snapshot = cards
+    const snapshotCards = cards
+    const snapshotPromptTags = promptTags
     const ids = bulkIds
     const count = ids.size
     setCards((prev) => prev.filter((c) => !ids.has(c.id)))
+    // P0-A 关联不悬空：批量删除卡片时一并清除其标签关联
+    setPromptTags((prev) => prev.filter((rt) => !ids.has(rt.prompt_id)))
     if (selectedId && ids.has(selectedId)) setSelectedId(null)
     if (detailId && ids.has(detailId)) setDetailId(null)
     clearBulk()
-    notifyWithUndo(`已删除 ${count} 张卡片`, () => setCards(snapshot))
+    notifyWithUndo(`已删除 ${count} 张卡片`, () => {
+      setCards(snapshotCards)
+      setPromptTags(snapshotPromptTags)
+    })
   }
 
   // 批量打标签：追加去重（不覆盖卡片已有标签），走标签实体关系
@@ -687,11 +743,17 @@ export default function Home() {
         return
       }
       if (!window.confirm(`导入将覆盖当前全部 ${cards.length} 张卡片，确定继续？`)) return
-      // P2-5：缓存覆盖前快照（卡片 + 设置），10s 内可撤销回退
+      // P2-5：缓存覆盖前快照（卡片 + 设置 + 标签），10s 内可撤销回退
       const snapshotCards = cards
       const snapshotSettings = settings
+      const snapshotTags = tags
+      const snapshotPromptTags = promptTags
       setCards(result.cards)
       if (result.settings) setSettings(result.settings)
+      // P0-A 关联不悬空：导入后按新卡片的字符串标签重建标签实体与关联
+      const derived = deriveTagsFromCards(result.cards)
+      setTags(derived.tags)
+      setPromptTags(derived.promptTags)
       setView('mine')
       setSelectedTag(null)
       setSelectedId(null)
@@ -703,6 +765,8 @@ export default function Home() {
         const undo = () => {
           setCards(snapshotCards)
           setSettings(snapshotSettings)
+          setTags(snapshotTags)
+          setPromptTags(snapshotPromptTags)
         }
         if (skipped.length > 0) {
           undoRef.current = undo

@@ -1,7 +1,8 @@
 import { promises as fs } from 'fs'
 import path from 'path'
 import { EventEmitter } from 'events'
-import { isTag, isPromptTag } from './tags'
+import type { Tag, PromptTag } from './types'
+import { isTag, isPromptTag, validateTagGraph } from './tags'
 
 // 服务端共享存储：进程内单例 + JSON 文件持久化。
 // 两台电脑访问同一份 Next.js 服务，因此读写的是同一个文件，天然共享。
@@ -49,15 +50,35 @@ export async function getState(): Promise<ServerState> {
   return { cards: s.cards, settings: s.settings, tags: s.tags, promptTags: s.promptTags, version: s.version }
 }
 
+/** setState 的返回：成功返回新版本号；校验/版本冲突返回错误对象（由 /api/sync 透传）。 */
+export type SetStateResult = number | { ok: false; error: string; conflict?: boolean }
+
 export async function setState(next: {
   cards: unknown[]
   settings: unknown
   tags?: unknown[]
   promptTags?: unknown[]
-}): Promise<number> {
+  /** P0-A 版本号提交：客户端声明本次写入基于的版本；已变化则拒绝并刷新后重试 */
+  baseVersion?: number
+}): Promise<SetStateResult> {
   const s = await ensureLoaded()
   const nextTags = Array.isArray(next.tags) ? next.tags.filter(isTag) : s.tags
   const nextPromptTags = Array.isArray(next.promptTags) ? next.promptTags.filter(isPromptTag) : s.promptTags
+
+  // P0-A 服务端写入前校验：父级存在 / 无环 / 同父无重名 / 关联不悬空 / (prompt_id, tag_id) 唯一。
+  // 非法数据一律拒绝落盘，防止整份快照「最后写入覆盖」污染共享库。
+  const cardIds = new Set<string>()
+  for (const c of next.cards) {
+    if (c && typeof c === 'object') {
+      const id = (c as Record<string, unknown>).id
+      if (typeof id === 'string') cardIds.add(id)
+    }
+  }
+  const invalid = validateTagGraph(nextTags as Tag[], nextPromptTags as PromptTag[], cardIds)
+  if (invalid) {
+    return { ok: false, error: `数据校验失败：${invalid}` }
+  }
+
   const current = JSON.stringify({
     cards: s.cards,
     settings: s.settings,
@@ -73,6 +94,14 @@ export async function setState(next: {
   if (current === incoming) {
     // 内容无变化：保持版本号、不落盘、不广播，避免远程回写导致的推送死循环
     return s.version
+  }
+  // P0-A 版本号提交：内容有变化且声明的基础版本落后于当前版本 → 拒绝（乐观并发控制，防丢更新）
+  if (typeof next.baseVersion === 'number' && next.baseVersion !== s.version) {
+    return {
+      ok: false,
+      error: `版本已变化（当前 ${s.version}，提交基于 ${next.baseVersion}），请刷新后重试`,
+      conflict: true,
+    }
   }
   s.cards = next.cards
   s.settings = next.settings

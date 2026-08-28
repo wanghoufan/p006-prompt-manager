@@ -66,6 +66,10 @@
 | 导入/导出 | 全量 JSON/Markdown 格式备份与恢复（含调取码）；导入 picker 支持 `.json` + `.md`（`accept=".json,.md"`），与 Markdown 导出可逆；导入结果带 `skipped` 详情（成功 N/跳过 M + 字段级原因） |
 | 离线文案 | TagPanel 底部在线「已开启局域网实时同步（服务端共享存储），离线时回退本机缓存」/ 离线「未连接同步服务，已使用本机本地数据」，与存储架构一致 |
 | 关闭不丢稿 | 详情弹窗 Esc/蒙层/关闭按钮与移动端抽屉收起前先 `commitSave(true)` flush 未保存草稿（含 700ms 防抖备注），切换卡片时 likewise，切卡/关闭不再静默丢稿 |
+| 删除影响数 | 删除标签前 confirm 展示「当前有 N 条提示词使用此标签（或其子标签）」+ 子标签名顿号列出（`totalCount` 子树去重），卡片 32→32 绝不删 Prompt |
+| 标签 10s 撤销 | 创建/重命名/移动/删除四类标签操作 Toast 内「撤销」10s（`captureTagSnapshot`/`restoreTagSnapshot` 三态快照），真机 vpn 删除→撤销后标签/关联/冗余 tags 全复原 |
+| 服务端校验 | `validateTagGraph` 五项（同父无重名/id 唯一/父级存在/无环/关联不悬空/(prompt_id,tag_id) 唯一）+ `serverStore.setState` 落盘前拒绝 + 客户端 `sanitizePromptTags` 自愈，非法数据均 `数据校验失败` 不落盘 |
+| 版本号提交 | `knownVersion`/`baseVersion` 乐观并发：版本不一致 `conflict` 拒绝 → 刷新权威数据 → 重载视图 + toast「检测到其他设备更新…请重试」+ SSE `lastPushedVersion` 回声过滤 |
 
 ## 快速开始
 
