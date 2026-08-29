@@ -390,6 +390,7 @@ export default function Home() {
   const previewCard = selectedId ? sourceCards.find((c) => c.id === selectedId) ?? null : null
 
   /** 把标签名列表解析为 tag id：同名（任意父级，优先顶级）复用，不存在则新建顶级标签实体。
+   *  「父/子/孙」路径：未命中同名扁平标签时按斜杠逐级创建父子层级，卡片关联到叶子标签。
    *  返回最终 tagIds（去重、保持顺序、trim）与可能扩展后的 tags。 */
   function resolveTagIds(names: string[]): { tagIds: string[]; nextTags: Tag[] } {
     let nextTags = tags
@@ -399,8 +400,28 @@ export default function Home() {
       const name = raw.trim()
       if (!name || seen.has(name)) continue
       seen.add(name)
-      // 优先匹配顶级同名标签，其次任意父级同名
-      let found = nextTags.find((t) => t.parent_id === null && t.name === name) ?? nextTags.find((t) => t.name === name)
+      // 优先匹配已有标签（顶级优先，其次任意父级）——兼容历史遗留的扁平「父/子」名
+      let found =
+        nextTags.find((t) => t.parent_id === null && t.name === name) ??
+        nextTags.find((t) => t.name === name)
+      // 未命中且含斜杠：按「父/子/孙」路径解析并逐级创建（不存在则建），卡片关联到叶子标签
+      if (!found && name.includes('/')) {
+        const parts = name.split('/').map((p) => p.trim()).filter(Boolean)
+        if (parts.length >= 2 && parts.every((p) => p.length <= 50)) {
+          let parentId: string | null = null
+          for (const part of parts) {
+            const node = nextTags.find((t) => t.parent_id === parentId && t.name === part)
+            if (node) {
+              found = node
+            } else {
+              const [updated, created] = createTag(nextTags, part, parentId)
+              nextTags = updated
+              found = created
+            }
+            parentId = found.id
+          }
+        }
+      }
       if (!found) {
         const [updated, created] = createTag(nextTags, name, null)
         nextTags = updated

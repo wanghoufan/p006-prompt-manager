@@ -7,57 +7,20 @@ import { useModalFocus } from '@/hooks/useModalFocus'
 
 const MCP_PROJECT_ROOT = '/Users/zzymima0000/Developer/coding/1.Active/ing丨0813提示词管理器 mac gpt桌面 v1.0'
 
-type McpScenario = {
-  id: 'gpt' | 'workbuddy' | 'orca'
-  name: string
-  buildCommand: string
-  agentPrompt: string
-}
+/**
+ * 直接跑这一条就能完成接入：装依赖、构建、写各客户端配置、真调一次验证，全自动。
+ */
+const SETUP_COMMAND = `node "${MCP_PROJECT_ROOT}/mcp/prompt-server/setup.mjs"`
 
-const MCP_SCENARIOS: McpScenario[] = [
-  {
-    id: 'gpt',
-    name: 'GPT',
-    buildCommand: `cd "${MCP_PROJECT_ROOT}/mcp/prompt-server" && npm install && npm run build`,
-    agentPrompt: `请为我连接本地 Prompt Manager MCP。请直接完成下面工作；任何一步不满足时，说明准确原因和下一步，不要猜测配置路径或覆盖已有 MCP。
+/**
+ * 用户唯一需要复制的东西——一句话，交给 AI 执行。
+ */
+const SETUP_AGENT_INSTRUCTION = `请执行 ${SETUP_COMMAND} 完成提示词管理器接入，成功后用一句话告诉我怎么用。`
 
-1. 环境检测：确认当前机器有 Node.js（执行 node --version），并定位提示词管理器项目根目录。优先使用：${MCP_PROJECT_ROOT}；若路径不存在，查找包含 mcp/prompt-server/package.json 的项目目录。
-2. 构建：进入 <项目根>/mcp/prompt-server，执行 npm install 和 npm run build；确认 dist/index.js 已生成。解析 command -v node，后续配置必须使用该绝对路径。
-3. GPT 配置检测：先识别我当前所说的 GPT 客户端及其本地 MCP 接入方式。若是 Codex，检查其现有 MCP 配置（优先 ~/.codex/config.toml）；若是 ChatGPT 桌面版，先检查应用内或本机已有的 MCP 配置入口。仅在确认该客户端支持本地 stdio MCP 后再写入配置。
-4. 配置写入：保留原有服务器，新增或更新唯一的 prompt-manager 条目。command 使用上一步得到的 Node 绝对路径，args 为 ["<项目根>/mcp/prompt-server/dist/index.js"]，description 为“本地提示词管理库：通过调取码激活卡片为系统提示词”。写入后校验配置格式。
-5. 完成后告诉我：已写入的配置位置、实际项目路径、是否构建成功；然后提示我完全新开一个 GPT 会话，使 MCP 工具重新加载。
-
-连接后，我会用“调取 <调取码>”调用 prompt_manager_activate_prompt。`,
-  },
-  {
-    id: 'workbuddy',
-    name: 'WorkBuddy',
-    buildCommand: `cd "${MCP_PROJECT_ROOT}/mcp/prompt-server" && npm install && npm run build`,
-    agentPrompt: `请为我连接本地 Prompt Manager MCP。请直接完成下面工作；任何一步不满足时，说明准确原因和下一步，不要猜测路径或覆盖已有 MCP。
-
-1. 环境检测：确认 Node.js 可用（node --version），并定位项目根目录。优先使用：${MCP_PROJECT_ROOT}；若路径不存在，查找包含 mcp/prompt-server/package.json 的项目目录。
-2. 构建：进入 <项目根>/mcp/prompt-server，执行 npm install 和 npm run build；确认 dist/index.js 已生成。解析 command -v node，后续配置必须使用该绝对路径。
-3. 配置检测：确认 WorkBuddy 配置文件为 ~/.workbuddy/mcp.json（不带点；不要写 ~/.workbuddy/.mcp.json）。若文件已存在，先读取并保留其他 mcpServers。
-4. 配置写入：在 mcpServers 中新增或更新 prompt-manager：command 为 Node 的绝对路径，args 为 ["<项目根>/mcp/prompt-server/dist/index.js"]，description 为“本地提示词管理库：通过调取码激活卡片为系统提示词”。写入后校验 JSON 格式；如 WorkBuddy 要求在连接器界面确认，请完成保存和信任。
-5. 完成后告诉我实际项目路径、配置文件路径和构建结果，然后提示我完全新开一个 WorkBuddy 会话，使 MCP 工具重新加载。
-
-连接后，我会用“调取 <调取码>”调用 prompt_manager_activate_prompt。`,
-  },
-  {
-    id: 'orca',
-    name: 'Orca',
-    buildCommand: `cd "${MCP_PROJECT_ROOT}/mcp/prompt-server" && npm install && npm run build`,
-    agentPrompt: `请为我连接本地 Prompt Manager MCP。请直接完成下面工作；任何一步不满足时，说明准确原因和下一步，不要猜测配置路径或覆盖已有 MCP。
-
-1. 环境检测：确认 Node.js 可用（node --version），并定位项目根目录。优先使用：${MCP_PROJECT_ROOT}；若路径不存在，查找包含 mcp/prompt-server/package.json 的项目目录。
-2. 构建：进入 <项目根>/mcp/prompt-server，执行 npm install 和 npm run build；确认 dist/index.js 已生成。解析 command -v node，后续配置必须使用该绝对路径。
-3. Orca MCP 宿主检测：先执行 orca --help 与 orca status --json，确认 Orca 1.4.x 本身无 mcp 子命令；再执行 opencode mcp list 与 opencode debug config，确认实际 MCP 宿主为 opencode。项目级配置为 <项目根>/opencode.jsonc（全局为 ~/.config/opencode/opencode.jsonc），不要凭空创建 Orca 不识别的配置文件。
-4. 配置写入：往上述 opencode.jsonc 的 mcp 中保留已有项并新增或更新唯一的 prompt-manager：{ "type": "local", "command": [Node绝对路径, "<项目根>/mcp/prompt-server/dist/index.js"], "enabled": true }。写入后执行 opencode mcp list 校验为 connected。
-5. 完成后告诉我实际项目路径、配置位置（精确到 opencode.jsonc 路径）与执行命令、构建结果，然后提示我完全新开一个 Orca 会话（opencode TUI 重进），使 MCP 工具重新加载。
-
-连接后，我会用"调取 <调取码>"调用 prompt_manager_activate_prompt（在 opencode 侧显示为 prompt-manager_prompt_manager_activate_prompt）。`,
-  },
-]
+/**
+ * 脚本会自动识别并配置这些客户端。仅用于展示，不要求用户理解细节。
+ */
+const SETUP_CLIENTS = 'WorkBuddy · Codex · Cursor · Claude Desktop · Cline · Windsurf · Gemini CLI'
 
 interface SettingsModalProps {
   settings: Settings
@@ -232,42 +195,55 @@ export function SettingsModal({ settings, onSave, onClose }: SettingsModalProps)
               <option value="right">右对齐</option>
             </select>
           </div>
-          <details className="rounded-lg border border-line bg-ink-900 px-3.5 py-3">
-            <summary className="cursor-pointer text-sm text-paper">MCP 一键连接提示词</summary>
-            <div className="mt-3 space-y-4 text-xs leading-relaxed text-muted">
-              <p>选择正在使用的客户端。先复制构建命令，或直接复制完整提示词交给对应 AI 代理执行；配置完成后必须新开会话。</p>
-              {MCP_SCENARIOS.map((scenario) => (
-                <section key={scenario.id} className="rounded-md border border-line bg-ink-850 p-3">
-                  <h3 className="text-sm font-medium text-paper">{scenario.name}</h3>
-                  <div className="mt-2 flex items-center justify-between gap-2">
-                    <p className="text-xs text-paper-dim">1. 构建命令</p>
-                    <button
-                      type="button"
-                      className="btn-ghost shrink-0 text-xs"
-                      onClick={() => void copyMcpText(`${scenario.id}-command`, scenario.buildCommand)}
-                    >
-                      {copied === `${scenario.id}-command` ? '已复制' : '复制命令'}
-                    </button>
-                  </div>
-                  <pre className="mt-1 overflow-x-auto rounded-md bg-ink-900 p-2 font-mono text-[10px] text-paper-dim">{scenario.buildCommand}</pre>
-                  <div className="mt-3 flex items-center justify-between gap-2">
-                    <p className="text-xs text-paper-dim">2. 交给 AI 代理执行</p>
-                    <button
-                      type="button"
-                      className="btn-ghost shrink-0 text-xs"
-                      onClick={() => void copyMcpText(`${scenario.id}-prompt`, scenario.agentPrompt)}
-                    >
-                      {copied === `${scenario.id}-prompt` ? '已复制' : '复制完整提示词'}
-                    </button>
-                  </div>
-                  <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap rounded-md bg-ink-900 p-2 font-mono text-[10px] text-paper-dim">{scenario.agentPrompt}</pre>
-                </section>
-              ))}
-              <p aria-live="polite" className={copied === 'error' ? 'text-rust' : 'text-muted'}>
-                {copied === 'error' ? '复制失败，请检查浏览器剪贴板权限后重试。' : '连接后可说“调取 &lt;调取码&gt;”触发 prompt_manager_activate_prompt。'}
-              </p>
-            </div>
-          </details>
+          <div className="rounded-lg border border-line bg-ink-900 px-3.5 py-3">
+            <p className="text-sm text-paper">一键接入</p>
+            <p className="mt-0.5 text-xs text-muted">
+              把下面这句话发给你的 AI，它会自动完成安装、配置和验证。你不需要看任何技术细节。
+            </p>
+            <button
+              type="button"
+              className="btn-gold mt-3 w-full"
+              onClick={() => void copyMcpText('agent', SETUP_AGENT_INSTRUCTION)}
+            >
+              {copied === 'agent' ? '已复制，去粘贴给 AI ✓' : '复制这句话，发给你的 AI'}
+            </button>
+            <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded-md bg-ink-850 p-2 font-mono text-[10px] leading-relaxed text-paper-dim">
+              {SETUP_AGENT_INSTRUCTION}
+            </pre>
+            <details className="mt-3">
+              <summary className="cursor-pointer text-xs text-muted">想自己跑，或想看它做了什么</summary>
+              <div className="mt-2 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-paper-dim">直接执行的命令</p>
+                  <button
+                    type="button"
+                    className="btn-ghost shrink-0 text-xs"
+                    onClick={() => void copyMcpText('command', SETUP_COMMAND)}
+                  >
+                    {copied === 'command' ? '已复制' : '复制命令'}
+                  </button>
+                </div>
+                <pre className="overflow-x-auto whitespace-pre-wrap rounded-md bg-ink-850 p-2 font-mono text-[10px] text-paper-dim">
+                  {SETUP_COMMAND}
+                </pre>
+                <p className="text-xs leading-relaxed text-muted">
+                  脚本会自动装依赖、构建、找出你本装的 AI 客户端并逐个配好，最后真调一次验证。它只读提示词库，不会改动任何卡片、标签或调取码。
+                </p>
+                <p className="text-xs leading-relaxed text-muted">已支持：{SETUP_CLIENTS}</p>
+                <p className="text-xs leading-relaxed text-muted">
+                  可选：<code className="font-mono">--check</code> 只体检、不改任何东西；<code className="font-mono">--remove</code> 卸载。
+                </p>
+              </div>
+            </details>
+            <p
+              aria-live="polite"
+              className={`mt-2 text-xs ${copied === 'error' ? 'text-rust' : 'text-muted'}`}
+            >
+              {copied === 'error'
+                ? '复制失败，请检查浏览器剪贴板权限后重试。'
+                : '接入完成后，对 AI 说「调取 <调取码>」即可加载对应卡片。'}
+            </p>
+          </div>
           {/* P0-5 主题提示：当前生效主题（仅提示，不改设置） */}
           <div className="rounded-lg border border-line bg-ink-900 px-3.5 py-3">
             <label htmlFor="settings-prompt" className="text-xs text-muted">

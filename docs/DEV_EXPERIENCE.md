@@ -48,7 +48,7 @@
 - 时间：2026-08-27（2026-08-28 补充三重保障）
 - 现象：重命名标签全链路失败这类“用户一用就发现”的 P0 阻断，未被 QA 拦截。QA 第十二次 PASS 仅为 `代码走查 + tsc/lint + curl /api/sync 11/55` 校验，`BUGS.md: 需人工确认` 仅列“未真机点过 TagPanel →重命名→输入→确认 全链路”；`QA_CHECKLIST` 对 P0-13 重命名只有 `renameTag 纯函数/handleRenameTag 重名检测` 走查项，无 GUI 必测项（选中→重命名→新名显隐→关联卡 chip 自动更新→子路径变）；工程收尾 `31b1322` 在 QA GUI 空档期直接提交，门控未拦住。
 - 小白解释：就像只看菜谱没尝菜就说菜熟了。看代码觉得逻辑对，不等于在真机上点一点就真能用——用户一点重命名就失败，说明必须亲手在界面上点过才算测过。单靠一条规定容易“走过场”，要用三道锁一起兜底。
-- 技术处理：按 `QUALITY_GATES.md` 本应 `P0 可复现 → QA 必 GUI`，但本轮 QA 为 B 档代码走查（`gpt-5.4-mini` 等）未强制 `Vision + Computer Use` 真机。本次已补为三重保障：① Skill `qa-real-device` 隐式加载（第一重，能力层兜底）② 角色模板 `docs/roles/qa.md` 写入“真机必测硬约束”（第二重，角色层）③ `Stage Manager` 生成 QA Prompt 时在“约束”首条显式要求 `Vision + Computer Use 真机操作 http://localhost:3000 必选，截图为据`（第三重，刚写入 `docs/roles/stage-manager.md: QA 真机必测多重保障`）。后续任何 P0 的 QA Prompt 都在约束首条显式要求真机，三重缺一不可，未真机逐项点过不得判 QA PASS。补救已入本次 Fix Prompt：Fix 后 QA 必须真机复测 4 项 GUI（单标签重命名 / 父重命名 / 重名拒绝 / 移动后子路径），`QA_CHECKLIST` 追加 P0 重命名 GUI 必测，`BUGS.md` 记 P0 阻断项，下次 `neat-freak` 前必须 GUI PASS 才能合。
+- 技术处理：按 `QUALITY_GATES.md` 本应 `P0 可复现 → QA 必 GUI`，但本轮 QA 为 B 档代码走查（`gpt-5.4-mini` 等）未强制 `Vision + Computer Use` 真机。本次已补为三重保障：① Skill `qa-real-device` 隐式加载（第一重，能力层兜底）② 角色模板 `docs/roles/qa.md` 写入“真机必测硬约束”（第二重，角色层）③ `Stage Manager` 生成 QA Prompt 时在“约束”首条显式要求 `Vision + Computer Use 真机操作 http://localhost:3100 必选，截图为据`（第三重，刚写入 `docs/roles/stage-manager.md: QA 真机必测多重保障`）。后续任何 P0 的 QA Prompt 都在约束首条显式要求真机，三重缺一不可，未真机逐项点过不得判 QA PASS。补救已入本次 Fix Prompt：Fix 后 QA 必须真机复测 4 项 GUI（单标签重命名 / 父重命名 / 重名拒绝 / 移动后子路径），`QA_CHECKLIST` 追加 P0 重命名 GUI 必测，`BUGS.md` 记 P0 阻断项，下次 `neat-freak` 前必须 GUI PASS 才能合。
 - 可直接给 Agent 的规则：`QA 对 P0 功能必须 Vision + Computer Use 真机点过全链路（选中→操作→显隐→关联数据更新）并截图留证，仅 tsc/lint/走查不得判 PASS；Stage Manager 的 QA Prompt 约束首条必须显式写明真机必选；三重保障（Skill+角色模板+Prompt约束）缺一不可，P0 GUI 未 PASS 禁止 neat-freak 合入与提交。`
 - QA 分工差异化（2026-08-28 补充，避免一刀切）：`代码走查（所有任务，读代码+验证逻辑）+ 自动化测试（有 tsc/lint/curl 门禁时，运行构建命令+API 测试）+ 真机 GUI 测试（仅 P0 核心功能：标签重命名/移动/删除等，Vision + Computer Use 操作浏览器，需 Vision 能力模型）`；问题是此前所有 QA 用同一模型/方式，未区分。整改：`P0 核心功能 → 必须真机 GUI`，`P1/P2 常规 → 代码走查 + 自动化测试即可`；后续 QA 任务在 Prompt 中明确标注「真机必测」或「代码走查即可」，Stage Manager 分派时按此分级选用模型/方式（P2-10/P2-11 12 项验证已按此区分通过）。
 - 候选升级位置：`docs/roles/qa.md` 增加“P0 必真机 + QA 三档分工”条目 + `docs/workflow/QUALITY_GATES.md` 硬门控 + `docs/qa/QA_CHECKLIST.md` 为 P0-13 追加 GUI 必测项 + `docs/roles/stage-manager.md` 增加 QA 真机多重保障与分工标注（均待授权，已部分写入）
@@ -163,8 +163,8 @@
 - 时间：2026-08-28
 - 现象：开发者常遇 `3000 端口已有 Node 进程但 HTTP 探活失败` + `Orca stale_bootstrap/runtime_unavailable`，虽 `npx tsc --noEmit` 与 `npm run lint` 0 错误，UI 验证仍被阻塞，需手动 `ps aux | rg orca` / `ls -ld /Applications/Orca.app` / `orca open --json` 重启后重探活。
 - 小白解释：就像房间门牌 3000 已被占但里面没人应答，想进门还得先清场再开门。节奏者发活前就应先查门是否被占、门是否真能开，别让开发者到门口才发现进不去。
-- 技术处理：Stage Manager 发命令时必须前置端口与运行时预检：① `lsof -i :3000` / `ps aux | rg '[0]rca|[o]rca'` 查占用 ② 若 3000 已有僵死 Node，先 `kill` 或改用 `PORT=3001` / `./dev-server.sh` 自愈脚本 ③ `Orca` 状态为 `stale_bootstrap` 则先 `orca open` 重启并 `curl http://localhost:3000 --fail` 探活成功后再派 UI 验证；Prompt 中写入该预检步骤，避免开发者现场排障打断。
-- 可直接给 Agent 的规则：`Stage Manager 派发含 UI 探活的任务时，必须在 Prompt 首步加入端口冲突预检（lsof :3000 / Orca 状态），有占用先清理或换端口、Orca 异常先重启并 curl 探活成功后再继续；不得让开发者到场才处理 3000 冲突。`
+- 技术处理：Stage Manager 发命令时必须前置端口与运行时预检：① `lsof -i :3100` / `ps aux | rg '[0]rca|[o]rca'` 查占用 ② 若 3000 已有僵死 Node，先 `kill` 或改用 `PORT=3101` / `./dev-server.sh` 自愈脚本 ③ `Orca` 状态为 `stale_bootstrap` 则先 `orca open` 重启并 `curl http://localhost:3100 --fail` 探活成功后再派 UI 验证；Prompt 中写入该预检步骤，避免开发者现场排障打断。
+- 可直接给 Agent 的规则：`Stage Manager 派发含 UI 探活的任务时，必须在 Prompt 首步加入端口冲突预检（lsof :3100 / Orca 状态），有占用先清理或换端口、Orca 异常先重启并 curl 探活成功后再继续；不得让开发者到场才处理 3000 冲突。`
 - 候选升级位置：`docs/roles/stage-manager.md §Prompt 生成契约` 增加“端口与运行时预检”条目 + `dev-server.sh` 使用约束（待授权）
 
 ## 13. Builder 禁止重启 Orca 进程，权限边界归 Stage Manager 统一管理
@@ -195,11 +195,11 @@
 - 小白解释：就像开车前不检查油和轮胎，半路抛锚了才后悔。开发前先检查服务和工具状态，避免白忙活。
 - 技术处理：
   1. **预检查dev server**：`./dev-server.sh status` 检查watchdog和next dev是否运行
-  2. **预检查端口**：`curl -s http://localhost:3000 > /dev/null && echo "HTTP 200" || echo "HTTP 失败"` 验证服务可达
+  2. **预检查端口**：`curl -s http://localhost:3100 > /dev/null && echo "HTTP 200" || echo "HTTP 失败"` 验证服务可达
   3. **预检查Orca**：`orca status --json` 检查状态是否为ready
   4. **启动服务**：如果dev server未运行，执行 `./dev-server.sh start`
   5. **重启Orca**：如果Orca状态异常，执行 `open /Applications/Orca.app` 并等待10秒
-- 可直接给 Agent 的规则：`开发者在执行UI验证前必须预检查：1) ./dev-server.sh status 2) curl http://localhost:3000 3) orca status --json。如果任一项失败，先修复再验证。`
+- 可直接给 Agent 的规则：`开发者在执行UI验证前必须预检查：1) ./dev-server.sh status 2) curl http://localhost:3100 3) orca status --json。如果任一项失败，先修复再验证。`
 - 候选升级位置：`docs/roles/builder.md` 增加"开发前预检查"硬约束（待授权）
 
 ## 13. Builder权限边界：禁止重启Orca进程

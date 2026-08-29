@@ -59,5 +59,5 @@
 - `src/app/page.tsx`: CardDetail props传递bodyAlignment
 
 ## Dev Server
-- 运行在 `http://localhost:3000`
+- 运行在 `http://localhost:3100`
 - 使用 `./dev-server.sh` watchdog管理

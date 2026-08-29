@@ -90,7 +90,7 @@ cp .env.local.example .env.local
 
 # 3. 启动开发服务
 npm run dev
-#   打开 http://localhost:3000
+#   打开 http://localhost:3100
 
 # （可选）带 watchdog 自愈地启动，服务挂了 3 秒自动拉起：
 ./dev-server.sh start        # 启动
@@ -105,15 +105,17 @@ npm run dev
 
 ```bash
 npm run build
-npm run start        # 默认 3000 端口
+npm run start        # 3100 端口
 ```
+
+> 端口统一为 **3100**（`package.json` 的 dev/start 与 `dev-server.sh` 的 `PORT`）。改端口时这三处要一起改，另外 `mcp/prompt-server/src/index.ts` 里计数 API 的默认地址也要同步。
 
 ## 局域网实时同步
 
-- 服务监听所有网卡（`*:3000`）。同局域网内其他设备访问 `http://<本机IP>:3000` 即可共用同一份数据（数据存在运行 dev 服务的那台机器上，`data/store.json`）。
+- 服务监听所有网卡（`*:3100`）。同局域网内其他设备访问 `http://<本机IP>:3100` 即可共用同一份数据（数据存在运行 dev 服务的那台机器上，`data/store.json`）。
 - 任意一端增删改，另一端几秒内自动刷新（SSE 推送）。
 - `next.config.ts` 的 `allowedDevOrigins` 已放行 `.local` 主机名与常用 IP；**IP 变化时需同步更新并重启**。
-- 本机也可用 `.local` 地址：`http://<Mac主机名>.local:3000`（不随 DHCP 变化，比 IP 更稳定）。
+- 本机也可用 `.local` 地址：`http://<Mac主机名>.local:3100`（不随 DHCP 变化，比 IP 更稳定）。
 
 ## MCP 接入（WorkBuddy / 其他支持 MCP 的 Agent）
 
@@ -222,7 +224,7 @@ dev-server.sh                                # dev 服务 watchdog 管理脚本
 | `DEEPSEEK_API_KEY` | 是 | DeepSeek 密钥（https://platform.deepseek.com），仅存于服务端 `.env.local` |
 | `DEEPSEEK_MODEL` | 否 | 默认 `deepseek-v4-flash` |
 | `DEEPSEEK_BASE_URL` | 否 | 默认 `https://api.deepseek.com`（兼容 `/v1` 前缀） |
-| `PROMPT_MANAGER_API_URL` | 否 | MCP server 计数 API 地址，默认 `http://localhost:3000` |
+| `PROMPT_MANAGER_API_URL` | 否 | MCP server 计数 API 地址，默认 `http://localhost:3100` |
 
 ## 存储与备份
 
@@ -234,7 +236,7 @@ dev-server.sh                                # dev 服务 watchdog 管理脚本
 ## 常见问题（FAQ）
 
 **Q：另一台电脑打不开 / 无法同步？**
-A：确认运行 dev 服务的那台电脑 `npm run dev` 仍在运行；对方用 `http://<本机IP或.local>:3000` 访问。若提示跨域拦截，把该 IP/主机名加入 `next.config.ts` 的 `allowedDevOrigins` 并重启。
+A：确认运行 dev 服务的那台电脑 `npm run dev` 仍在运行；对方用 `http://<本机IP或.local>:3100` 访问。若提示跨域拦截，把该 IP/主机名加入 `next.config.ts` 的 `allowedDevOrigins` 并重启。
 
 **Q：IP 变了之后同步失效？**
 A：路由器重分配 IP 后，旧 IP 失效。改用 `.local` 主机名访问，或更新 `allowedDevOrigins` 里的 IP 并重启服务。
@@ -246,7 +248,7 @@ A：① 确认已在 WorkBuddy「连接器」里**信任**该 server；② MCP �
 A：右侧面板或详情弹窗填写调取码时，若已存在会实时红字提示，换一个即可。
 
 **Q：复制次数不更新？**
-A：手动复制实时生效；MCP 调取计数需要 dev 服务运行且 `PROMPT_MANAGER_API_URL`（默认 `http://localhost:3000`）可达，计数失败不影响取卡片。
+A：手动复制实时生效；MCP 调取计数需要 dev 服务运行且 `PROMPT_MANAGER_API_URL`（默认 `http://localhost:3100`）可达，计数失败不影响取卡片。
 
 **Q：AI 生成标题/标签失败？**
 A：检查 `.env.local` 中 `DEEPSEEK_API_KEY` 是否正确，以及网络能否访问 DeepSeek。失败时可手动「直接创建」。

@@ -76,7 +76,7 @@ Builder 只能执行以下操作：
 - 修改业务代码（src/ 目录）
 - 运行类型检查：npx tsc --noEmit
 - 运行代码检查：npm run lint
-- 检查页面状态：curl http://localhost:3000
+- 检查页面状态：curl http://localhost:3100
 - 读取文档和配置文件
 
 Builder 禁止执行以下操作：

@@ -47,6 +47,6 @@
 
 ## QA 真机必测多重保障（2026-08-28 用户确认，三重）
 
-- **Stage Manager 生成 QA Prompt 时必须显式要求**：若任务为 `P0 核心功能`（标签重命名/移动/删除等），Prompt 的「约束」与「执行」段必须写明 **Vision + Computer Use 真机操作 `http://localhost:3000` 必选，截图存 `scratch/qa-real-device/*.png` 为据，`tsc/lint` 仅作门禁不算 GUI 通过**
+- **Stage Manager 生成 QA Prompt 时必须显式要求**：若任务为 `P0 核心功能`（标签重命名/移动/删除等），Prompt 的「约束」与「执行」段必须写明 **Vision + Computer Use 真机操作 `http://localhost:3100` 必选，截图存 `scratch/qa-real-device/*.png` 为据，`tsc/lint` 仅作门禁不算 GUI 通过**
 - 此为 **第三重保障**，与 `Skill qa-real-device`（第一重，隐式加载）+ `docs/roles/qa.md: 真机必测硬约束`（第二重，角色模板）形成三重兜底
 - 未满足真机逐项点过（选中→重命名→输入→确认→观察树/芯片/子路径）前，不得判 `QA PASS`，不得进入 `neat-freak` 收尾

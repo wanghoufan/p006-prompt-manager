@@ -19,8 +19,9 @@ import { fileURLToPath } from 'node:url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..')
 const STORE_FILE = path.join(PROJECT_ROOT, 'data', 'store.json')
-// 计数 API 地址：默认本机 Next.js dev 服务，可用环境变量覆盖
-const API_BASE = process.env.PROMPT_MANAGER_API_URL ?? 'http://localhost:3000'
+// 计数 API 地址：默认本机 Next.js dev 服务，可用环境变量覆盖。
+// 端口必须与 dev-server.sh 的 PORT 一致（改端口时两处都要改）。
+const API_BASE = process.env.PROMPT_MANAGER_API_URL ?? 'http://localhost:3100'
 
 const server = new McpServer({
   name: 'prompt-manager-mcp-server',

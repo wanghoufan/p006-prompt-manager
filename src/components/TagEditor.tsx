@@ -45,7 +45,7 @@ export function TagEditor({
   existingTags,
   onChange,
   max = 10,
-  placeholder = '输入 #标签名 后按回车/空格添加',
+  placeholder = '输入 #标签名 后按回车/空格添加 · #父/子 创建子标签',
   inputId,
 }: TagEditorProps) {
   const chips = useMemo(() => parseTags(value), [value])
@@ -188,6 +188,8 @@ export function TagEditor({
           }}
           placeholder={placeholder}
           aria-label="添加标签"
+          autoComplete="off"
+          spellCheck={false}
         />
         {open && suggestions.length > 0 && !atMax && (
           <ul
