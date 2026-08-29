@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
-import { summarizeThinking } from '@/lib/ai'
+import { AiError, summarizeThinking } from '@/lib/ai'
+
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 
 export async function POST(request: Request) {
   let bodyText: string
@@ -20,6 +23,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ summary })
   } catch (e) {
     const message = e instanceof Error ? e.message : 'AI 调用失败'
-    return NextResponse.json({ error: message }, { status: 502 })
+    return NextResponse.json({ error: message }, { status: e instanceof AiError ? e.status : 502 })
   }
 }

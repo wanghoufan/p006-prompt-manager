@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { AiError, generateMeta } from '@/lib/ai'
 
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 export async function POST(request: Request) {
   let bodyText: string
   let existingTags: string[]

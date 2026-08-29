@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react'
 import type { Settings } from '@/lib/types'
+import type { AIProvider } from '@/lib/ai/types'
 import { DEFAULT_THINKING_PROMPT } from '@/lib/prompts'
 import { useModalFocus } from '@/hooks/useModalFocus'
 
@@ -21,6 +22,76 @@ const SETUP_AGENT_INSTRUCTION = `请执行 ${SETUP_COMMAND} 完成提示词管�
  * 脚本会自动识别并配置这些客户端。仅用于展示，不要求用户理解细节。
  */
 const SETUP_CLIENTS = 'WorkBuddy · Codex · Cursor · Claude Desktop · Cline · Windsurf · Gemini CLI'
+
+/**
+ * 通用AI接口的服务商注册表（Phase 2）。
+ * available=false 的服务商尚未实现对应适配器（Phase 4），下拉中禁用；
+ * 模型名仅作预设建议，实际以服务商官方为准。
+ */
+const AI_SERVICES: {
+  provider: AIProvider
+  label: string
+  available: boolean
+  models: string[]
+  baseUrlPlaceholder: string
+}[] = [
+  {
+    provider: 'deepseek',
+    label: 'DeepSeek',
+    available: true,
+    models: ['deepseek-v4-flash', 'deepseek-chat', 'deepseek-reasoner'],
+    baseUrlPlaceholder: 'https://api.deepseek.com',
+  },
+  {
+    provider: 'zhipu',
+    label: '智谱（GLM）',
+    available: true,
+    models: ['glm-4-plus', 'glm-4-flash', 'glm-4-air'],
+    baseUrlPlaceholder: 'https://open.bigmodel.cn/api/paas/v4',
+  },
+  {
+    provider: 'tencent',
+    label: '腾讯混元',
+    available: true,
+    models: ['hunyuan-turbo', 'hunyuan-pro'],
+    baseUrlPlaceholder: 'https://api.hunyuan.cloud.tencent.com/v1',
+  },
+  {
+    provider: 'doubao',
+    label: '豆包（火山引擎）',
+    available: true,
+    models: ['doubao-pro-32k', 'doubao-lite-32k'],
+    baseUrlPlaceholder: 'https://ark.cn-beijing.volces.com/api/v3',
+  },
+  {
+    provider: 'kimi',
+    label: 'Kimi（月之暗面）',
+    available: true,
+    models: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
+    baseUrlPlaceholder: 'https://api.moonshot.cn/v1',
+  },
+  {
+    provider: 'google',
+    label: 'Google Gemini',
+    available: true,
+    models: ['gemini-2.0-flash', 'gemini-2.0-pro'],
+    baseUrlPlaceholder: 'https://generativelanguage.googleapis.com',
+  },
+  {
+    provider: 'openai',
+    label: 'OpenAI',
+    available: true,
+    models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1'],
+    baseUrlPlaceholder: 'https://api.openai.com/v1',
+  },
+  {
+    provider: 'openrouter',
+    label: 'OpenRouter',
+    available: true,
+    models: ['openrouter/auto'],
+    baseUrlPlaceholder: 'https://openrouter.ai/api/v1',
+  },
+]
 
 interface SettingsModalProps {
   settings: Settings
@@ -194,6 +265,85 @@ export function SettingsModal({ settings, onSave, onClose }: SettingsModalProps)
               <option value="center">居中</option>
               <option value="right">右对齐</option>
             </select>
+          </div>
+          {/* 通用AI接口（Phase 2）：服务商 / 模型 / Base URL / API Key（onChange 即存） */}
+          <div className="rounded-lg border border-line bg-ink-900 px-3.5 py-3">
+            <p className="text-sm text-paper">AI 服务</p>
+            <p className="mt-0.5 text-xs text-muted">
+              用于标题标签生成、正文整理与思考摘要。切换服务商自动切换到默认模型。
+            </p>
+            <label htmlFor="settings-ai-provider" className="mt-3 block text-xs text-muted">
+              服务商
+            </label>
+            <select
+              id="settings-ai-provider"
+              className="field mt-1"
+              value={settings.aiProvider}
+              onChange={(e) => {
+                const provider = e.target.value as AIProvider
+                const service = AI_SERVICES.find((s) => s.provider === provider)
+                onSave({
+                  ...settings,
+                  aiProvider: provider,
+                  aiModel: service?.models[0] ?? settings.aiModel,
+                  aiBaseUrl: '',
+                })
+              }}
+            >
+              {AI_SERVICES.map((s) => (
+                <option key={s.provider} value={s.provider} disabled={!s.available}>
+                  {s.available ? s.label : `${s.label}（即将支持）`}
+                </option>
+              ))}
+            </select>
+            <label htmlFor="settings-ai-model" className="mt-3 block text-xs text-muted">
+              模型
+            </label>
+            <select
+              id="settings-ai-model"
+              className="field mt-1"
+              value={settings.aiModel}
+              onChange={(e) => onSave({ ...settings, aiModel: e.target.value })}
+            >
+              {(
+                AI_SERVICES.find((s) => s.provider === settings.aiProvider)?.models ?? []
+              ).map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+            <label htmlFor="settings-ai-base-url" className="mt-3 block text-xs text-muted">
+              Base URL（可选，留空使用默认）
+            </label>
+            <input
+              id="settings-ai-base-url"
+              type="text"
+              className="field mt-1"
+              value={settings.aiBaseUrl}
+              onChange={(e) => onSave({ ...settings, aiBaseUrl: e.target.value })}
+              placeholder={
+                AI_SERVICES.find((s) => s.provider === settings.aiProvider)?.baseUrlPlaceholder ??
+                'https://…'
+              }
+              autoComplete="off"
+            />
+            <label htmlFor="settings-ai-api-key" className="mt-3 block text-xs text-muted">
+              API Key
+            </label>
+            <input
+              id="settings-ai-api-key"
+              type="password"
+              className="field mt-1"
+              value={settings.aiApiKey}
+              onChange={(e) => onSave({ ...settings, aiApiKey: e.target.value })}
+              placeholder="留空则使用服务端环境变量"
+              autoComplete="new-password"
+            />
+            <p className="mt-2 text-xs leading-relaxed text-muted">
+              留空时自动回退到服务端{' '}
+              <code className="font-mono">DEEPSEEK_API_KEY</code>（.env.local），API Key 不会出现在前端打包产物中。
+            </p>
           </div>
           <div className="rounded-lg border border-line bg-ink-900 px-3.5 py-3">
             <p className="text-sm text-paper">一键接入</p>

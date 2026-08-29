@@ -220,7 +220,10 @@
 
 <div class="layout" data-page-node-id="BXzGAFeHhnNM5bsFx9E9Fz">
   <nav class="sidebar" data-page-node-id="N6YyjTeY3IvoGPAmPAjj9E">
-    <div class="group-label" data-page-node-id="7tir8fek8t3vSB9jFslxYV">开始</div>
+    <div class="group-label" data-page-node-id="7tir8fek8t3vSB9jFslxYV">快速接入</div>
+    <a href="#config-cmd" data-page-node-id="nb2a1ZAjLESAmppWihsRZs">各智能体命令（复制即用）</a>
+
+    <div class="group-label" data-page-node-id="L1FELFUSURmAtP4GAGnJt1">开始</div>
     <a href="#overview" data-page-node-id="WchJVbP89p4mVSpvUScKYr">概述</a>
     <a href="#quickstart" data-page-node-id="2ChbtJ5QkCqXSV9AUUow8z">快速开始</a>
     <a href="#architecture" data-page-node-id="WVW2RdjaJZY2saYEEhdzoL">架构与数据流</a>
@@ -239,7 +242,6 @@
 
     <div class="group-label" data-page-node-id="lbwBnFxq0IDKY60QUxGs44">接入</div>
     <a href="#config" data-page-node-id="C50Ru3H7RHnlE1sE2vMqoq">客户端配置</a>
-    <a href="#config-cmd" class="sub" data-page-node-id="nb2a1ZAjLESAmppWihsRZs">各智能体命令</a>
     <a href="#config-locations" class="sub" data-page-node-id="KnjZH4y7eG8xGkrPZEzGKQ">配置落点</a>
     <a href="#config-manual" class="sub" data-page-node-id="wB9NhtvL2tGO5MiJmwvuHG">手工配置示例</a>
     <a href="#setup-cli" data-page-node-id="bEBF0ayUHzDaRQ1f89IhVe">setup.mjs 选项</a>
@@ -253,6 +255,33 @@
   <main class="content" data-page-node-id="0rs5LtoKjfxGOtwlsjDpXx">
     <h1 class="anchor" id="overview" data-page-node-id="oq4k0LfWTqaGRKUGUB59vD">Prompt Manager MCP 接口参考</h1>
     <p class="lede" data-page-node-id="SjAsYhwmn8SXJTCBmaPAUk">通过「调取码」从提示词管理库加载卡片正文，并计入复制次数。stdio 模式的 Model Context Protocol 服务器。</p>
+
+    <h2 class="anchor" id="config-cmd" data-page-node-id="R4ve03vnUMEzCNcZtQz0LK">按智能体接入（复制即用的命令）</h2>
+    <p data-page-node-id="oYjIvezO61NzkqH24W5A4B">每个智能体的接入命令不同——差别只在 <code class="inline" data-page-node-id="SQ7E1dAx1m9hhe6WJmsVe0">--client</code> 参数；脚本会自动把配置写到<strong data-page-node-id="0GJu2eV9grmeFSaGG2xqfQ">该智能体自己的位置</strong>、用正确的格式。在<strong data-page-node-id="GVXl9X6Hp4VxANpFCdYo0v">项目根目录</strong>运行下面任一条：</p>
+
+    <p data-page-node-id="Ia7qQhi2A32eKgdfRRZTbS"><strong data-page-node-id="ikmofkLWTLODBuqKUnNIwH">一键接入本机所有检测到的客户端</strong></p>
+    <div class="code" data-page-node-id="xVCttyjadRf9jGD7N5rbo5"><span class="lang" data-page-node-id="qhUm7gzyWUjuFEPhLg1kmw">bash</span><div class="bar" data-page-node-id="eaq8Rtl7tbcHYfJG16Bq23"><button class="copy-btn" data-page-node-id="WjKDdGj17sMx2UYSkKVERP">复制</button></div><pre data-page-node-id="PoAYLKZAaHDjzICSZ5SqpV">node mcp/prompt-server/setup.mjs</pre></div>
+
+    <p data-page-node-id="GI9n4Eo4rsCQdqQpBhJkrn">更常用：只接入某一个客户端（避免误改其他客户端配置）。每条都是独立可复制的命令：</p>
+
+    <div class="code" data-page-node-id="5gX8CjNUBB6ifukjEUtD7b"><span class="lang" data-page-node-id="8YxABHkCkPIOlGnN8AXDnM">bash</span><div class="bar" data-page-node-id="c9r6H6wbXWK892NBWUNQjt"><button class="copy-btn" data-page-node-id="85RuNyzeddH7zzn91IVsTZ">复制</button></div><pre data-page-node-id="gsUYMQybFLSB5vAFzP7PDm"><span class="c" data-page-node-id="CVU7ZWGMsDSrwveiNBz1fY"># WorkBuddy</span>
+node mcp/prompt-server/setup.mjs --client=workbuddy</pre></div>
+    <div class="code" data-page-node-id="kXr5JHMQoelHM7NVU7IyjL"><span class="lang" data-page-node-id="KaYFUZO0xtNz3krgK2xtga">bash</span><div class="bar" data-page-node-id="vZcpw0fM88p0QVhIAanQLr"><button class="copy-btn" data-page-node-id="t7enoRXrIof0SaCOzcEVdS">复制</button></div><pre data-page-node-id="3DDRBFDwlzGg6M2gl3THxc"><span class="c" data-page-node-id="EU2ngUhZSYiefpHXrbiN8W"># Codex CLI</span>
+node mcp/prompt-server/setup.mjs --client=codex</pre></div>
+    <div class="code" data-page-node-id="qjSRWZmnsQcDfowheAVTQn"><span class="lang" data-page-node-id="RXqQtD07Q6ED9VCxMwHyTP">bash</span><div class="bar" data-page-node-id="I7xKjA5Z7l8GynmSPnfreC"><button class="copy-btn" data-page-node-id="37KN2gY93cH3JF1xE4XdbS">复制</button></div><pre data-page-node-id="IzZSffaN5iEJHqdx7R9sjk"><span class="c" data-page-node-id="iFldeZ0wLBd8GmJIsFjD5x"># OpenCode</span>
+node mcp/prompt-server/setup.mjs --client=opencode</pre></div>
+    <div class="code" data-page-node-id="4B0zN5r3HC3g1wHqwtKrrq"><span class="lang" data-page-node-id="417AQmLLXNFWkjCFBwJ58k">bash</span><div class="bar" data-page-node-id="vpa78VuFtwoNGAtI3lCBRw"><button class="copy-btn" data-page-node-id="DqYHTDzWpjReBa4C9C7xNJ">复制</button></div><pre data-page-node-id="dfrBx3saMYczJlBRVQ9uRU"><span class="c" data-page-node-id="Lpfp0E8Yh0qT8ygvGl9X4m"># Cursor</span>
+node mcp/prompt-server/setup.mjs --client=cursor</pre></div>
+    <div class="code" data-page-node-id="DIcXYdBU7hEN9sUnkNawvS"><span class="lang" data-page-node-id="9skeyla1PRWfrRkUvpJmRs">bash</span><div class="bar" data-page-node-id="pps2laulkQ6zUGLsUBEEdS"><button class="copy-btn" data-page-node-id="NBPjJzX8J91yvVMMTGabo1">复制</button></div><pre data-page-node-id="vcT1hcgZ5zfeVhUAql2wVk"><span class="c" data-page-node-id="XhCjuwalQ4wVETmfgASb4V"># Claude Desktop</span>
+node mcp/prompt-server/setup.mjs --client=claude</pre></div>
+    <div class="code" data-page-node-id="mEQE7CSGs6dxzmKRxtwsAW"><span class="lang" data-page-node-id="b53e3MjuEUM1peGennuXrd">bash</span><div class="bar" data-page-node-id="FXTKq6Fuurq25nBUOaaXXs"><button class="copy-btn" data-page-node-id="gA4wI1SZ508Nq4szs3wgzZ">复制</button></div><pre data-page-node-id="IJIXdeCQUvexJJuC6eEOY4"><span class="c" data-page-node-id="QCsz4DFnuBC8fJAZ8wFogO"># Cline（VS Code）</span>
+node mcp/prompt-server/setup.mjs --client=cline</pre></div>
+    <div class="code" data-page-node-id="jgDlOE0FGBnpNI5sMDk0YK"><span class="lang" data-page-node-id="Gjpy8Okq9EV6ZhMDp6RIwX">bash</span><div class="bar" data-page-node-id="Zi9MVOES0A0cPDXLCgvh1q"><button class="copy-btn" data-page-node-id="EEfVKkd3yFmYir1lQUYm0n">复制</button></div><pre data-page-node-id="0pUFX4NX4KIeNbmpIuOTN4"><span class="c" data-page-node-id="qMz33eiotOobWPLbWCvf3L"># Windsurf</span>
+node mcp/prompt-server/setup.mjs --client=windsurf</pre></div>
+    <div class="code" data-page-node-id="nqAVdoKtBNeXssUCQMJdSF"><span class="lang" data-page-node-id="0lYCDzenodn12l5X7O3UEb">bash</span><div class="bar" data-page-node-id="mzQ08J5ZESX3PdsWE6OZeJ"><button class="copy-btn" data-page-node-id="GdCcyv0EqQtLabh9RXVIPq">复制</button></div><pre data-page-node-id="VAwlDNZ5SgYttSDIyNEPpS"><span class="c" data-page-node-id="3G1iCxnOqkrEuPd9x753Ma"># Gemini CLI</span>
+node mcp/prompt-server/setup.mjs --client=gemini</pre></div>
+
+    <div class="tip" data-page-node-id="n5rGYCwdiJ2Ecy5h1Y03FF">想自己跑 / 只预览不写文件加 <code class="inline" data-page-node-id="ft615UueHwHnK74ctuoyqx">--dry-run</code>；只体检加 <code class="inline" data-page-node-id="HnZGxOmWLwFbHYwsrkeVZ8">--check</code>；卸载加 <code class="inline" data-page-node-id="xE0rfMwatrOMraFW80psKT">--remove</code>。脚本写配置前会自动备份原文件（<code class="inline" data-page-node-id="VzMaMiMtD1uM8vxKPbgV6y">&lt;文件&gt;.bak-&lt;时间戳&gt;</code>）。</div>
 
     <p data-page-node-id="I3CIHfHhli0T5fWtuany1x">Prompt Manager MCP 是一个只读的 MCP 服务器：它从提示词管理工具落盘的
       <code class="inline" data-page-node-id="m17Dvdtf6Da5T7S6G5QQoT">data/store.json</code> 中按<strong data-page-node-id="ho65wVNfcwQAWcaRfrBUqP">调取码（code）</strong>查找卡片，
@@ -480,32 +509,7 @@ execution: Immediately perform any explicit initialization or task in activated-
     <h2 class="anchor" id="config" data-page-node-id="Ru85CRhopD8ruQMKdscSjW">客户端配置</h2>
     <p data-page-node-id="ayKPC8cnzUicQ9rQpL52Gd">接入后每个客户端需要做一次「收尾动作」（如点信任 / 重开会话），脚本 <code class="inline" data-page-node-id="0VWHulr9m6qjATzmBx9jYJ">setup.mjs</code> 会在结束时列出。</p>
 
-    <h3 class="anchor" id="config-cmd" data-page-node-id="R4ve03vnUMEzCNcZtQz0LK">按智能体接入（复制即用的命令）</h3>
-    <p data-page-node-id="oYjIvezO61NzkqH24W5A4B">每个智能体的接入命令不同——差别只在 <code class="inline" data-page-node-id="SQ7E1dAx1m9hhe6WJmsVe0">--client</code> 参数；脚本会自动把配置写到<strong data-page-node-id="0GJu2eV9grmeFSaGG2xqfQ">该智能体自己的位置</strong>、用正确的格式。在<strong data-page-node-id="GVXl9X6Hp4VxANpFCdYo0v">项目根目录</strong>运行下面任一条：</p>
-
-    <p data-page-node-id="Ia7qQhi2A32eKgdfRRZTbS"><strong data-page-node-id="ikmofkLWTLODBuqKUnNIwH">一键接入本机所有检测到的客户端</strong></p>
-    <div class="code" data-page-node-id="xVCttyjadRf9jGD7N5rbo5"><span class="lang" data-page-node-id="qhUm7gzyWUjuFEPhLg1kmw">bash</span><div class="bar" data-page-node-id="eaq8Rtl7tbcHYfJG16Bq23"><button class="copy-btn" data-page-node-id="WjKDdGj17sMx2UYSkKVERP">复制</button></div><pre data-page-node-id="PoAYLKZAaHDjzICSZ5SqpV">node mcp/prompt-server/setup.mjs</pre></div>
-
-    <p data-page-node-id="GI9n4Eo4rsCQdqQpBhJkrn">更常用：只接入某一个客户端（避免误改其他客户端配置）。每条都是独立可复制的命令：</p>
-
-    <div class="code" data-page-node-id="5gX8CjNUBB6ifukjEUtD7b"><span class="lang" data-page-node-id="8YxABHkCkPIOlGnN8AXDnM">bash</span><div class="bar" data-page-node-id="c9r6H6wbXWK892NBWUNQjt"><button class="copy-btn" data-page-node-id="85RuNyzeddH7zzn91IVsTZ">复制</button></div><pre data-page-node-id="gsUYMQybFLSB5vAFzP7PDm"><span class="c" data-page-node-id="CVU7ZWGMsDSrwveiNBz1fY"># WorkBuddy</span>
-node mcp/prompt-server/setup.mjs --client=workbuddy</pre></div>
-    <div class="code" data-page-node-id="kXr5JHMQoelHM7NVU7IyjL"><span class="lang" data-page-node-id="KaYFUZO0xtNz3krgK2xtga">bash</span><div class="bar" data-page-node-id="vZcpw0fM88p0QVhIAanQLr"><button class="copy-btn" data-page-node-id="t7enoRXrIof0SaCOzcEVdS">复制</button></div><pre data-page-node-id="3DDRBFDwlzGg6M2gl3THxc"><span class="c" data-page-node-id="EU2ngUhZSYiefpHXrbiN8W"># Codex CLI</span>
-node mcp/prompt-server/setup.mjs --client=codex</pre></div>
-    <div class="code" data-page-node-id="qjSRWZmnsQcDfowheAVTQn"><span class="lang" data-page-node-id="RXqQtD07Q6ED9VCxMwHyTP">bash</span><div class="bar" data-page-node-id="I7xKjA5Z7l8GynmSPnfreC"><button class="copy-btn" data-page-node-id="37KN2gY93cH3JF1xE4XdbS">复制</button></div><pre data-page-node-id="IzZSffaN5iEJHqdx7R9sjk"><span class="c" data-page-node-id="iFldeZ0wLBd8GmJIsFjD5x"># OpenCode</span>
-node mcp/prompt-server/setup.mjs --client=opencode</pre></div>
-    <div class="code" data-page-node-id="4B0zN5r3HC3g1wHqwtKrrq"><span class="lang" data-page-node-id="417AQmLLXNFWkjCFBwJ58k">bash</span><div class="bar" data-page-node-id="vpa78VuFtwoNGAtI3lCBRw"><button class="copy-btn" data-page-node-id="DqYHTDzWpjReBa4C9C7xNJ">复制</button></div><pre data-page-node-id="dfrBx3saMYczJlBRVQ9uRU"><span class="c" data-page-node-id="Lpfp0E8Yh0qT8ygvGl9X4m"># Cursor</span>
-node mcp/prompt-server/setup.mjs --client=cursor</pre></div>
-    <div class="code" data-page-node-id="DIcXYdBU7hEN9sUnkNawvS"><span class="lang" data-page-node-id="9skeyla1PRWfrRkUvpJmRs">bash</span><div class="bar" data-page-node-id="pps2laulkQ6zUGLsUBEEdS"><button class="copy-btn" data-page-node-id="NBPjJzX8J91yvVMMTGabo1">复制</button></div><pre data-page-node-id="vcT1hcgZ5zfeVhUAql2wVk"><span class="c" data-page-node-id="XhCjuwalQ4wVETmfgASb4V"># Claude Desktop</span>
-node mcp/prompt-server/setup.mjs --client=claude</pre></div>
-    <div class="code" data-page-node-id="mEQE7CSGs6dxzmKRxtwsAW"><span class="lang" data-page-node-id="b53e3MjuEUM1peGennuXrd">bash</span><div class="bar" data-page-node-id="FXTKq6Fuurq25nBUOaaXXs"><button class="copy-btn" data-page-node-id="gA4wI1SZ508Nq4szs3wgzZ">复制</button></div><pre data-page-node-id="IJIXdeCQUvexJJuC6eEOY4"><span class="c" data-page-node-id="QCsz4DFnuBC8fJAZ8wFogO"># Cline（VS Code）</span>
-node mcp/prompt-server/setup.mjs --client=cline</pre></div>
-    <div class="code" data-page-node-id="jgDlOE0FGBnpNI5sMDk0YK"><span class="lang" data-page-node-id="Gjpy8Okq9EV6ZhMDp6RIwX">bash</span><div class="bar" data-page-node-id="Zi9MVOES0A0cPDXLCgvh1q"><button class="copy-btn" data-page-node-id="EEfVKkd3yFmYir1lQUYm0n">复制</button></div><pre data-page-node-id="0pUFX4NX4KIeNbmpIuOTN4"><span class="c" data-page-node-id="qMz33eiotOobWPLbWCvf3L"># Windsurf</span>
-node mcp/prompt-server/setup.mjs --client=windsurf</pre></div>
-    <div class="code" data-page-node-id="nqAVdoKtBNeXssUCQMJdSF"><span class="lang" data-page-node-id="0lYCDzenodn12l5X7O3UEb">bash</span><div class="bar" data-page-node-id="mzQ08J5ZESX3PdsWE6OZeJ"><button class="copy-btn" data-page-node-id="GdCcyv0EqQtLabh9RXVIPq">复制</button></div><pre data-page-node-id="VAwlDNZ5SgYttSDIyNEPpS"><span class="c" data-page-node-id="3G1iCxnOqkrEuPd9x753Ma"># Gemini CLI</span>
-node mcp/prompt-server/setup.mjs --client=gemini</pre></div>
-
-    <div class="tip" data-page-node-id="n5rGYCwdiJ2Ecy5h1Y03FF">想自己跑 / 只预览不写文件加 <code class="inline" data-page-node-id="ft615UueHwHnK74ctuoyqx">--dry-run</code>；只体检加 <code class="inline" data-page-node-id="HnZGxOmWLwFbHYwsrkeVZ8">--check</code>；卸载加 <code class="inline" data-page-node-id="xE0rfMwatrOMraFW80psKT">--remove</code>。脚本写配置前会自动备份原文件（<code class="inline" data-page-node-id="VzMaMiMtD1uM8vxKPbgV6y">&lt;文件&gt;.bak-&lt;时间戳&gt;</code>）。</div>
+    <!-- 按智能体接入 区块已上移至文档顶部（#config-cmd） -->
 
     <h3 class="anchor" id="config-locations" data-page-node-id="tqyU273G7uwDnPL2oQ1Isy">配置落点一览</h3>
     <p data-page-node-id="0MgSGS3ukJPHtKBDpiE5kv">脚本按客户端把配置写到各自的位置；手工配置时参照下表。</p>

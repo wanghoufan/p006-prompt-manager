@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
-import { formatBody, type BodyAlignment } from '@/lib/ai'
+import { AiError, formatBody, type BodyAlignment } from '@/lib/ai'
+
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 
 const MAX_BODY_LENGTH = 50_000
 
@@ -19,6 +22,7 @@ export async function POST(request: Request) {
   try {
     return NextResponse.json({ body: await formatBody(body, alignment) })
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'AI 调用失败' }, { status: 502 })
+    const message = e instanceof Error ? e.message : 'AI 调用失败'
+    return NextResponse.json({ error: message }, { status: e instanceof AiError ? e.status : 502 })
   }
 }

@@ -1,62 +1,48 @@
+import { createAIAdapter } from '@/lib/ai/factory'
+import { AiError } from '@/lib/ai/adapter'
+import type { AIConfig, AIProvider, ChatMessage, ChatOptions } from '@/lib/ai/types'
 import { DEFAULT_THINKING_PROMPT, META_PROMPT } from '@/lib/prompts'
 import { normalizeTags } from '@/lib/cards'
-import type { GenerateMetaResult } from '@/lib/types'
+import { getState } from '@/lib/serverStore'
+import type { GenerateMetaResult, Settings } from '@/lib/types'
+
+export { AiError } from '@/lib/ai/adapter'
 
 export type BodyAlignment = 'left' | 'center' | 'right'
 
-const MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash'
-const BASE_URL = (process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com').replace(/\/+$/, '')
-const ENDPOINT = `${BASE_URL}/chat/completions`
+const AI_PROVIDERS = [
+  'deepseek',
+  'zhipu',
+  'tencent',
+  'doubao',
+  'kimi',
+  'google',
+  'openai',
+  'openrouter',
+] as const
 
-export class AiError extends Error {
-  constructor(message: string, readonly status = 502) {
-    super(message)
+/** Phase 3：从服务端共享设置解析 AI 配置，缺省回退环境变量（.env.local）。
+ *  model/baseUrl 留空时由具体 Adapter 构造器填充厂商默认值（见 DeepSeekAdapter）。 */
+export async function resolveAIConfig(): Promise<AIConfig> {
+  const s = await getState()
+  const st = (s.settings && typeof s.settings === 'object' ? s.settings : {}) as Partial<Settings>
+  const provider = (AI_PROVIDERS as readonly string[]).includes(st.aiProvider ?? '')
+    ? (st.aiProvider as AIProvider)
+    : 'deepseek'
+  return {
+    provider,
+    model: typeof st.aiModel === 'string' ? st.aiModel.trim() : '',
+    apiKey:
+      (typeof st.aiApiKey === 'string' && st.aiApiKey.trim()
+        ? st.aiApiKey.trim()
+        : process.env.DEEPSEEK_API_KEY) ?? '',
+    baseUrl: typeof st.aiBaseUrl === 'string' ? st.aiBaseUrl.trim() : '',
   }
 }
 
-interface ChatMessage {
-  role: 'system' | 'user' | 'assistant'
-  content: string
-}
-
-async function chat(
-  messages: ChatMessage[],
-  options: { temperature?: number; maxTokens?: number } = {},
-): Promise<string> {
-  const apiKey = process.env.DEEPSEEK_API_KEY
-  if (!apiKey || apiKey.startsWith('sk-your-key')) {
-    throw new AiError('AI 服务尚未配置，请在 .env.local 中设置 DEEPSEEK_API_KEY 后重启服务', 503)
-  }
-  const res = await fetch(ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      messages,
-      temperature: options.temperature ?? 0.5,
-      ...(options.maxTokens ? { max_tokens: options.maxTokens } : {}),
-    }),
-  })
-  if (!res.ok) {
-    let detail = ''
-    try {
-      detail = (await res.text()).slice(0, 200)
-    } catch {
-      // ignore
-    }
-    throw new AiError(`DeepSeek 接口返回错误（${res.status}）：${detail}`)
-  }
-  const data: unknown = await res.json()
-  const content =
-    (data as { choices?: { message?: { content?: unknown } }[] })?.choices?.[0]?.message
-      ?.content ?? ''
-  if (typeof content !== 'string' || !content.trim()) {
-    throw new AiError('DeepSeek 返回内容为空')
-  }
-  return content
+async function chat(messages: ChatMessage[], options: ChatOptions = {}): Promise<string> {
+  const adapter = createAIAdapter(await resolveAIConfig())
+  return adapter.chat(messages, options)
 }
 
 function extractJsonCandidates(text: string): unknown[] {

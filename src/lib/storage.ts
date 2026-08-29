@@ -101,15 +101,35 @@ const DEFAULT_SETTINGS: Settings = {
   bodyAlignment: 'left',
   composerAddMode: 'auto',
   hoverPreview: false,
+  aiProvider: 'deepseek',
+  aiModel: 'deepseek-v4-flash',
+  aiApiKey: '',
+  aiBaseUrl: '',
 }
 
+const AI_PROVIDERS = [
+  'deepseek',
+  'zhipu',
+  'tencent',
+  'doubao',
+  'kimi',
+  'google',
+  'openai',
+  'openrouter',
+] as const
+
 /** 设置归一化（P0-4/P0-5）：老数据缺 confirmDelete / theme 字段时补默认值；
- *  theme 仅接受 'dark' | 'light' | 'system'，其余（含 undefined）回退 'system'。 */
+ *  theme 仅接受 'dark' | 'light' | 'system'，其余（含 undefined）回退 'system'。
+ *  通用AI配置（Phase 2）：缺 ai* 字段时补默认值，非法服务商回退 deepseek。 */
 function normalizeSettings(v: unknown): Settings {
   const s = (v && typeof v === 'object' ? v : {}) as Partial<Settings>
   const theme = s.theme === 'dark' || s.theme === 'light' || s.theme === 'system' ? s.theme : 'system'
   const bodyAlignment = s.bodyAlignment === 'center' || s.bodyAlignment === 'right' ? s.bodyAlignment : 'left'
   const composerAddMode = s.composerAddMode === 'manual' ? 'manual' : 'auto'
+  const aiProvider = (AI_PROVIDERS as readonly string[]).includes(s.aiProvider ?? '')
+    ? (s.aiProvider as Settings['aiProvider'])
+    : 'deepseek'
+  const aiModel = typeof s.aiModel === 'string' && s.aiModel.trim() ? s.aiModel : 'deepseek-v4-flash'
   return {
     thinkingSummaryPrompt: typeof s.thinkingSummaryPrompt === 'string' ? s.thinkingSummaryPrompt : '',
     confirmDelete: typeof s.confirmDelete === 'boolean' ? s.confirmDelete : true,
@@ -118,6 +138,10 @@ function normalizeSettings(v: unknown): Settings {
     bodyAlignment,
     composerAddMode,
     hoverPreview: typeof s.hoverPreview === 'boolean' ? s.hoverPreview : false,
+    aiProvider,
+    aiModel,
+    aiApiKey: typeof s.aiApiKey === 'string' ? s.aiApiKey : '',
+    aiBaseUrl: typeof s.aiBaseUrl === 'string' ? s.aiBaseUrl : '',
   }
 }
 

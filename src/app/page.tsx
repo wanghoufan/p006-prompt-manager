@@ -64,6 +64,10 @@ export default function Home() {
     bodyAlignment: 'left',
     composerAddMode: 'auto',
     hoverPreview: false,
+    aiProvider: 'deepseek',
+    aiModel: 'deepseek-v4-flash',
+    aiApiKey: '',
+    aiBaseUrl: '',
   }))
   const [hydrated, setHydrated] = useState(false)
   const [view, setView] = useState<ViewMode>('mine')

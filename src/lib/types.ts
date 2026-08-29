@@ -1,3 +1,5 @@
+import type { AIProvider } from '@/lib/ai/types'
+
 export interface Version {
   id: string
   body: string
@@ -37,6 +39,14 @@ export interface Settings {
   composerAddMode: 'auto' | 'manual'
   /** 是否在鼠标停留卡片正文时显示浏览器全文预览（默认关闭）。 */
   hoverPreview: boolean
+  /** 通用AI接口：服务商（deepseek 等，见 AIProvider）。 */
+  aiProvider: AIProvider
+  /** 通用AI接口：模型名。 */
+  aiModel: string
+  /** 通用AI接口：API Key；留空则回退服务端环境变量（如 DEEPSEEK_API_KEY）。 */
+  aiApiKey: string
+  /** 通用AI接口：自定义 Base URL；留空使用厂商默认。 */
+  aiBaseUrl: string
 }
 
 /** 标签实体：与 Prompt 完全解耦，通过稳定 id 关联（交接 §38）。
