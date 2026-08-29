@@ -19,6 +19,7 @@ const AI_PROVIDERS = [
   'google',
   'openai',
   'openrouter',
+  'opencode',
 ] as const
 
 /** Phase 3：从服务端共享设置解析 AI 配置，缺省回退环境变量（.env.local）。

@@ -17,6 +17,7 @@ const PROVIDER_LABELS: Record<AIProvider, string> = {
   google: 'Google',
   openai: 'OpenAI',
   openrouter: 'OpenRouter',
+  opencode: 'OpenCode',
 }
 
 export abstract class BaseAIAdapter implements AIAdapter {

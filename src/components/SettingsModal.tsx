@@ -92,6 +92,13 @@ const AI_SERVICES: {
     models: ['openrouter/auto'],
     baseUrlPlaceholder: 'https://openrouter.ai/api/v1',
   },
+  {
+    provider: 'opencode',
+    label: 'OpenCode',
+    available: true,
+    models: [],
+    baseUrlPlaceholder: 'http://localhost:3000',
+  },
 ]
 
 interface SettingsModalProps {

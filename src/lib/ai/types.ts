@@ -7,6 +7,7 @@ export type AIProvider =
   | 'google'
   | 'openai'
   | 'openrouter'
+  | 'opencode'
 
 export interface AIConfig {
   provider: AIProvider

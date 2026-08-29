@@ -6,6 +6,7 @@ import { KimiAdapter } from './kimi'
 import { GoogleAdapter } from './google'
 import { OpenAIAdapter } from './openai'
 import { OpenRouterAdapter } from './openrouter'
+import { OpenCodeAdapter } from './opencode'
 import type { AIAdapter, AIConfig } from './types'
 
 export function createAIAdapter(config: AIConfig): AIAdapter {
@@ -26,6 +27,8 @@ export function createAIAdapter(config: AIConfig): AIAdapter {
       return new OpenAIAdapter(config)
     case 'openrouter':
       return new OpenRouterAdapter(config)
+    case 'opencode':
+      return new OpenCodeAdapter(config)
     default:
       throw new Error(`不支持的AI服务: ${config.provider}`)
   }

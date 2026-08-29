@@ -116,6 +116,7 @@ const AI_PROVIDERS = [
   'google',
   'openai',
   'openrouter',
+  'opencode',
 ] as const
 
 /** 设置归一化（P0-4/P0-5）：老数据缺 confirmDelete / theme 字段时补默认值；
