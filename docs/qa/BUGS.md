@@ -4,6 +4,17 @@
 
 ## 最近一次 QA 执行记录
 
+### Bug #2 残留修复：resolveTagIds 路径解析被历史扁平标签遮蔽（2026-08-29）
+
+- **状态**：✅ **FIXED**（Builder）
+- **现象**：Composer 自动标签 / 卡片编辑标签 / 批量打标签 输入 `自动化/每日` 时，未按层级创建父（自动化）+ 子（每日），而是关联到历史遗留的整串扁平标签 `自动化/每日`（`tag_id-mtdxkb70-qliodfs7`，1 张卡片关联）。
+- **根因**：`resolveTagIds` 先按整串名匹配已有标签（顶级优先），命中历史扁平 `自动化/每日` 后跳过 `/` 路径解析；此前 Bug #2 仅修复了 TagPanel `handleCreateTag`，`resolveTagIds` 路径（Composer / 编辑 / 批量）仍被遮蔽。
+- **修复**（`src/app/page.tsx`）：名称含 `/` 时优先按「父/子/孙」逐级解析层级（复用已存在父级、缺失则创建），卡片关联叶子；若存在整串同名的顶级扁平标签（且无子标签），将其关联并入层级叶子并删除扁平实体（含 (prompt_id, tag_id) 去重）。`resolveTagIds` 新增接收/返回 `promptTags`，三个调用点（handleCreate / handleUpdateMeta / handleBulkTag）同步适配。
+- **验证**：tsc --noEmit ✅、npm run lint ✅（仅 scratch/ 既有 warning）；用 store.json 实测：`自动化/每日` → 新建顶层 `自动化` + 子标签 `每日`，扁平残留自动删除并迁移关联；`SOP/每日` 复用已有层级无回归。
+- **说明**：存量扁平标签 `自动化/每日` 无需手工删除，下次任一入口输入该名会自动迁移；也可在 TagPanel 手动删除（删除后卡片标签由 promptTags 真源重建）。
+
+---
+
 ### Bug #2 子标签层级关系复测（2026-08-29）
 
 - **环境**：Chrome 真机浏览器，`http://localhost:3100`

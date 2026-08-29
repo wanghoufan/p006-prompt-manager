@@ -390,22 +390,24 @@ export default function Home() {
   const previewCard = selectedId ? sourceCards.find((c) => c.id === selectedId) ?? null : null
 
   /** 把标签名列表解析为 tag id：同名（任意父级，优先顶级）复用，不存在则新建顶级标签实体。
-   *  「父/子/孙」路径：未命中同名扁平标签时按斜杠逐级创建父子层级，卡片关联到叶子标签。
-   *  返回最终 tagIds（去重、保持顺序、trim）与可能扩展后的 tags。 */
-  function resolveTagIds(names: string[]): { tagIds: string[]; nextTags: Tag[] } {
+   *  「父/子/孙」路径：名称含「/」时优先按斜杠逐级解析父子层级（复用已存在父级、缺失则创建），
+   *  卡片关联到叶子标签；若存在历史遗留的整串扁平标签（如「自动化/每日」，Bug #2 残留），
+   *  将其关联并入层级叶子并删除扁平实体。返回 tagIds（去重、保持顺序、trim）与扩展后的 tags、promptTags。 */
+  function resolveTagIds(
+    names: string[],
+    promptTags: PromptTag[],
+  ): { tagIds: string[]; nextTags: Tag[]; nextPromptTags: PromptTag[] } {
     let nextTags = tags
+    let nextPromptTags = promptTags
     const tagIds: string[] = []
     const seen = new Set<string>()
     for (const raw of names) {
       const name = raw.trim()
       if (!name || seen.has(name)) continue
       seen.add(name)
-      // 优先匹配已有标签（顶级优先，其次任意父级）——兼容历史遗留的扁平「父/子」名
-      let found =
-        nextTags.find((t) => t.parent_id === null && t.name === name) ??
-        nextTags.find((t) => t.name === name)
-      // 未命中且含斜杠：按「父/子/孙」路径解析并逐级创建（不存在则建），卡片关联到叶子标签
-      if (!found && name.includes('/')) {
+      let found: Tag | undefined
+      // 含斜杠：优先按「父/子/孙」路径解析——避免历史遗留的整串扁平标签遮蔽层级创建
+      if (name.includes('/')) {
         const parts = name.split('/').map((p) => p.trim()).filter(Boolean)
         if (parts.length >= 2 && parts.every((p) => p.length <= 50)) {
           let parentId: string | null = null
@@ -420,7 +422,36 @@ export default function Home() {
             }
             parentId = found.id
           }
+          const leaf = found as Tag
+          // 迁移历史扁平残留：整串同名的顶级扁平标签（且无子标签）并入层级叶子，再删除扁平实体
+          const legacy = nextTags.find((t) => t.parent_id === null && t.name === name)
+          if (legacy && legacy.id !== leaf.id && nextTags.every((t) => t.parent_id !== legacy.id)) {
+            nextPromptTags = nextPromptTags.map((rt) =>
+              rt.tag_id === legacy.id ? { ...rt, tag_id: leaf.id } : rt,
+            )
+            // 去重：同一 prompt 可能已关联叶子标签，避免 (prompt_id, tag_id) 重复
+            const seenPair = new Set<string>()
+            const deduped: PromptTag[] = []
+            for (const rt of nextPromptTags) {
+              const key = `${rt.prompt_id}\u0000${rt.tag_id}`
+              if (seenPair.has(key)) continue
+              seenPair.add(key)
+              deduped.push(rt)
+            }
+            nextPromptTags = deduped
+            nextTags = nextTags.filter((t) => t.id !== legacy.id)
+          }
+        } else {
+          // 路径非法（空段 / 超长）：回退匹配已有标签（顶级优先，其次任意父级）——兼容历史遗留扁平名
+          found =
+            nextTags.find((t) => t.parent_id === null && t.name === name) ??
+            nextTags.find((t) => t.name === name)
         }
+      } else {
+        // 无斜杠：优先匹配已有标签（顶级优先，其次任意父级）
+        found =
+          nextTags.find((t) => t.parent_id === null && t.name === name) ??
+          nextTags.find((t) => t.name === name)
       }
       if (!found) {
         const [updated, created] = createTag(nextTags, name, null)
@@ -429,7 +460,7 @@ export default function Home() {
       }
       tagIds.push(found.id)
     }
-    return { tagIds, nextTags }
+    return { tagIds, nextTags, nextPromptTags }
   }
 
   /** 标签集合原子落盘：更新 tags + promptTags 后，同步重建所有卡片的 Card.tags 冗余字段 */
@@ -478,7 +509,7 @@ export default function Home() {
         .filter((name): name is string => Boolean(name))
       if (positiveNames.length > 0) names = Array.from(new Set([...positiveNames, ...aiTags]))
     }
-    const { tagIds, nextTags } = resolveTagIds(names)
+    const { tagIds, nextTags, nextPromptTags } = resolveTagIds(names, promptTags)
     const card = createCard(body, title, names)
     setCards((prev) => {
       const nextCards = [card, ...prev]
@@ -486,7 +517,7 @@ export default function Home() {
       return nextCards
     })
     setTags(nextTags)
-    setPromptTags((prev) => setCardTags(prev, card.id, tagIds))
+    setPromptTags(() => setCardTags(nextPromptTags, card.id, tagIds))
     return card.id
   }
 
@@ -639,11 +670,11 @@ export default function Home() {
 
   // 编辑卡片时更新标题 + 标签（标签以名字数组传入，解析为 tag id 后原子替换关系；不存在的名字自动建实体）
   function handleUpdateMeta(id: string, title: string, tagNames: string[]) {
-    const { tagIds, nextTags } = resolveTagIds(tagNames)
+    const { tagIds, nextTags, nextPromptTags: migratedPromptTags } = resolveTagIds(tagNames, promptTags)
     // BUG-NEW-1 修复：card.tags 与 promptTags 双写一致。此前仅改 title/updatedAt，
     // chip × 移除后冗余字段残留旧标签 → UI 显示旧 chip、push 携带过期 tags。
     // 与 handleRenameTag/handleDeleteTag 对齐：以 promptTags 为真源重建 Card.tags。
-    const nextPromptTags = setCardTags(promptTags, id, tagIds)
+    const nextPromptTags = setCardTags(migratedPromptTags, id, tagIds)
     setCards((prev) =>
       syncCardsToPromptTags(prev, nextTags, nextPromptTags).map((c) =>
         c.id === id ? { ...c, title, updatedAt: nowIso() } : c,
@@ -911,11 +942,11 @@ export default function Home() {
       notify('未输入有效标签')
       return
     }
-    const { tagIds, nextTags } = resolveTagIds(tagNames)
+    const { tagIds, nextTags, nextPromptTags: migratedPromptTags } = resolveTagIds(tagNames, promptTags)
     const ids = bulkIds
     // 基于当前 promptTags 计算实际变更数，再统一应用
     let changed = 0
-    let nextPromptTags = promptTags
+    let nextPromptTags = migratedPromptTags
     for (const c of cards) {
       if (!ids.has(c.id)) continue
       const before = nextPromptTags.length
