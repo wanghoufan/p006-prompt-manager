@@ -2,6 +2,23 @@
 
 > 产品体验审查员（Product Reviewer）维护的优化候选池。已完成事项应及时移除，勿与 `CODE_REVIEW.md` 混淆。
 
+## 最近一次 Product 执行记录（通用AI接口 — 2026-08-29）
+
+- 时间：2026-08-29（产品审核 — 通用AI接口）
+- 模式：Product Reviewer · 产品审核（定点代码走查 `src/components/SettingsModal.tsx:269-346` + `src/lib/types.ts:42-49` + `src/lib/storage.ts:96-145` + `src/lib/ai/types.ts:1-10` + `src/lib/ai/factory.ts:11-32` + `src/lib/ai/adapter.ts:22-75` + `src/lib/ai.ts:26-41` + 真机逻辑推演；未改业务代码）
+- 结果：**PASS（有条件通过）** — 8 服务商全量可用，基础链路闭环；提出 4 项 P1 + 4 项 P2 + 3 项 P3，无新增阻断但需择机修复 P1 后再宣称“生产可用”
+- 输入：`SettingsModal.tsx` AI 服务卡片（AI_SERVICES 8 家 + provider/model/baseUrl/apiKey 四字段 onChange 即存）+ `storage.ts:DEFAULT_SETTINGS/normalizeSettings` + `page.tsx:59-71` 初始 Settings + `serverStore.ts`/`ai.ts:resolveAIConfig` 服务端回退 `DEEPSEEK_API_KEY`
+- 体验方式：定点走查（≤4000 token，AI 配置全链路）+ 文案/交互/安全一致性校验 + 真机切换/保存/错误推演；未做持久化写入与 Git 提交；AI 真实调用受“未配置 Key”限制未真机触发，仅验证配置/切换/落库/错误链路
+- 覆盖维度：
+  1. AI 服务选择清晰度（PM）：`SettingsModal.tsx:270-274` 标题“AI 服务”+ 副文案“用于标题标签生成…切换服务商自动切换到默认模型。”意图清晰 ✅；`AI_SERVICES:31-94` 8 家 `available=true` 全部可选，下拉 `label` 中文+英文对照可读 ✅；`select#settings-ai-provider:278-298` 选中态 `value=aiProvider` 实时高亮 ✅；但副文案未说明“API Key 留空回退环境变量”的优先级，用户不知“填了 UI Key 是否覆盖 .env”；服务商列表无图标/无官网链接，quark（智谱需 bigmodel.cn、豆包需 ark、OpenRouter 需路由）对新用户学习成本高；`available=false` 分支虽有“即将支持”文案但当前全可用，死代码易误导（见 P2-AI4）
+  2. 模型选择直观性（PM/UX）：`select#settings-ai-model:302-315` 随 provider 动态渲染 `find(provider).models`，切换后模型选项即时更新 ✅；`text-xs text-muted` label “模型”符合现有设置卡片层级 ✅；但仅允许预设 2-3 个写死模型（`deepseek-v4-flash`/`glm-4-plus`/`gpt-4o` 等）不可自由输入，`storage.ts:132` `normalizeSettings` 明明接受任意 `aiModel` 字符串，UI 却把能力截断——用户已有 `deepseek-v3`/`gpt-4.1-mini`/`gemini-2.5-pro` 等新模型无法使用，属于“能存不能选”割裂（见 P1-AI2）；无模型能力说明（上下文长度/价格/是否支持 reasoning），用户只能凭名字猜
+  3. API Key 输入安全性（安全/UX）：`input#settings-ai-api-key:335-342` `type=password` + `autoComplete=new-password` + `placeholder="留空则使用服务端环境变量"` 基础遮蔽 ✅；`page.tsx:69` 默认空、 `storage.ts:143` 归一化保留原文 ✅；但 Key 以明文存 `localStorage:SETTINGS_KEY` + 经 `pushToServer:577-582` → `data/store.json` 明文落盘 + `GET /api/sync`/`SSE` 明文回传局域网任意设备可拉取，无二次加密、无作用域隔离，局域网共享语义下等于“谁连上谁可见” ✅；无“显示/隐藏”切换，无粘贴后脱敏预览（`sk-****abcd`），用户无法确认是否输对；下方 `text-muted` 说明仅提 `DEEPSEEK_API_KEY`，其他 7 家的 env 回退名未说明，易误以为只有 DeepSeek 可走环境变量（见 P1-AI1）
+  4. Base URL 可选性（信息架构）：`label#settings-ai-base-url:316-330` 文案“Base URL（可选，留空使用默认）”+ `placeholder` 按 provider 动态显示默认地址（`deepseek→https://api.deepseek.com` 等）语义准确 ✅；空串时 `adapter.ts:32` / `deepseek.ts:14` / `ai.ts:40` 自动回退厂商默认值，留空可用 ✅；但输入无 URL 格式校验（`httpx://`、`example` 也能保存）、无 `https://` 前缀提示、无尾斜杠自动归一说明（虽 `replace(/\/+$/,'')` 已处理但未告知）；切换 provider 时 `onChange:289-290` 强制 `aiBaseUrl: ''` 静默清空已填的自定义地址，往返切换即丢失（见 P1-AI4/P2-AI1）；占位符在有值后消失，用户无法再对照默认值
+  5. 切换流畅度（UX）：`onChange:282-291` provider 切换 `onSave({...aiProvider, aiModel: models[0], aiBaseUrl: ''})` 即时落盘 `saveSettings→schedulePush→serverMode pushToServer`，下拉值与模型列表同步重渲染无卡顿、属“即时生效” ✅；但无任何成功反馈（toast/角标），用户不知已保存；模型被自动重置为列表首项且 Base URL 被清空均为静默破坏性操作，无 confirm、无撤销（见 P2-AI1）；键盘焦点在切换后丢失（select 失焦），连续切换需重新聚焦
+  6. 配置保存即时生效（一致性）：`SettingsModal.tsx:164,186,203,220,243,262,282,306,324,339` 10 处 `onSave` 均为 onChange 即存，与 `confirmDelete/theme/composerAddMode/hoverPreview/autoFormatBody/bodyAlignment` 逻辑一致，但底部 `footer:426-433` 仍保留“取消/保存设置”仅用于 `thinkingSummaryPrompt`，同一弹窗两种保存心智模型割裂——AI 四字段切完即存却还需看底部按钮，易让用户误以为“改完要点保存才生效”或反之“点了保存才把 AI 配置也提交”（见 P1-AI4）；`ai.ts:26-41` `resolveAIConfig` 每次 AI 调用前 `getState()` 读服务端最新配置，`pushToServer` 异步 `setTimeout 0` + `pushInFlight` 串行，若切换后立即触发 `generate-meta/format-body/summarize-thinking`，可能读到旧版本（竞态窗口约 50-200ms），无“配置同步中”提示
+  7. 错误提示友好度（容错）：`adapter.ts:41-42,57-64,70-71` 空 Key `throw AiError('…请在 .env.local 中设置 API Key…',503)` + 非 200 截断 200 字 `detail` + 空内容提示均经 `route.ts:27-28` `NextResponse.json({error:message}, status)` 透传，`Composer/PreviewPanel/CardDetail` 侧 `catch` 后 `notify` toast 可见 ✅；但空 Key 文案仍只提 `.env.local` / `DEEPSEEK_API_KEY`，与“已支持 UI 填 Key”事实矛盾，用户在设置里填了 Key 仍看到“去改 .env”会困惑；`Base URL` 非法、`apiKey` 格式错误（`sk-` 前缀/长度）无前置校验，错误要到真正调用时才暴露，链路长、归因难；`google.ts:69-77` 对 Gemini 错误取 `error.message`，其他 7 家取 `res.text slice 0,200`，提示风格不统一且可能泄露 HTML
+- 结论：通用AI接口已达到“可用”——8 家适配器 + Base URL 可选 + 留空回退 + 切换即存链路跑通；但在 安全披露、模型可扩展性、保存心智一致性、错误文案准确性 四项 P1 未修复前，不建议作为“对外宣称的多模型生产方案”发布。建议按下列 P1/P2 择机修复后复验
+
 ## 最近一次 Product 执行记录（Composer 交互重构 — 2026-08-28）
 
 - 时间：2026-08-28（产品审核 — Composer 交互重构）
@@ -237,6 +254,46 @@
 - 问题：`PreviewPanel.tsx:157-164` 冲突时跳过 code 字段但仍保存标题/标签/备注/正文；`CardDetail.tsx:101-129` 冲突时直接 `return` 阻断所有字段保存。同为“失焦自动保存”，行为分叉。
 - 修复：CardDetail 与 PreviewPanel 统一为「跳过冲突 code、其余照存」+ 常驻冲突提示「该调取码已被其他卡片使用」+ 保存 toast「调取码与其他卡片冲突，其余修改已保存，请更换调取码后重试」，`allCodes` 同源 `page.tsx:253-256`，QA 第十六次 PASS。
 
+### P1-AI1 API Key 明文同步且无可见性控制 — 待排期（通用AI接口 2026-08-29 新增）
+
+- 问题：`SettingsModal.tsx:335-346` API Key 以 `type=password` 遮蔽但无“显示/隐藏”切换，且以明文存 `localStorage` + 经 `storage.ts:577-582` `pushToServer` → `data/store.json` 明文落盘 + `GET /api/sync`/`SSE` 明文回传，局域网任意能连上 `http://<ip>:3100` 的设备均可拉取全量 Key；`src/lib/serverStore.ts` 无加密/脱敏，`src/lib/ai.ts:35-38` 服务端回退仅提 `DEEPSEEK_API_KEY`，用户不知其他 7 家 env 名
+- 用户场景：团队/家庭局域网共享场景下，用户 A 在自己电脑填入 OpenAI Key，同一 WiFi 下用户 B 用另一台电脑打开页面 `fetch /api/sync` 即可看到明文 `aiApiKey`；用户输错 Key 后无法脱敏核对（`sk-****abcd`），只能删了重输
+- 为什么是问题：安全与信任问题——“填 Key 即全网可见”与用户“Key 仅我可见”预期相悖；且无二次确认，敏感信息泄露风险高
+- 建议方案：① 输入框加 👁 显示/隐藏切换 + 失焦后显示脱敏 `sk-****${last4}`（悬浮显示完整需二次点击）；② 同步前对 `aiApiKey` 做最小披露：`store.json` 中仍明文落盘但 `GET /api/sync` 返回时对非本机请求脱敏（或至少在设置卡片加 `text-rust text-[11px]` 警示“局域网共享存储，明文同步，勿填生产 Key”）；③ `SettingsModal.tsx:343-346` 说明改为“8 家均可填 UI Key；留空则回退服务端环境变量（DeepSeek→DEEPSEEK_API_KEY / OpenAI→OPENAI_API_KEY / …）”
+- 预期收益：用户敢填 Key、可核对、可感知风险
+- 实现成本：中（脱敏展示低，服务端脱敏中）
+- 优先级：P1
+
+### P1-AI2 模型选择仅预设下拉，不支持自定义/新模型 — 待排期（通用AI接口 2026-08-29 新增）
+
+- 问题：`SettingsModal.tsx:302-315` 模型 `select` 仅渲染 `AI_SERVICES.find(provider).models`（每家 2-3 个写死值，如 `deepseek-v4-flash`/`gpt-4o`），`storage.ts:132` `normalizeSettings` 实际允许任意 `aiModel` 字符串，UI 把能力截断；用户已有 `deepseek-v3`/`gpt-4.1-mini`/`gemini-2.5-pro`/`moonshot-v1-auto` 等新模型无法选择
+- 用户场景：OpenAI 发布 `gpt-4.1` 后，用户在设置里找不到该模型，只能放弃使用或手动改 `localStorage`；智谱/豆包用户想用 `glm-4.5`/`doubao-seed-1.6` 等新模型被迫选旧版
+- 为什么是问题：模型迭代最快，写死列表两周即过期；“能存不能选”属于功能完整性缺口
+- 建议方案：`select` 改为 `datalist`/`combobox`：下拉展示预设 + 允许自由输入；`placeholder` 显示当前 provider 的默认模型；保存时 `trim()` 非空即存，`normalizeSettings` 已兼容；可保留预设作为快捷选择，输入区 `onBlur` 即存
+- 预期收益：新模型零发版即可用，适配所有 8 家未来模型
+- 实现成本：低
+- 优先级：P1
+
+### P1-AI3 错误提示仍只提 .env.local，与 UI 配置事实矛盾 — 待排期（通用AI接口 2026-08-29 新增）
+
+- 问题：`src/lib/ai/adapter.ts:42` 空 Key 抛 `AiError('AI 服务尚未配置，请在 .env.local 中设置 API Key 后重启服务',503)`，`src/lib/ai/google.ts:46` 同款；`src/app/api/ai/*` 透传后前端 toast 显示该文案。用户已在 `SettingsModal.tsx:339` 填了 UI Key，仍看到“去改 .env”会困惑；且未区分“未填 Key”vs“Key 无效/余额不足/网络错误”
+- 用户场景：用户在设置里填完 Kimi Key 后点“格式整理”，因网络抖动失败，看到“请在 .env.local 中设置”以为自己填的地方不对，改去改文件
+- 为什么是问题：状态反馈错误，误导排查路径，违背“操作后清楚知道怎么修”
+- 建议方案：① `adapter.ts:42` 文案改为“AI 服务尚未配置：请在 设置 → AI 服务 中填入 API Key，或在服务端 .env.local 设置 ${PROVIDER}_API_KEY 后重启”；② 区分 401/403（Key 无效/余额）与 5xx（网络/限流）文案；`route.ts:28` 已透传 `status`，前端可按 `503→未配置 / 401→Key 无效请检查 / 429→限流稍后重试` 分支 toast
+- 预期收益：报错即知道去哪修，减少无效排查
+- 实现成本：低
+- 优先级：P1
+
+### P1-AI4 同一弹窗两种保存心智 + 切换无反馈 — 待排期（通用AI接口 2026-08-29 新增）
+
+- 问题：AI 四字段（provider/model/baseUrl/apiKey）`onChange` 即存 `onSave→saveSettings→schedulePush`，无需点底部按钮；而 `thinkingSummaryPrompt` 需点 `footer:430` “保存设置”才落盘。同一 `SettingsModal.tsx` 两种保存模型割裂；且 10 处即存均无 toast/角标反馈，用户不知“切完是否已生效”；底部“保存设置”按钮文案未说明仅保存模板，易误以为点了才提交 AI 配置
+- 用户场景：用户切到 OpenAI 后犹豫，看到底部“保存设置”以为必须点它，点了后又不确定刚才的 Base URL 是否已保存；另一用户切完直接关弹窗，不确定配置是否丢了
+- 为什么是问题：状态反馈与一致性问题，违背“操作后清楚知道是否成功/是否保存”
+- 建议方案：① 即存字段 `onSave` 后 `notify('AI 配置已保存')` 轻提示（或设置卡片右上角 `text-[11px] text-gold` “已自动保存 ✓” 2s）；② footer 文案改为“保存模板”或将模板也改为即存并移除 footer（与其它设置一致）；③ 切换 provider 模型重置/Base URL 清空前在卡片内用 `text-muted` 小字提示“已切换为默认模型，Base URL 已重置”
+- 预期收益：保存心智统一，所见即所得
+- 实现成本：低
+- 优先级：P1
+
 ---
 
 ## P2 体验问题（功能可用，但效率或易用性明显不足）
@@ -323,6 +380,46 @@
 - 实现成本：中
 - 优先级：P2
 
+### P2-AI1 切换服务商静默清空 Base URL 且自动重置模型 — 待排期（通用AI接口 2026-08-29 新增）
+
+- 问题：`SettingsModal.tsx:282-291` `onChange` 切 provider 时强制 `aiModel: models[0]` + `aiBaseUrl: ''`，无确认、无撤销；用户曾为 DeepSeek 填了代理 `https://proxy.example.com/v1`，切到 OpenAI 再切回，Base URL 已丢失需重输；模型也被重置为首项，若用户之前选 `deepseek-reasoner`，切走再切回变 `deepseek-v4-flash`
+- 用户场景：多服务商对比用户在 DeepSeek/OpenAI 间来回切换，想保留各自的 Base URL 与模型偏好
+- 为什么是问题：破坏性操作静默执行，违背“可撤销”与“最少惊讶”；高频切换场景下效率损失
+- 建议方案：① 按 provider 记忆 `aiBaseUrl`（`Record<AIProvider,string>` 存于 Settings，或至少切前缓存旧值切回恢复）；② 模型仅当当前 `aiModel` 不在新 provider 列表时才重置为首项，否则保留；③ 卡片内 `text-[11px] text-muted` 提示“已切换为 xxx，模型/Base URL 已更新” 2s
+- 预期收益：来回切换零丢失，符合用户心智
+- 实现成本：低
+- 优先级：P2
+
+### P2-AI2 Base URL 无格式校验与帮助缺失 — 待排期（通用AI接口 2026-08-29 新增）
+
+- 问题：`SettingsModal.tsx:319-330` Base URL `type=text` 无 `URL` 校验，`https://`、`http://`、`example.com`、`httpx://` 均可保存；无 `https://` 必需提示、无尾斜杠自动处理说明（虽 `adapter.ts:32` `replace(/\/+$/,'')` 已处理但用户不知）；占位符有值后消失，用户无法再对照默认值
+- 用户场景：用户填 `api.openai.com/v1` 漏 `https://`，保存后调用 `fetch("api.openai.com/v1/chat/completions")` 失败，报错仅“接口返回错误”难归因
+- 为什么是问题：容错性不足，错误延迟到调用时才暴露，排查链路长
+- 建议方案：① `onChange` 即时校验：非空且不以 `https://`/`http://` 开头时下方 `text-rust text-[11px]` 提示“Base URL 需以 https:// 开头”；② 失焦时 `trim()` + 去尾斜杠；③ 输入框下方常驻 `text-[11px] text-muted` “当前默认：{placeholder}” 即使有值也可见；④ 非法时 `notify` 不阻断保存但高亮边框 `border-rust`
+- 预期收益：输入即纠错，降低调用失败率
+- 实现成本：低
+- 优先级：P2
+
+### P2-AI3 无“测试连接”验证入口 — 待排期（通用AI接口 2026-08-29 新增）
+
+- 问题：配置完 provider/model/apiKey/baseUrl 后无就地验证手段，必须去 `Composer` 粘贴或 `PreviewPanel` 点“格式整理/思维总结”才能触发真实 AI 调用，失败才知 Key/URL 错，链路长（4-5 步）
+- 用户场景：用户填完 OpenAI Key 想确认是否可用，只能新建卡片等 AI 生成标题，失败后不知是 Key 错、模型名错还是 Base URL 错
+- 为什么是问题：操作效率与状态反馈不足，违背“操作后清楚知道是否成功”
+- 建议方案：在 AI 服务卡片底部加 `btn-ghost text-xs` “测试连接”：`POST /api/ai/generate-meta` 发最小 body（如 `"hello"`）+ `existingTags=[]`，成功 toast“连接成功：{provider}/{model}” 2.2s，失败按 P1-AI3 分支提示；按钮 `disabled` 当 `aiApiKey` 为空且 env 也未配置时提示“请先填 API Key”；`loading` 时显示 `Spinner` 禁用重复点击
+- 预期收益：填完即验，归因精准
+- 实现成本：中（复用现有 `generateMeta` 链路，加测试 route 或直接复用）
+- 优先级：P2
+
+### P2-AI4 AI 设置区信息密度与位置 — 待排期（通用AI接口 2026-08-29 新增）
+
+- 问题：`SettingsModal.tsx:150-425` 弹窗 `max-h-[85vh]` 内已堆 7 卡片（二次确认/主题/添加模式/hover/自动整理/AI/MCP/模板），AI 卡片本身含 4 字段 + 2 段说明，纵向约 380px，占首屏一半；`AI_SERVICES` 无分组、无图标，8 家平铺，下拉与说明挤在一起；AI 卡片位于“正文对齐”与“MCP”之间，与思维模板无逻辑关联
+- 用户场景：新用户打开设置想改主题，需滚动越过 AI 长卡片才能看到 MCP；想看 AI 配置也需滚动
+- 为什么是问题：信息架构与易发现性——重要但低频的 AI 配置与高频的外观/添加模式混排，增加滚动成本
+- 建议方案：① AI 卡片加 `details` 折叠或分节标题 `AI 服务（高级）` 默认展开但可收起；② provider 下拉旁加 `text-[11px]` 官网链接（如 DeepSeek→deepseek.com）供查 Key；③ 考虑将 AI 卡片上移至“外观主题”之后、“添加模式”之前，或抽为独立二级页
+- 预期收益：首屏信息更聚焦，AI 配置仍易找但不挤占高频设置
+- 实现成本：低
+- 优先级：P2
+
 ---
 
 ## P3 优化机会（非必需，但能明显提升效率/易用性/完整性）
@@ -362,6 +459,36 @@
 - 问题：`page.tsx:268-287` 导入失败仅 Toast，成功仅计数；未展示“哪些卡片因校验失败被跳过”。
 - 建议方案：导入结果用 Toast + 详情列表（成功 N / 跳过 M 及原因），并提供“查看导入的卡片”快捷筛选。
 - 预期收益：可验证、可追溯。
+- 实现成本：低
+- 优先级：P3
+
+### P3-AI1 API Key 获取指引缺失 — 待排期（通用AI接口 2026-08-29 新增）
+
+- 问题：`SettingsModal.tsx:331-346` API Key 仅 `placeholder="留空则使用服务端环境变量"`，无各家获取链接、无格式示例（OpenAI `sk-` / DeepSeek `sk-` / Gemini `AIza` / 腾讯 `AK`），新用户不知去哪申请；`baseUrlPlaceholder` 虽有但无“何时需要填”说明
+- 用户场景：首次使用 OpenRouter 的用户在设置里看到 Base URL 可选，不知是否需要填 `https://openrouter.ai/api/v1` 还是留空
+- 为什么是问题：易发现性不足，首日可用性受阻
+- 建议方案：Key 输入下方 `text-[11px] text-gold/70` 加“获取 Key：DeepSeek 控制台 / OpenAI Platform / …”外链（8 家各一）；Base URL 下方小字“仅自建代理/企业网关需填，普通用户留空即可”
+- 预期收益：新用户 1 分钟内完成配置
+- 实现成本：低
+- 优先级：P3
+
+### P3-AI2 模型预设值时效性与说明 — 待排期（通用AI接口 2026-08-29 新增）
+
+- 问题：`SettingsModal.tsx:38-94` 预设 `deepseek-v4-flash`/`glm-4-plus`/`hunyuan-turbo` 等命名与厂商最新文档可能滞后（DeepSeek 官方当前主推 `deepseek-chat`/`deepseek-reasoner`，`v4-flash` 非标准）；无模型上下文/价格/能力标签，用户盲选
+- 用户场景：用户选 `doubao-pro-32k` 不知是 32k 上下文还是 128k，想选 128k 找不到
+- 为什么是问题：信息架构——模型名即决策依据，缺说明导致试错
+- 建议方案：预设旁加 `text-[11px] text-muted` 能力小字（`deepseek-chat — 128k, 通用` / `gemini-2.0-flash — 1M, 多模态`）或 hover `title` 说明；定期同步厂商最新默认模型（抽为 `DEFAULT_MODEL` 常量，P1-AI2 的自由输入已缓解时效压力）
+- 预期收益：选型更快，减少“选错模型”浪费
+- 实现成本：低
+- 优先级：P3
+
+### P3-AI3 AI 配置与使用场景的联动说明 — 待排期（通用AI接口 2026-08-29 新增）
+
+- 问题：`SettingsModal.tsx:272-274` 副文案“用于标题标签生成、正文整理与思考摘要。”一句话带过，用户不知“改了 AI 配置会影响哪些按钮”（Composer 生成、Preview 整理、详情总结）；`src/app/api/ai/*` 三 route 共用同一 `resolveAIConfig`，但设置里无此关联说明
+- 用户场景：用户切到便宜模型后发现“思维总结”质量下降，不知是模型导致还是 prompt 导致
+- 为什么是问题：一致性与可学习性——配置与功能的影响面未显式建立
+- 建议方案：AI 卡片内加 `text-[11px] text-muted` 影响面清单“影响：① 粘贴后标题/标签自动生成 ② 正文格式整理 ③ 思维总结（设置 → 模板）”，每项旁 `→` 跳转或 hover 提示
+- 预期收益：用户理解配置的全局影响，减少误归因
 - 实现成本：低
 - 优先级：P3
 
