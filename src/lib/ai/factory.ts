@@ -29,6 +29,8 @@ export function createAIAdapter(config: AIConfig): AIAdapter {
       return new OpenRouterAdapter(config)
     case 'opencode':
       return new OpenCodeAdapter(config)
+    case 'opencode-go':
+      return new OpenCodeAdapter(config)
     default:
       throw new Error(`不支持的AI服务: ${config.provider}`)
   }

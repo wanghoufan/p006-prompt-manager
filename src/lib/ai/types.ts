@@ -8,6 +8,7 @@ export type AIProvider =
   | 'openai'
   | 'openrouter'
   | 'opencode'
+  | 'opencode-go'
 
 export interface AIConfig {
   provider: AIProvider
