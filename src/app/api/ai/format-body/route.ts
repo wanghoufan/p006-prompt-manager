@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { AiError, formatBody, type BodyAlignment } from '@/lib/ai'
+import { AiError, configOverrideFromHeaders, formatBody, type BodyAlignment } from '@/lib/ai'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -20,7 +20,9 @@ export async function POST(request: Request) {
   if (!body) return NextResponse.json({ error: '正文不能为空' }, { status: 400 })
   if (body.length > MAX_BODY_LENGTH) return NextResponse.json({ error: '正文不能超过 50000 个字符' }, { status: 400 })
   try {
-    return NextResponse.json({ body: await formatBody(body, alignment) })
+    return NextResponse.json({
+      body: await formatBody(body, alignment, configOverrideFromHeaders(request.headers)),
+    })
   } catch (e) {
     const message = e instanceof Error ? e.message : 'AI 调用失败'
     return NextResponse.json({ error: message }, { status: e instanceof AiError ? e.status : 502 })

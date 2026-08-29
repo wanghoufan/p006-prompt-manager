@@ -541,7 +541,12 @@ export async function loadFromServer(): Promise<ServerSnapshot | null> {
     const cards = Array.isArray(data.cards)
       ? (data.cards.filter(isCard).map(normalizeCard) as Card[])
       : []
-    const settings: Settings = normalizeSettings(data.settings)
+    const remoteSettings = normalizeSettings(data.settings)
+    // P1-AI1：服务端不存 Key，取回后补回本机 localStorage 中保存的 Key，避免同步覆盖丢失
+    if (!remoteSettings.aiApiKey) {
+      remoteSettings.aiApiKey = loadSettings().aiApiKey
+    }
+    const settings = remoteSettings
     const tags = Array.isArray(data.tags) ? (data.tags.filter(isTag).map(normalizeTag) as Tag[]) : []
     const promptTags = Array.isArray(data.promptTags) ? (data.promptTags.filter(isPromptTag) as PromptTag[]) : []
     serverMode = true
@@ -562,6 +567,11 @@ export async function loadFromServer(): Promise<ServerSnapshot | null> {
 
 export type PushResult = 'ok' | 'conflict' | 'error'
 
+/** P1-AI1：推送前剥离 aiApiKey，API Key 只保存在本机 localStorage，不进入共享快照。 */
+function settingsForServer(settings: Settings): Settings {
+  return { ...settings, aiApiKey: '' }
+}
+
 export async function pushToServer(
   cards: Card[],
   settings: Settings,
@@ -576,7 +586,7 @@ export async function pushToServer(
       // P0-A 带版本号提交：声明本次写入基于 knownVersion；服务端版本已变化则 409/拒绝
       body: JSON.stringify({
         cards,
-        settings,
+        settings: settingsForServer(settings),
         tags,
         promptTags: sanitizePromptTags(promptTags, cards, tags),
         baseVersion: knownVersion,

@@ -9,6 +9,7 @@ import { Spinner } from '@/components/Spinner'
 import { TagEditor } from '@/components/TagEditor'
 import { VersionDiff } from '@/components/VersionDiff'
 import { formatTime } from '@/lib/util'
+import { aiRequestHeaders } from '@/lib/aiClient'
 
 interface PreviewPanelProps {
   card: Card | null
@@ -388,7 +389,7 @@ export function PreviewPanel({
     try {
       const res = await fetch('/api/ai/generate-meta', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...aiRequestHeaders() },
         body: JSON.stringify({ body: card.body, existingTags }),
         signal: ac.signal,
       })
@@ -417,7 +418,7 @@ export function PreviewPanel({
     try {
       const res = await fetch('/api/ai/summarize-thinking', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...aiRequestHeaders() },
         body: JSON.stringify({ body: card.body, prompt: customThinkingPrompt || null }),
         signal: ac.signal,
       })
@@ -449,7 +450,7 @@ export function PreviewPanel({
     try {
       const res = await fetch('/api/ai/format-body', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...aiRequestHeaders() },
         body: JSON.stringify({ body: source, alignment: bodyAlignment }),
         signal: ac.signal,
       })

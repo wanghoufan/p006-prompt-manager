@@ -22,26 +22,56 @@ const AI_PROVIDERS = [
 ] as const
 
 /** Phase 3：从服务端共享设置解析 AI 配置，缺省回退环境变量（.env.local）。
- *  model/baseUrl 留空时由具体 Adapter 构造器填充厂商默认值（见 DeepSeekAdapter）。 */
-export async function resolveAIConfig(): Promise<AIConfig> {
+ *  model/baseUrl 留空时由具体 Adapter 构造器填充厂商默认值（见 DeepSeekAdapter）。
+ *  P1-AI1：可传入本次请求的覆盖项（API Key 由客户端经请求头传递，不落共享存储）。 */
+export async function resolveAIConfig(override?: Partial<AIConfig>): Promise<AIConfig> {
   const s = await getState()
   const st = (s.settings && typeof s.settings === 'object' ? s.settings : {}) as Partial<Settings>
-  const provider = (AI_PROVIDERS as readonly string[]).includes(st.aiProvider ?? '')
-    ? (st.aiProvider as AIProvider)
+  const provider = (AI_PROVIDERS as readonly string[]).includes(override?.provider ?? st.aiProvider ?? '')
+    ? ((override?.provider ?? st.aiProvider) as AIProvider)
     : 'deepseek'
+  const storedKey = typeof st.aiApiKey === 'string' && st.aiApiKey.trim() ? st.aiApiKey.trim() : ''
   return {
     provider,
-    model: typeof st.aiModel === 'string' ? st.aiModel.trim() : '',
+    model:
+      typeof override?.model === 'string' && override.model.trim()
+        ? override.model.trim()
+        : typeof st.aiModel === 'string'
+          ? st.aiModel.trim()
+          : '',
     apiKey:
-      (typeof st.aiApiKey === 'string' && st.aiApiKey.trim()
-        ? st.aiApiKey.trim()
-        : process.env.DEEPSEEK_API_KEY) ?? '',
-    baseUrl: typeof st.aiBaseUrl === 'string' ? st.aiBaseUrl.trim() : '',
+      typeof override?.apiKey === 'string' && override.apiKey.trim()
+        ? override.apiKey.trim()
+        : storedKey || (process.env.DEEPSEEK_API_KEY ?? ''),
+    baseUrl:
+      typeof override?.baseUrl === 'string' && override.baseUrl.trim()
+        ? override.baseUrl.trim()
+        : typeof st.aiBaseUrl === 'string'
+          ? st.aiBaseUrl.trim()
+          : '',
   }
 }
 
-async function chat(messages: ChatMessage[], options: ChatOptions = {}): Promise<string> {
-  const adapter = createAIAdapter(await resolveAIConfig())
+/** P1-AI1：从请求头解析本次 AI 调用所需的覆盖配置（Key 不经共享存储，仅本次请求生效）。 */
+export function configOverrideFromHeaders(headers: Headers): Partial<AIConfig> {
+  const out: Partial<AIConfig> = {}
+  const provider = headers.get('x-ai-provider')
+  const model = headers.get('x-ai-model')
+  const baseUrl = headers.get('x-ai-base-url')
+  const apiKey = headers.get('x-ai-api-key')
+  if (provider) out.provider = provider as AIProvider
+  if (model) out.model = model
+  if (baseUrl) out.baseUrl = baseUrl
+  if (apiKey) out.apiKey = apiKey
+  return out
+}
+
+async function chat(
+  messages: ChatMessage[],
+  options: ChatOptions = {},
+  override?: Partial<AIConfig>,
+): Promise<string> {
+  const adapter = createAIAdapter(await resolveAIConfig(override))
   return adapter.chat(messages, options)
 }
 
@@ -81,11 +111,15 @@ function extractJsonCandidates(text: string): unknown[] {
   return out
 }
 
-export async function generateMeta(body: string, existingTags: string[]): Promise<GenerateMetaResult> {
+export async function generateMeta(
+  body: string,
+  existingTags: string[],
+  override?: Partial<AIConfig>,
+): Promise<GenerateMetaResult> {
   const existing =
     existingTags.length > 0 ? existingTags.map((t) => `- ${t}`).join('\n') : '（暂无）'
   const prompt = META_PROMPT.replace('{existingTags}', existing) + `\n\n提示词正文：\n${body}`
-  const content = await chat([{ role: 'user', content: prompt }])
+  const content = await chat([{ role: 'user', content: prompt }], {}, override)
   const candidates = extractJsonCandidates(content)
   if (candidates.length === 0) {
     throw new AiError('AI 返回内容中没有可解析的 JSON')
@@ -106,18 +140,26 @@ export async function generateMeta(body: string, existingTags: string[]): Promis
   return { title, tags }
 }
 
-export async function summarizeThinking(body: string, customPrompt?: string): Promise<string> {
+export async function summarizeThinking(
+  body: string,
+  customPrompt?: string,
+  override?: Partial<AIConfig>,
+): Promise<string> {
   let template = customPrompt && customPrompt.trim() ? customPrompt : DEFAULT_THINKING_PROMPT
   if (!template.includes('{body}')) {
     template = `${template}\n\n提示词正文：\n{body}`
   }
   const prompt = template.replace('{body}', body)
-  const content = await chat([{ role: 'user', content: prompt }], { maxTokens: 600 })
+  const content = await chat([{ role: 'user', content: prompt }], { maxTokens: 600 }, override)
   return content.trim()
 }
 
 /** P0-I：保留正文语义与 Markdown 结构，仅清理粘贴造成的空白和段落排版。 */
-export async function formatBody(body: string, alignment: BodyAlignment): Promise<string> {
+export async function formatBody(
+  body: string,
+  alignment: BodyAlignment,
+  override?: Partial<AIConfig>,
+): Promise<string> {
   const alignmentLabel = { left: '左对齐', center: '居中', right: '右对齐' }[alignment]
   const prompt = `你是文本格式整理助手。请整理下面的提示词正文，目标为${alignmentLabel}。
 
@@ -130,5 +172,7 @@ export async function formatBody(body: string, alignment: BodyAlignment): Promis
 
 正文：
 ${body}`
-  return (await chat([{ role: 'user', content: prompt }], { temperature: 0, maxTokens: 3000 })).trim()
+  return (
+    await chat([{ role: 'user', content: prompt }], { temperature: 0, maxTokens: 3000 }, override)
+  ).trim()
 }

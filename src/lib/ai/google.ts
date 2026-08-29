@@ -43,7 +43,10 @@ export class GoogleAdapter extends BaseAIAdapter {
   async chat(messages: ChatMessage[], options: ChatOptions = {}): Promise<string> {
     const { apiKey } = this
     if (!apiKey || apiKey.startsWith('sk-your-key')) {
-      throw new AiError('AI 服务尚未配置，请在 .env.local 中设置 API Key 后重启服务', 503)
+      throw new AiError(
+        'AI 服务尚未配置：请在「设置 → AI 服务」中填写 API Key，或在服务端 .env.local 中配置后重启服务',
+        503,
+      )
     }
     const systemInstruction = messages.find((m) => m.role === 'system')?.content
     const res = await fetch(`${this.endpoint}?key=${encodeURIComponent(apiKey)}`, {

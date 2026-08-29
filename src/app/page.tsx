@@ -1354,6 +1354,7 @@ export default function Home() {
           settings={settings}
           onSave={setSettings}
           onClose={() => setShowSettings(false)}
+          onNotify={notify}
         />
       )}
       <Toast

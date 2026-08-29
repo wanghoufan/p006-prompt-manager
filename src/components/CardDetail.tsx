@@ -9,6 +9,7 @@ import { TagEditor } from '@/components/TagEditor'
 import { VersionDiff } from '@/components/VersionDiff'
 import { formatTime } from '@/lib/util'
 import { useModalFocus } from '@/hooks/useModalFocus'
+import { aiRequestHeaders } from '@/lib/aiClient'
 
 interface CardDetailProps {
   card: Card
@@ -281,7 +282,7 @@ export function CardDetail(props: CardDetailProps) {
     try {
       const res = await fetch('/api/ai/generate-meta', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...aiRequestHeaders() },
         body: JSON.stringify({ body: card.body, existingTags: props.existingTags }),
         signal: ac.signal,
       })
@@ -309,7 +310,7 @@ export function CardDetail(props: CardDetailProps) {
     try {
       const res = await fetch('/api/ai/summarize-thinking', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...aiRequestHeaders() },
         body: JSON.stringify({ body: card.body, prompt: props.customThinkingPrompt || null }),
         signal: ac.signal,
       })
@@ -341,7 +342,7 @@ export function CardDetail(props: CardDetailProps) {
     try {
       const res = await fetch('/api/ai/format-body', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...aiRequestHeaders() },
         body: JSON.stringify({ body: source, alignment: props.bodyAlignment }),
         signal: ac.signal,
       })

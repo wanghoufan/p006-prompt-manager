@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { AiError, generateMeta } from '@/lib/ai'
+import { AiError, configOverrideFromHeaders, generateMeta } from '@/lib/ai'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: '正文不能为空' }, { status: 400 })
   }
   try {
-    const { title, tags } = await generateMeta(bodyText, existingTags)
+    const { title, tags } = await generateMeta(bodyText, existingTags, configOverrideFromHeaders(request.headers))
     return NextResponse.json({ title, tags })
   } catch (e) {
     const message = e instanceof Error ? e.message : 'AI 调用失败'

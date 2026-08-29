@@ -22,6 +22,14 @@ const DATA_FILE = path.join(DATA_DIR, 'store.json')
 const emitter = new EventEmitter()
 emitter.setMaxListeners(0)
 
+/** P1-AI1：清洗 settings，剥离 aiApiKey，保证 API Key 永不落盘 / 永不出现在共享快照中。 */
+function sanitizeSettings(v: unknown): unknown {
+  if (!v || typeof v !== 'object') return v
+  const out: Record<string, unknown> = { ...(v as Record<string, unknown>) }
+  delete out.aiApiKey
+  return out
+}
+
 let state: ServerState | null = null
 let writeChain: Promise<void> = Promise.resolve()
 
@@ -32,7 +40,7 @@ async function ensureLoaded(): Promise<ServerState> {
     const parsed = JSON.parse(raw) as Partial<ServerState>
     state = {
       cards: Array.isArray(parsed.cards) ? parsed.cards : [],
-      settings: parsed.settings ?? null,
+      settings: sanitizeSettings(parsed.settings ?? null),
       // 迁移后新增集合：旧文件缺省时为空数组；守卫过滤非法结构（isTag/isPromptTag）
       tags: Array.isArray(parsed.tags) ? parsed.tags.filter(isTag) : [],
       promptTags: Array.isArray(parsed.promptTags) ? parsed.promptTags.filter(isPromptTag) : [],
@@ -46,8 +54,14 @@ async function ensureLoaded(): Promise<ServerState> {
 
 export async function getState(): Promise<ServerState> {
   const s = await ensureLoaded()
-  // 返回副本，避免调用方意外修改内存中的单例
-  return { cards: s.cards, settings: s.settings, tags: s.tags, promptTags: s.promptTags, version: s.version }
+  // 返回副本，避免调用方意外修改内存中的单例；settings 二次清洗，杜绝历史残留 Key 外泄
+  return {
+    cards: s.cards,
+    settings: sanitizeSettings(s.settings),
+    tags: s.tags,
+    promptTags: s.promptTags,
+    version: s.version,
+  }
 }
 
 /** setState 的返回：成功返回新版本号；校验/版本冲突返回错误对象（由 /api/sync 透传）。 */
@@ -64,6 +78,8 @@ export async function setState(next: {
   const s = await ensureLoaded()
   const nextTags = Array.isArray(next.tags) ? next.tags.filter(isTag) : s.tags
   const nextPromptTags = Array.isArray(next.promptTags) ? next.promptTags.filter(isPromptTag) : s.promptTags
+  // P1-AI1：API Key 只存在于本机 localStorage，写入共享存储前剥离
+  const nextSettings = sanitizeSettings(next.settings)
 
   // P0-A 服务端写入前校验：父级存在 / 无环 / 同父无重名 / 关联不悬空 / (prompt_id, tag_id) 唯一。
   // 非法数据一律拒绝落盘，防止整份快照「最后写入覆盖」污染共享库。
@@ -87,7 +103,7 @@ export async function setState(next: {
   })
   const incoming = JSON.stringify({
     cards: next.cards,
-    settings: next.settings,
+    settings: nextSettings,
     tags: nextTags,
     promptTags: nextPromptTags,
   })
@@ -104,7 +120,7 @@ export async function setState(next: {
     }
   }
   s.cards = next.cards
-  s.settings = next.settings
+  s.settings = nextSettings
   s.tags = nextTags
   s.promptTags = nextPromptTags
   s.version += 1

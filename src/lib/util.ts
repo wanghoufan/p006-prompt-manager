@@ -20,3 +20,10 @@ export function formatTime(iso: string): string {
     hour12: false,
   })
 }
+
+/** P1-AI1：API Key 显示脱敏，仅保留前 4 位与后 4 位，中间用 * 代替。 */
+export function maskApiKey(key: string): string {
+  if (!key) return ''
+  if (key.length <= 8) return '********'
+  return `${key.slice(0, 4)}****${key.slice(-4)}`
+}

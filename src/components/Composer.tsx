@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { aiRequestHeaders } from '@/lib/aiClient'
 
 interface ComposerProps {
   existingTags: string[]
@@ -77,7 +78,7 @@ export function Composer({ existingTags, addMode, onCreate, onApplyGeneratedMeta
     try {
       const res = await fetch('/api/ai/generate-meta', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...aiRequestHeaders() },
         body: JSON.stringify({ body: source, existingTags }),
         signal: controller.signal,
       })

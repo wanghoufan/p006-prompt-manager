@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { AiError, summarizeThinking } from '@/lib/ai'
+import { AiError, configOverrideFromHeaders, summarizeThinking } from '@/lib/ai'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: '正文不能为空' }, { status: 400 })
   }
   try {
-    const summary = await summarizeThinking(bodyText, customPrompt)
+    const summary = await summarizeThinking(bodyText, customPrompt, configOverrideFromHeaders(request.headers))
     return NextResponse.json({ summary })
   } catch (e) {
     const message = e instanceof Error ? e.message : 'AI 调用失败'

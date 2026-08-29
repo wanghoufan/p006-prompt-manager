@@ -1,10 +1,11 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Settings } from '@/lib/types'
 import type { AIProvider } from '@/lib/ai/types'
 import { DEFAULT_THINKING_PROMPT } from '@/lib/prompts'
 import { useModalFocus } from '@/hooks/useModalFocus'
+import { maskApiKey } from '@/lib/util'
 
 const MCP_PROJECT_ROOT = '/Users/zzymima0000/Developer/coding/1.Active/ing丨0813提示词管理器 mac gpt桌面 v1.0'
 
@@ -97,16 +98,35 @@ interface SettingsModalProps {
   settings: Settings
   onSave: (settings: Settings) => void
   onClose: () => void
+  /** P1-AI4：AI 配置保存后的反馈提示（复用页面 Toast） */
+  onNotify?: (msg: string) => void
 }
 
-export function SettingsModal({ settings, onSave, onClose }: SettingsModalProps) {
+export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsModalProps) {
   const [text, setText] = useState(settings.thinkingSummaryPrompt)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
+  // P1-AI1：API Key 输入框草稿（不直接回显明文，仅在 placeholder 展示脱敏值）
+  const [keyDraft, setKeyDraft] = useState('')
   const panelRef = useRef<HTMLDivElement>(null)
+  // P1-AI4：AI 配置即存，防抖后 toast 反馈
+  const aiSaveTimer = useRef<number | null>(null)
 
   // OPT-NEW-2：复用 CardDetail 的 useModalFocus（打开聚焦 / Tab 循环 / 关闭归还 / Esc 关闭）
   useModalFocus(panelRef, true, onClose)
+
+  useEffect(() => {
+    return () => {
+      if (aiSaveTimer.current) window.clearTimeout(aiSaveTimer.current)
+    }
+  }, [])
+
+  /** P1-AI4：AI 配置 onChange 即存，防抖提示「AI配置已保存」 */
+  function saveAi(patch: Partial<Settings>) {
+    onSave({ ...settings, ...patch })
+    if (aiSaveTimer.current) window.clearTimeout(aiSaveTimer.current)
+    aiSaveTimer.current = window.setTimeout(() => onNotify?.('AI配置已保存'), 800)
+  }
 
   function handleSave() {
     const trimmed = text.trim()
@@ -282,8 +302,7 @@ export function SettingsModal({ settings, onSave, onClose }: SettingsModalProps)
               onChange={(e) => {
                 const provider = e.target.value as AIProvider
                 const service = AI_SERVICES.find((s) => s.provider === provider)
-                onSave({
-                  ...settings,
+                saveAi({
                   aiProvider: provider,
                   aiModel: service?.models[0] ?? settings.aiModel,
                   aiBaseUrl: '',
@@ -299,20 +318,23 @@ export function SettingsModal({ settings, onSave, onClose }: SettingsModalProps)
             <label htmlFor="settings-ai-model" className="mt-3 block text-xs text-muted">
               模型
             </label>
-            <select
+            {/* P1-AI2：允许手动输入任意模型名，也提供当前服务商的预设候选（datalist 补全） */}
+            <input
               id="settings-ai-model"
               className="field mt-1"
+              list="settings-ai-model-options"
               value={settings.aiModel}
-              onChange={(e) => onSave({ ...settings, aiModel: e.target.value })}
-            >
+              onChange={(e) => saveAi({ aiModel: e.target.value })}
+              placeholder="输入模型名，或从下拉候选中选择"
+              autoComplete="off"
+            />
+            <datalist id="settings-ai-model-options">
               {(
                 AI_SERVICES.find((s) => s.provider === settings.aiProvider)?.models ?? []
               ).map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
+                <option key={m} value={m} />
               ))}
-            </select>
+            </datalist>
             <label htmlFor="settings-ai-base-url" className="mt-3 block text-xs text-muted">
               Base URL（可选，留空使用默认）
             </label>
@@ -321,7 +343,7 @@ export function SettingsModal({ settings, onSave, onClose }: SettingsModalProps)
               type="text"
               className="field mt-1"
               value={settings.aiBaseUrl}
-              onChange={(e) => onSave({ ...settings, aiBaseUrl: e.target.value })}
+              onChange={(e) => saveAi({ aiBaseUrl: e.target.value })}
               placeholder={
                 AI_SERVICES.find((s) => s.provider === settings.aiProvider)?.baseUrlPlaceholder ??
                 'https://…'
@@ -331,18 +353,27 @@ export function SettingsModal({ settings, onSave, onClose }: SettingsModalProps)
             <label htmlFor="settings-ai-api-key" className="mt-3 block text-xs text-muted">
               API Key
             </label>
+            {/* P1-AI1：Key 不回显明文。已有 Key 时 placeholder 展示脱敏值（前4后4），聚焦留空输入即替换；留空表示用服务端环境变量 */}
             <input
               id="settings-ai-api-key"
               type="password"
               className="field mt-1"
-              value={settings.aiApiKey}
-              onChange={(e) => onSave({ ...settings, aiApiKey: e.target.value })}
-              placeholder="留空则使用服务端环境变量"
+              value={keyDraft}
+              onChange={(e) => {
+                setKeyDraft(e.target.value)
+                saveAi({ aiApiKey: e.target.value })
+              }}
+              placeholder={settings.aiApiKey ? maskApiKey(settings.aiApiKey) : '留空则使用服务端环境变量'}
               autoComplete="new-password"
             />
+            {settings.aiApiKey && (
+              <p className="mt-1.5 text-xs text-muted">
+                已保存 Key：{maskApiKey(settings.aiApiKey)}（仅保存在本机浏览器，不同步到服务端；点击输入框输入新 Key 可替换）
+              </p>
+            )}
             <p className="mt-2 text-xs leading-relaxed text-muted">
-              留空时自动回退到服务端{' '}
-              <code className="font-mono">DEEPSEEK_API_KEY</code>（.env.local），API Key 不会出现在前端打包产物中。
+              本机填写的 API Key 仅保存在浏览器本地，不会上传到同步服务端；留空时自动回退到服务端{' '}
+              <code className="font-mono">.env.local</code> 环境变量。
             </p>
           </div>
           <div className="rounded-lg border border-line bg-ink-900 px-3.5 py-3">
