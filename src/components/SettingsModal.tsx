@@ -33,80 +33,94 @@ const AI_SERVICES: {
   label: string
   available: boolean
   models: string[]
-  baseUrlPlaceholder: string
+  defaultBaseUrl: string
+  docsUrl: string
 }[] = [
   {
     provider: 'deepseek',
     label: 'DeepSeek',
     available: true,
     models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
-    baseUrlPlaceholder: 'https://api.deepseek.com',
+    defaultBaseUrl: 'https://api.deepseek.com',
+    docsUrl: 'https://api-docs.deepseek.com/',
   },
   {
     provider: 'zhipu',
     label: '智谱（GLM）',
     available: true,
     models: ['glm-4-plus', 'glm-4', 'glm-4-flash', 'glm-4v-plus'],
-    baseUrlPlaceholder: 'https://open.bigmodel.cn/api/paas/v4',
+    defaultBaseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    docsUrl: 'https://docs.bigmodel.cn/api-reference/introduction',
   },
   {
     provider: 'tencent',
     label: '腾讯混元',
     available: true,
     models: ['hunyuan-pro', 'hunyuan-standard', 'hunyuan-lite'],
-    baseUrlPlaceholder: 'https://api.hunyuan.cloud.tencent.com/v1',
+    defaultBaseUrl: 'https://hunyuan.cloud.tencent.com',
+    docsUrl: 'https://cloud.tencent.com/document/product/1729/101837',
   },
   {
     provider: 'doubao',
     label: '豆包（火山引擎）',
     available: true,
     models: ['doubao-pro-256k', 'doubao-pro-128k', 'doubao-lite-128k'],
-    baseUrlPlaceholder: 'https://ark.cn-beijing.volces.com/api/v3',
+    defaultBaseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+    docsUrl: 'https://www.volcengine.com/docs/82379/1099522',
   },
   {
     provider: 'kimi',
     label: 'Kimi（月之暗面）',
     available: true,
     models: ['moonshot-v1-128k', 'moonshot-v1-32k', 'moonshot-v1-8k'],
-    baseUrlPlaceholder: 'https://api.moonshot.cn/v1',
+    defaultBaseUrl: 'https://api.moonshot.cn/v1',
+    docsUrl: 'https://platform.moonshot.cn/docs/intro',
   },
   {
     provider: 'google',
     label: 'Google Gemini',
     available: true,
     models: ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-1.0-pro'],
-    baseUrlPlaceholder: 'https://generativelanguage.googleapis.com',
+    defaultBaseUrl: 'https://generativelanguage.googleapis.com',
+    docsUrl: 'https://ai.google.dev/gemini-api/docs',
   },
   {
     provider: 'openai',
     label: 'OpenAI',
     available: true,
     models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
-    baseUrlPlaceholder: 'https://api.openai.com/v1',
+    defaultBaseUrl: 'https://api.openai.com/v1',
+    docsUrl: 'https://platform.openai.com/docs/api-reference',
   },
   {
     provider: 'openrouter',
     label: 'OpenRouter',
     available: true,
     models: ['auto'],
-    baseUrlPlaceholder: 'https://openrouter.ai/api/v1',
+    defaultBaseUrl: 'https://openrouter.ai/api/v1',
+    docsUrl: 'https://openrouter.ai/docs',
   },
   {
     provider: 'opencode',
     label: 'OpenCode',
     available: true,
     models: [
-      'opencode/muse-spark-1.2-contributor-free',
-      'opencode/nemotron-3-ultra-free',
-      'opencode/nemotron-3.5-lightning-free',
-      'opencode-go/gpt-5.6-luna',
-      'opencode-go/gpt-5.6-terra',
-      'opencode-go/gpt-5.6-sol',
-      'opencode-go/deepseek-v4-flash',
-      'opencode-go/deepseek-v4-pro',
-      'opencode-go/mimo-v2.5-free',
+      'claude-fable-5', 'claude-opus-5', 'claude-opus-4-8', 'claude-opus-4-7', 'claude-opus-4-6',
+      'claude-opus-4-5', 'claude-sonnet-5', 'claude-sonnet-4-6', 'claude-sonnet-4-5', 'claude-sonnet-4',
+      'claude-haiku-4-5', 'gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.5-flash-lite',
+      'gemini-3.5-flash', 'gemini-3.1-pro', 'gemini-3-flash', 'gpt-5.6-sol', 'gpt-5.6-terra',
+      'gpt-5.6-luna', 'gpt-5.5', 'gpt-5.5-pro', 'gpt-5.4', 'gpt-5.4-pro', 'gpt-5.4-mini',
+      'gpt-5.4-nano', 'gpt-5.3-codex-spark', 'gpt-5.3-codex', 'gpt-5.2', 'gpt-5.2-codex',
+      'gpt-5.1', 'gpt-5.1-codex-max', 'gpt-5.1-codex', 'gpt-5.1-codex-mini', 'gpt-5',
+      'gpt-5-codex', 'gpt-5-nano', 'grok-build-0.1', 'grok-4.6', 'grok-4.5', 'muse-spark-1.2',
+      'deepseek-v4-pro', 'deepseek-v4-flash', 'glm-5.2', 'glm-5.1', 'glm-5', 'minimax-m3',
+      'minimax-m2.7', 'minimax-m2.5', 'kimi-k3', 'kimi-k2.7-code', 'kimi-k2.6', 'kimi-k2.5',
+      'qwen3.6-plus', 'qwen3.5-plus', 'big-pickle', 'deepseek-v4-flash-free',
+      'muse-spark-1.2-contributor-free', 'mimo-v2.5-free', 'hy3-free', 'ling-3.0-flash-fin-free',
+      'nemotron-3-ultra-free', 'nemotron-3.5-lightning-free', 'laguna-s-2.1-free',
     ],
-    baseUrlPlaceholder: 'http://localhost:3000',
+    defaultBaseUrl: 'http://localhost:3000',
+    docsUrl: 'https://opencode.ai/docs/zen',
   },
 ]
 
@@ -124,6 +138,8 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
   const [copied, setCopied] = useState<string | null>(null)
   // P1-AI1：API Key 输入框草稿（不直接回显明文，仅在 placeholder 展示脱敏值）
   const [keyDraft, setKeyDraft] = useState('')
+  const [connectionTest, setConnectionTest] = useState<{ success: boolean; message: string } | null>(null)
+  const [isTestingConnection, setIsTestingConnection] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
   // P1-AI4：AI 配置即存，防抖后 toast 反馈
   const aiSaveTimer = useRef<number | null>(null)
@@ -143,9 +159,47 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
 
   /** P1-AI4：AI 配置 onChange 即存，防抖提示「AI配置已保存」 */
   function saveAi(patch: Partial<Settings>) {
+    setConnectionTest(null)
     onSave({ ...settings, ...patch })
     if (aiSaveTimer.current) window.clearTimeout(aiSaveTimer.current)
     aiSaveTimer.current = window.setTimeout(() => onNotify?.('AI配置已保存'), 800)
+  }
+
+  async function testConnection() {
+    setIsTestingConnection(true)
+    setConnectionTest(null)
+    const baseUrl = settings.aiBaseUrl || aiService?.defaultBaseUrl || ''
+    const apiKey = keyDraft || settings.aiApiKey
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'x-ai-provider': settings.aiProvider,
+      'x-ai-model': settings.aiModel,
+      'x-ai-base-url': baseUrl,
+    }
+    if (apiKey) headers['x-ai-api-key'] = apiKey
+
+    try {
+      const res = await fetch('/api/ai/summarize-thinking', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          body: '连接测试',
+          customPrompt: '请仅回复“连接成功”。内容：{body}',
+        }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: unknown }
+      if (!res.ok) {
+        throw new Error(typeof data.error === 'string' ? data.error : `请求失败（${res.status}）`)
+      }
+      setConnectionTest({ success: true, message: '连接成功' })
+    } catch (e) {
+      setConnectionTest({
+        success: false,
+        message: e instanceof Error ? e.message : '连接测试失败，请检查配置后重试',
+      })
+    } finally {
+      setIsTestingConnection(false)
+    }
   }
 
   function handleSave() {
@@ -325,7 +379,7 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
                 saveAi({
                   aiProvider: provider,
                   aiModel: service?.models[0] ?? '',
-                  aiBaseUrl: '',
+                  aiBaseUrl: service?.defaultBaseUrl ?? '',
                 })
               }}
             >
@@ -383,12 +437,22 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
               className="field mt-1"
               value={settings.aiBaseUrl}
               onChange={(e) => saveAi({ aiBaseUrl: e.target.value })}
-              placeholder={
-                AI_SERVICES.find((s) => s.provider === settings.aiProvider)?.baseUrlPlaceholder ??
-                'https://…'
-              }
+              placeholder={aiService?.defaultBaseUrl ?? 'https://…'}
               autoComplete="off"
             />
+            <p className="mt-1.5 text-xs leading-relaxed text-muted">
+              Base URL 是服务商 API 的基础地址。留空使用默认地址，或填写自定义地址。{' '}
+              {aiService && (
+                <a
+                  href={aiService.docsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-gold underline underline-offset-2 hover:text-paper"
+                >
+                  查看 {aiService.label} API 文档
+                </a>
+              )}
+            </p>
             <label htmlFor="settings-ai-api-key" className="mt-3 block text-xs text-muted">
               API Key
             </label>
@@ -414,6 +478,25 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
               本机填写的 API Key 仅保存在浏览器本地，不会上传到同步服务端；留空时自动回退到服务端{' '}
               <code className="font-mono">.env.local</code> 环境变量。
             </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className="btn-gold"
+                onClick={() => void testConnection()}
+                disabled={isTestingConnection}
+              >
+                {isTestingConnection ? '正在测试连接…' : '测试连接'}
+              </button>
+              {connectionTest && (
+                <p
+                  role="status"
+                  aria-live="polite"
+                  className={`text-xs ${connectionTest.success ? 'text-gold' : 'text-rust'}`}
+                >
+                  {connectionTest.message}
+                </p>
+              )}
+            </div>
           </div>
           <div className="rounded-lg border border-line bg-ink-900 px-3.5 py-3">
             <p className="text-sm text-paper">一键接入</p>
