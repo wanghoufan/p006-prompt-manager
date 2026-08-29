@@ -636,6 +636,10 @@ export function subscribeSync(
       return
     }
     if (version === null) return
+    // EventSource 建连会立即推送当前版本。若首条消息对应的是已经由
+    // loadFromServer 载入的快照，无需再异步回拉；否则该请求可能在用户刚
+    // 修改 AI 设置后才返回，用旧快照覆盖本地的新选择。
+    if (knownVersion !== null && version <= knownVersion) return
     if (lastPushedVersion !== null && version === lastPushedVersion) return // 自己的回声，忽略
     void loadFromServer().then((r) => {
       if (r) onRemote(r.cards, r.settings, r.tags, r.promptTags)

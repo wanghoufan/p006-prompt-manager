@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { Settings } from '@/lib/types'
 import type { AIProvider } from '@/lib/ai/types'
 import { DEFAULT_THINKING_PROMPT } from '@/lib/prompts'
@@ -129,7 +129,7 @@ const AI_SERVICES: {
 
 interface SettingsModalProps {
   settings: Settings
-  onSave: (settings: Settings) => void
+  onSave: Dispatch<SetStateAction<Settings>>
   onClose: () => void
   /** P1-AI4：AI 配置保存后的反馈提示（复用页面 Toast） */
   onNotify?: (msg: string) => void
@@ -163,7 +163,9 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
   /** P1-AI4：AI 配置 onChange 即存，防抖提示「AI配置已保存」 */
   function saveAi(patch: Partial<Settings>) {
     setConnectionTest(null)
-    onSave({ ...settings, ...patch })
+    // 设置控件可能连续触发更新；从最新状态合并，避免陈旧渲染快照把刚选的
+    // 服务商或模型覆盖回之前的值。
+    onSave((current) => ({ ...current, ...patch }))
     if (aiSaveTimer.current) window.clearTimeout(aiSaveTimer.current)
     aiSaveTimer.current = window.setTimeout(() => onNotify?.('AI配置已保存'), 800)
   }
