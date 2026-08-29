@@ -4,6 +4,32 @@
 
 ## 最近一次 QA 执行记录
 
+### 通用 AI 接口实现验证（2026-08-29）
+
+- **模式**：QA 静态代码核对 + TypeScript / ESLint 门禁
+- **结果**：**PARTIAL**（核心实现核对通过；发现 1 项配置风险）
+- **构建门禁**：`npx tsc --noEmit` ✅ 通过；`npm run lint` ✅ 0 错误，但有 1 个既有 warning：`scratch/api-doc-test/run.mjs:309` 的 `f0` 未使用
+- **未覆盖**：未使用真实厂商 API Key 进行在线请求验证；未执行浏览器设置页交互
+- **逐项结果**：
+  1. `src/lib/ai/types.ts` ✅ 定义 `AIProvider` 8 家厂商、`AIConfig`、`ChatMessage`、`ChatOptions` 和 `AIAdapter`，与当前适配器调用契约一致。
+  2. `src/lib/ai/factory.ts` ✅ switch 完整注册 DeepSeek、智谱、腾讯、豆包、Kimi、Google、OpenAI、OpenRouter 共 8 家厂商，未知值抛出错误。
+  3. `src/lib/ai/deepseek.ts` ✅ 继承 `BaseAIAdapter`，保留 `DEEPSEEK_MODEL` / `DEEPSEEK_BASE_URL` 环境变量、默认模型和去除末尾斜杠逻辑；现有 `generateMeta`、`summarizeThinking`、`formatBody` 均经 `src/lib/ai.ts` 统一调用链接入。
+  4. `src/components/SettingsModal.tsx` ✅ 显示 AI 服务选择、模型、Base URL、API Key，8 家厂商均标记可用；切换厂商会切换默认模型并清空 Base URL。
+  5. `src/lib/types.ts` / `src/lib/storage.ts` ✅ `Settings` 包含 `aiProvider`、`aiModel`、`aiApiKey`、`aiBaseUrl`；默认值、旧数据归一化、localStorage 读写及服务端同步链路均已覆盖。
+
+### BUG-8
+
+- **状态**：OPEN
+- **严重程度**：P1
+- **涉及功能**：通用 AI 接口的多厂商 API Key 环境变量回退
+- **前置条件**：在设置中选择非 DeepSeek 厂商，API Key 留空
+- **复现步骤**：选择 OpenAI、智谱或其他非 DeepSeek 服务；保持 API Key 为空；触发标题、标签、摘要或正文整理请求
+- **预期结果**：按当前厂商读取对应的服务端环境变量，或明确提示该厂商未配置密钥
+- **实际结果**：`src/lib/ai.ts:35-38` 固定回退 `process.env.DEEPSEEK_API_KEY`，可能把 DeepSeek 密钥发送至其他厂商 Base URL
+- **复现概率**：100%（满足前置条件时）
+- **影响范围**：所有未在设置中显式填写 API Key 的非 DeepSeek 配置；可能导致鉴权失败或密钥误发
+- **备注**：设置页 `SettingsModal.tsx:343-346` 也固定提示 `DEEPSEEK_API_KEY`。建议按厂商建立环境变量映射，或仅允许 DeepSeek 使用该回退。
+
 ### Bug #2 残留修复：resolveTagIds 路径解析被历史扁平标签遮蔽（2026-08-29）
 
 - **状态**：✅ **FIXED**（Builder）
