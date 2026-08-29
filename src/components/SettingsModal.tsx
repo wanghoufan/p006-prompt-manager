@@ -26,8 +26,7 @@ const SETUP_CLIENTS = 'WorkBuddy · Codex · Cursor · Claude Desktop · Cline �
 
 /**
  * 通用AI接口的服务商注册表（Phase 2）。
- * available=false 的服务商尚未实现对应适配器（Phase 4），下拉中禁用；
- * 模型名仅作预设建议，实际以服务商官方为准。
+ * 模型列表固定在客户端；仅 OpenRouter 支持自定义模型名称。
  */
 const AI_SERVICES: {
   provider: AIProvider
@@ -40,63 +39,73 @@ const AI_SERVICES: {
     provider: 'deepseek',
     label: 'DeepSeek',
     available: true,
-    models: ['deepseek-v4-flash', 'deepseek-chat', 'deepseek-reasoner'],
+    models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
     baseUrlPlaceholder: 'https://api.deepseek.com',
   },
   {
     provider: 'zhipu',
     label: '智谱（GLM）',
     available: true,
-    models: ['glm-4-plus', 'glm-4-flash', 'glm-4-air'],
+    models: ['glm-4-plus', 'glm-4', 'glm-4-flash', 'glm-4v-plus'],
     baseUrlPlaceholder: 'https://open.bigmodel.cn/api/paas/v4',
   },
   {
     provider: 'tencent',
     label: '腾讯混元',
     available: true,
-    models: ['hunyuan-turbo', 'hunyuan-pro'],
+    models: ['hunyuan-pro', 'hunyuan-standard', 'hunyuan-lite'],
     baseUrlPlaceholder: 'https://api.hunyuan.cloud.tencent.com/v1',
   },
   {
     provider: 'doubao',
     label: '豆包（火山引擎）',
     available: true,
-    models: ['doubao-pro-32k', 'doubao-lite-32k'],
+    models: ['doubao-pro-256k', 'doubao-pro-128k', 'doubao-lite-128k'],
     baseUrlPlaceholder: 'https://ark.cn-beijing.volces.com/api/v3',
   },
   {
     provider: 'kimi',
     label: 'Kimi（月之暗面）',
     available: true,
-    models: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
+    models: ['moonshot-v1-128k', 'moonshot-v1-32k', 'moonshot-v1-8k'],
     baseUrlPlaceholder: 'https://api.moonshot.cn/v1',
   },
   {
     provider: 'google',
     label: 'Google Gemini',
     available: true,
-    models: ['gemini-2.0-flash', 'gemini-2.0-pro'],
+    models: ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-1.0-pro'],
     baseUrlPlaceholder: 'https://generativelanguage.googleapis.com',
   },
   {
     provider: 'openai',
     label: 'OpenAI',
     available: true,
-    models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1'],
+    models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
     baseUrlPlaceholder: 'https://api.openai.com/v1',
   },
   {
     provider: 'openrouter',
     label: 'OpenRouter',
     available: true,
-    models: ['openrouter/auto'],
+    models: ['auto'],
     baseUrlPlaceholder: 'https://openrouter.ai/api/v1',
   },
   {
     provider: 'opencode',
     label: 'OpenCode',
     available: true,
-    models: [],
+    models: [
+      'opencode/muse-spark-1.2-contributor-free',
+      'opencode/nemotron-3-ultra-free',
+      'opencode/nemotron-3.5-lightning-free',
+      'opencode-go/gpt-5.6-luna',
+      'opencode-go/gpt-5.6-terra',
+      'opencode-go/gpt-5.6-sol',
+      'opencode-go/deepseek-v4-flash',
+      'opencode-go/deepseek-v4-pro',
+      'opencode-go/mimo-v2.5-free',
+    ],
     baseUrlPlaceholder: 'http://localhost:3000',
   },
 ]
@@ -118,6 +127,10 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
   const panelRef = useRef<HTMLDivElement>(null)
   // P1-AI4：AI 配置即存，防抖后 toast 反馈
   const aiSaveTimer = useRef<number | null>(null)
+  const aiService = AI_SERVICES.find((service) => service.provider === settings.aiProvider)
+  const aiModels = aiService?.models ?? []
+  const isOpenRouter = settings.aiProvider === 'openrouter'
+  const isOpenRouterCustomModel = isOpenRouter && settings.aiModel !== 'auto'
 
   // OPT-NEW-2：复用 CardDetail 的 useModalFocus（打开聚焦 / Tab 循环 / 关闭归还 / Esc 关闭）
   useModalFocus(panelRef, true, onClose)
@@ -311,7 +324,7 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
                 const service = AI_SERVICES.find((s) => s.provider === provider)
                 saveAi({
                   aiProvider: provider,
-                  aiModel: service?.models[0] ?? settings.aiModel,
+                  aiModel: service?.models[0] ?? '',
                   aiBaseUrl: '',
                 })
               }}
@@ -325,23 +338,42 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
             <label htmlFor="settings-ai-model" className="mt-3 block text-xs text-muted">
               模型
             </label>
-            {/* P1-AI2：允许手动输入任意模型名，也提供当前服务商的预设候选（datalist 补全） */}
-            <input
-              id="settings-ai-model"
-              className="field mt-1"
-              list="settings-ai-model-options"
-              value={settings.aiModel}
-              onChange={(e) => saveAi({ aiModel: e.target.value })}
-              placeholder="输入模型名，或从下拉候选中选择"
-              autoComplete="off"
-            />
-            <datalist id="settings-ai-model-options">
-              {(
-                AI_SERVICES.find((s) => s.provider === settings.aiProvider)?.models ?? []
-              ).map((m) => (
-                <option key={m} value={m} />
-              ))}
-            </datalist>
+            {isOpenRouter ? (
+              <>
+                <select
+                  id="settings-ai-model"
+                  className="field mt-1"
+                  value={isOpenRouterCustomModel ? 'custom' : 'auto'}
+                  onChange={(e) => saveAi({ aiModel: e.target.value === 'auto' ? 'auto' : '' })}
+                >
+                  <option value="auto">auto</option>
+                  <option value="custom">自定义模型</option>
+                </select>
+                {isOpenRouterCustomModel && (
+                  <input
+                    id="settings-ai-model-custom"
+                    className="field mt-2"
+                    value={settings.aiModel}
+                    onChange={(e) => saveAi({ aiModel: e.target.value })}
+                    placeholder="输入 OpenRouter 模型名称"
+                    autoComplete="off"
+                  />
+                )}
+              </>
+            ) : (
+              <select
+                id="settings-ai-model"
+                className="field mt-1"
+                value={aiModels.includes(settings.aiModel) ? settings.aiModel : aiModels[0] ?? ''}
+                onChange={(e) => saveAi({ aiModel: e.target.value })}
+              >
+                {aiModels.map((model) => (
+                  <option key={model} value={model}>
+                    {model}
+                  </option>
+                ))}
+              </select>
+            )}
             <label htmlFor="settings-ai-base-url" className="mt-3 block text-xs text-muted">
               Base URL（可选，留空使用默认）
             </label>
