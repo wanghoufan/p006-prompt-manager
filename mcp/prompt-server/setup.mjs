@@ -131,6 +131,18 @@ const CLIENTS = [
     detect: () => present(join(HOME, '.gemini', 'settings.json')),
     hint: '重启 gemini 会话',
   },
+  {
+    id: 'opencode',
+    label: 'OpenCode',
+    format: 'opencode',
+    file: () => join(HOME, '.config', 'opencode', 'opencode.jsonc'),
+    detect: () =>
+      present(
+        join(HOME, '.config', 'opencode', 'opencode.jsonc'),
+        join(PROJECT_ROOT, 'opencode.jsonc'),
+      ),
+    hint: '重启 opencode 会话（或执行 /mcp 重新加载配置）',
+  },
 ]
 
 /* ────────────────────────── 小工具 ────────────────────────── */
@@ -289,6 +301,84 @@ function writeToml(client, entry, remove) {
   const bak = backup(file)
   mkdirSync(dirname(file), { recursive: true })
   writeFileSync(file, next.startsWith('\n') || next === '' ? next : next, 'utf8')
+  return { changed: true, file, backup: bak }
+}
+
+/**
+ * OpenCode 用 JSONC（允许 // 与 /* *\/ 注释、尾随逗号），且字段结构不同于其他客户端：
+ *   mcp.<name> = { type: "local", command: [node, ...index.js], enabled: true }
+ * 解析时尽力剥离注释与尾随逗号；写回时输出干净的 JSON（不保留原注释）。
+ */
+function parseJsonc(raw) {
+  // 逐字符扫描：仅在「不在字符串内」时才剥离 // 行注释与 /* */ 块注释，
+  // 否则会误删 https:// 这类 URL 里的 // 。
+  let out = ''
+  let inStr = false
+  let esc = false
+  const n = raw.length
+  let i = 0
+  while (i < n) {
+    const ch = raw[i]
+    if (inStr) {
+      out += ch
+      if (esc) esc = false
+      else if (ch === '\\') esc = true
+      else if (ch === '"') inStr = false
+      i++
+      continue
+    }
+    if (ch === '"') {
+      inStr = true
+      out += ch
+      i++
+      continue
+    }
+    if (ch === '/' && raw[i + 1] === '/') {
+      while (i < n && raw[i] !== '\n') i++
+      continue
+    }
+    if (ch === '/' && raw[i + 1] === '*') {
+      i += 2
+      while (i < n && !(raw[i] === '*' && raw[i + 1] === '/')) i++
+      i += 2
+      continue
+    }
+    out += ch
+    i++
+  }
+  out = out.replace(/,(\s*[}\]])/g, '$1') // 尾随逗号
+  return JSON.parse(out)
+}
+
+function writeOpencode(client, entry, remove) {
+  const file = client.file()
+  let data = {}
+  if (existsSync(file)) {
+    const raw = readFileSync(file, 'utf8').trim()
+    if (raw) {
+      try {
+        data = parseJsonc(raw)
+      } catch (e) {
+        throw new Error(`${tilde(file)} 不是合法 JSON/JSONC，已跳过以免破坏：${e.message}`)
+      }
+    }
+  }
+  if (!data.mcp || typeof data.mcp !== 'object') data.mcp = {}
+
+  if (remove) {
+    if (!data.mcp[SERVER_NAME]) return { changed: false, file }
+    delete data.mcp[SERVER_NAME]
+  } else {
+    const next = { type: 'local', command: [entry.command, ...entry.args], enabled: true }
+    if (JSON.stringify(data.mcp[SERVER_NAME]) === JSON.stringify(next)) return { changed: false, file, upToDate: true }
+    data.mcp[SERVER_NAME] = next
+  }
+
+  if (OPT.dryRun) return { changed: true, file, dryRun: true }
+
+  const bak = backup(file)
+  mkdirSync(dirname(file), { recursive: true })
+  writeFileSync(file, JSON.stringify(data, null, 2) + '\n', 'utf8')
   return { changed: true, file, backup: bak }
 }
 
@@ -516,9 +606,11 @@ async function main() {
     try {
       const r = OPT.check
         ? { changed: false, file: c.file() }
-        : c.format === 'toml'
-          ? writeToml(c, entry, OPT.remove)
-          : writeJson(c, entry, OPT.remove)
+        : c.format === 'opencode'
+          ? writeOpencode(c, entry, OPT.remove)
+          : c.format === 'toml'
+            ? writeToml(c, entry, OPT.remove)
+            : writeJson(c, entry, OPT.remove)
       rec.changed = Boolean(r.changed)
       rec.backup = r.backup ? tilde(r.backup) : null
       if (OPT.check) rec.state = 'checked'

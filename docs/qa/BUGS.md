@@ -4,6 +4,18 @@
 
 ## 最近一次 QA 执行记录
 
+### 标签输入与新建子标签复测（2026-08-29）
+
+- **环境**：Chrome 真机浏览器，`http://localhost:3100`
+- **模式**：QA Acceptance（Orca Computer Use + 截图核验）
+- **执行者**：QA / Test Agent
+- **结果**：**PARTIAL**
+- **Bug #1 标签输入白色区域**：✅ **PASS**。点击标签搜索输入框并聚焦后，仅显示一个输入区域，未出现额外的 Chrome 自动填充白色面板。证据：`scratch/qa-real-device/bug1-tag-input-single-panel.png`
+- **Bug #2 新建子标签**：✅ **FIXED**（2026-08-29）。根因：TagPanel「新建标签」走 `handleCreateTag`，把 `SOP/开发` 直接创建为顶级扁平标签，未按 `/` 拆分为层级（`resolveTagIds` 与 TagPanel 树渲染本身正确）。修复：`handleCreateTag` 支持路径创建，按「父/子/孙」逐级建层级并复用已存在父级；TagPanel 创建后自动展开路径根节点。真机复测：`SOP` 为父标签、`开发` 为其子标签（缩进层级），已清理旧的扁平残留 `SOP/开发`（0 关联）。构建门禁：tsc --noEmit ✅、npm run lint ✅。
+- **测试数据**：保留新建的 `SOP/开发`，便于后续修复复测；当前标签总数由 46 增至 47。
+
+---
+
 - **日期**：2026-08-28（Composer 交互重构验证）
 - **模式**：QA Acceptance（静态检查 + Chrome 真机浏览器交互）
 - **执行者**：QA / Test Agent

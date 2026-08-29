@@ -18,7 +18,7 @@ export interface TagPanelProps {
   onResetFilters: () => void
   offline?: boolean
   /** demo/只读视图不传以下操作回调（隐藏管理入口） */
-  onCreateTag?: (name: string, parentId: string | null) => { ok: boolean; error?: string }
+  onCreateTag?: (name: string, parentId: string | null) => { ok: boolean; error?: string; createdRootId?: string }
   onRenameTag?: (id: string, name: string) => { ok: boolean; error?: string }
   onMoveTag?: (id: string, parentId: string | null) => { ok: boolean; error?: string }
   onReorderTag?: (id: string, targetId: string, position: 'before' | 'after') => { ok: boolean; error?: string }
@@ -379,11 +379,14 @@ export function TagPanel({
       return
     }
     setError(null)
-    // 新建标签自动展开其父节点，便于看到
-    if (parentId) {
+    // 新建标签自动展开其父节点与路径根节点，便于看到层级结构
+    const expandIds = new Set<string>()
+    if (parentId) expandIds.add(parentId)
+    if (r.createdRootId) expandIds.add(r.createdRootId)
+    if (expandIds.size > 0) {
       setExpanded((prev) => {
         const next = new Set(prev)
-        next.add(parentId)
+        expandIds.forEach((id) => next.add(id))
         writeExpanded(next)
         return next
       })

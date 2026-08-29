@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="hH1zrwsYfuGS3WAO9E9sbl">
+<head data-page-node-id="43wAx6eQylM4AyQnTvKNEJ">
+<meta charset="UTF-8" data-page-node-id="Q8yJcetpE63yGL7PYiT6eL" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="W1c1TMRDCj89EKVUhAsIfw" />
+<title>Prompt Manager MCP · 接口参考</title>
+<style>
+  :root {
+    --navy: #0a2540;
+    --navy-2: #1a2b47;
+    --ink: #1a1f36;
+    --muted: #697386;
+    --line: #e3e8ee;
+    --line-soft: #eef1f6;
+    --bg: #ffffff;
+    --bg-side: #f6f9fc;
+    --accent: #635bff;
+    --accent-soft: #f0eeff;
+    --code-bg: #0a2540;
+    --code-fg: #e6edf6;
+    --code-comment: #7a8aa3;
+    --code-key: #8be9fd;
+    --code-str: #a5e8b0;
+    --code-num: #f6c177;
+    --ok: #15803d;
+    --warn: #b45309;
+    --err: #b91c1c;
+    --radius: 8px;
+    --mono: "SF Mono", "JetBrains Mono", "Fira Code", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: var(--sans);
+    color: var(--ink);
+    background: var(--bg);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* ---------- Top bar ---------- */
+  .topbar {
+    position: sticky; top: 0; z-index: 50;
+    height: 60px;
+    display: flex; align-items: center; gap: 12px;
+    padding: 0 24px;
+    background: rgba(255,255,255,0.92);
+    backdrop-filter: saturate(180%) blur(8px);
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar .logo {
+    width: 26px; height: 26px; border-radius: 7px;
+    background: linear-gradient(135deg, #635bff, #00d4ff);
+    box-shadow: 0 2px 8px rgba(99,91,255,0.35);
+  }
+  .topbar .title { font-weight: 700; font-size: 15px; letter-spacing: .2px; }
+  .topbar .sub { color: var(--muted); font-size: 13px; }
+  .topbar .ver {
+    margin-left: auto; font-size: 12px; font-weight: 600;
+    color: var(--accent); background: var(--accent-soft);
+    padding: 3px 9px; border-radius: 999px;
+  }
+
+  /* ---------- Layout ---------- */
+  .layout { display: flex; align-items: flex-start; }
+  .sidebar {
+    position: sticky; top: 60px;
+    width: 264px; flex: 0 0 264px;
+    height: calc(100vh - 60px);
+    overflow-y: auto;
+    background: var(--bg-side);
+    border-right: 1px solid var(--line);
+    padding: 22px 14px 40px 24px;
+  }
+  .sidebar .group-label {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .8px; color: var(--muted); margin: 18px 0 8px;
+  }
+  .sidebar .group-label:first-child { margin-top: 0; }
+  .sidebar a {
+    display: block; padding: 6px 10px; border-radius: 6px;
+    color: var(--ink); font-size: 13.5px;
+    border-left: 2px solid transparent;
+  }
+  .sidebar a:hover { background: rgba(99,91,255,0.06); text-decoration: none; }
+  .sidebar a.active {
+    color: var(--accent); font-weight: 600;
+    background: var(--accent-soft);
+    border-left-color: var(--accent);
+  }
+  .sidebar a.sub { padding-left: 22px; font-size: 13px; color: var(--muted); }
+
+  .content {
+    flex: 1 1 auto; min-width: 0;
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 40px 48px 120px;
+  }
+
+  /* ---------- Typography ---------- */
+  .content h1 {
+    font-size: 30px; margin: 0 0 6px; letter-spacing: -.4px;
+  }
+  .content .lede { color: var(--muted); font-size: 16px; margin: 0 0 8px; }
+  .content h2 {
+    font-size: 22px; margin: 52px 0 14px; padding-top: 10px;
+    letter-spacing: -.2px; border-top: 1px solid var(--line-soft);
+  }
+  .content h3 {
+    font-size: 16px; margin: 30px 0 10px; color: var(--navy);
+  }
+  .content h4 {
+    font-size: 14px; margin: 22px 0 8px; color: var(--navy);
+  }
+  .content p { margin: 12px 0; }
+  .content ul, .content ol { margin: 12px 0; padding-left: 22px; }
+  .content li { margin: 6px 0; }
+  .content code.inline {
+    font-family: var(--mono); font-size: 12.5px;
+    background: #f4f6fb; color: #c026d3;
+    padding: 2px 6px; border-radius: 5px; border: 1px solid var(--line-soft);
+  }
+  .content strong { color: var(--navy); }
+  .anchor { scroll-margin-top: 76px; }
+
+  /* ---------- Code blocks ---------- */
+  .code {
+    position: relative; background: var(--code-bg); color: var(--code-fg);
+    border-radius: var(--radius); padding: 18px 18px 16px; margin: 16px 0;
+    overflow-x: auto; font-family: var(--mono); font-size: 12.8px; line-height: 1.7;
+    box-shadow: 0 1px 2px rgba(10,37,64,.15);
+  }
+  .code .bar {
+    position: absolute; top: 10px; right: 10px;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .code .lang {
+    position: absolute; top: 10px; left: 18px;
+    font-size: 11px; letter-spacing: .6px; text-transform: uppercase;
+    color: var(--code-comment); font-family: var(--mono);
+  }
+  .code pre { margin: 22px 0 0; white-space: pre; }
+  .code .c { color: var(--code-comment); }
+  .code .k { color: var(--code-key); }
+  .code .s { color: var(--code-str); }
+  .code .n { color: var(--code-num); }
+  .copy-btn {
+    background: rgba(255,255,255,.08); color: #cdd8e6;
+    border: 1px solid rgba(255,255,255,.16); border-radius: 6px;
+    font-size: 11px; padding: 3px 9px; cursor: pointer; font-family: var(--sans);
+  }
+  .copy-btn:hover { background: rgba(255,255,255,.16); }
+
+  /* ---------- Tables ---------- */
+  .tbl { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13.5px; }
+  .tbl th, .tbl td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .tbl th { background: var(--bg-side); color: var(--navy); font-weight: 600; font-size: 12.5px; }
+  .tbl tr:last-child td { border-bottom: none; }
+  .tbl td code { font-family: var(--mono); font-size: 12px; color: #c026d3; }
+  .tbl .type { font-family: var(--mono); font-size: 12px; color: var(--accent); white-space: nowrap; }
+  .tbl .req { color: var(--err); font-weight: 600; font-size: 12px; }
+
+  /* ---------- Callouts ---------- */
+  .note, .warn, .tip {
+    border-radius: var(--radius); padding: 14px 16px; margin: 18px 0;
+    font-size: 13.5px; border: 1px solid;
+  }
+  .note { background: #f3f8ff; border-color: #cfe2ff; color: #0b3d91; }
+  .warn { background: #fff7ed; border-color: #fed7aa; color: #92400e; }
+  .tip  { background: #f0fdf4; border-color: #bbf7d0; color: #14532d; }
+  .note b, .warn b, .tip b { color: inherit; }
+
+  .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; vertical-align: middle; }
+  .pill.get { background: #e0f2fe; color: #075985; }
+  .pill.post { background: #dcfce7; color: #166534; }
+  .pill.err { background: #fee2e2; color: #991b1b; }
+
+  .schema-card {
+    border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 4px 0; margin: 16px 0;
+  }
+  .schema-row { display: flex; gap: 14px; padding: 10px 16px; border-bottom: 1px solid var(--line-soft); }
+  .schema-row:last-child { border-bottom: none; }
+  .schema-row .name { flex: 0 0 170px; font-family: var(--mono); font-size: 12.5px; color: var(--navy); }
+  .schema-row .meta { flex: 1; font-size: 13px; }
+  .schema-row .meta .t { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+
+  .endpoint {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--navy); color: #fff; border-radius: var(--radius);
+    padding: 12px 16px; font-family: var(--mono); font-size: 13px; margin: 16px 0;
+  }
+  .endpoint .m { font-weight: 700; }
+  .endpoint .u { color: #9fe6ff; }
+
+  .divider { height: 1px; background: var(--line-soft); margin: 40px 0; }
+
+  footer.page { color: var(--muted); font-size: 12.5px; margin-top: 60px; border-top: 1px solid var(--line); padding-top: 20px; }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 980px) {
+    .sidebar { display: none; }
+    .content { padding: 28px 20px 90px; max-width: 100%; }
+    .topbar .sub { display: none; }
+  }
+</style>
+</head>
+<body data-page-node-id="WjKRzQBqkN4CCFAd2DE7C0">
+
+<header class="topbar" data-page-node-id="zXljr6hPotcsCZHxH7EM0z">
+  <div class="logo" data-page-node-id="VWouCRnsXwOHXrZu2VOFCy"></div>
+  <span class="title" data-page-node-id="ek2CtxeaSvhNbzxx3U2BQ2">Prompt Manager MCP</span>
+  <span class="sub" data-page-node-id="1UoUmLWcIauPvEawNNYPho">接口参考文档</span>
+  <span class="ver" data-page-node-id="4INXG4J87PyLk5HNGhdHRe">v0.1.0</span>
+</header>
+
+<div class="layout" data-page-node-id="BXzGAFeHhnNM5bsFx9E9Fz">
+  <nav class="sidebar" data-page-node-id="N6YyjTeY3IvoGPAmPAjj9E">
+    <div class="group-label" data-page-node-id="7tir8fek8t3vSB9jFslxYV">开始</div>
+    <a href="#overview" data-page-node-id="WchJVbP89p4mVSpvUScKYr">概述</a>
+    <a href="#quickstart" data-page-node-id="2ChbtJ5QkCqXSV9AUUow8z">快速开始</a>
+    <a href="#architecture" data-page-node-id="WVW2RdjaJZY2saYEEhdzoL">架构与数据流</a>
+
+    <div class="group-label" data-page-node-id="L1FELFUSURmAtP4GAGnJt1">工具</div>
+    <a href="#tool-activate" data-page-node-id="cEaAW1CaChlpyJuPG3kXYQ">prompt_manager_activate_prompt</a>
+    <a href="#tool-params" class="sub" data-page-node-id="XF8dYANhjlAIJExmMeJ7TD">请求参数</a>
+    <a href="#tool-output" class="sub" data-page-node-id="gGpivW4Ktv4y3jDEixkABG">返回结构</a>
+    <a href="#tool-examples" class="sub" data-page-node-id="Y8LhH0eFSl66krDDSAmjcm">调用示例</a>
+    <a href="#tool-errors" class="sub" data-page-node-id="8Qhi8G4fCseaU9MPS4vm8H">错误情况</a>
+    <a href="#tool-sideeffects" class="sub" data-page-node-id="IOBS5vGnLwQtZcL7jsnzSk">副作用</a>
+
+    <div class="group-label" data-page-node-id="a0VraE0LGwMxjCflAWXkDW">数据</div>
+    <a href="#data-model" data-page-node-id="iVJGr5mZXWNoNB6uYJwFe3">数据模型</a>
+    <a href="#count-api" data-page-node-id="I755tPw9k8pTKhprHRIwPH">计数接口</a>
+
+    <div class="group-label" data-page-node-id="lbwBnFxq0IDKY60QUxGs44">接入</div>
+    <a href="#config" data-page-node-id="C50Ru3H7RHnlE1sE2vMqoq">客户端配置</a>
+    <a href="#config-cmd" class="sub" data-page-node-id="nb2a1ZAjLESAmppWihsRZs">各智能体命令</a>
+    <a href="#config-locations" class="sub" data-page-node-id="KnjZH4y7eG8xGkrPZEzGKQ">配置落点</a>
+    <a href="#config-manual" class="sub" data-page-node-id="wB9NhtvL2tGO5MiJmwvuHG">手工配置示例</a>
+    <a href="#setup-cli" data-page-node-id="bEBF0ayUHzDaRQ1f89IhVe">setup.mjs 选项</a>
+    <a href="#env" data-page-node-id="m6Iu1Q1Bx4BxyAbGKWM5iL">环境变量</a>
+
+    <div class="group-label" data-page-node-id="cEEEoiG3DeWH8OWfftxQ8K">规范</div>
+    <a href="#contract" data-page-node-id="1zDY2YHnyJv2rppkQEhYw9">行为契约</a>
+    <a href="#errors" data-page-node-id="kUZcwFycxq28uA8vGJmk0y">错误码参考</a>
+  </nav>
+
+  <main class="content" data-page-node-id="0rs5LtoKjfxGOtwlsjDpXx">
+    <h1 class="anchor" id="overview" data-page-node-id="oq4k0LfWTqaGRKUGUB59vD">Prompt Manager MCP 接口参考</h1>
+    <p class="lede" data-page-node-id="SjAsYhwmn8SXJTCBmaPAUk">通过「调取码」从提示词管理库加载卡片正文，并计入复制次数。stdio 模式的 Model Context Protocol 服务器。</p>
+
+    <p data-page-node-id="I3CIHfHhli0T5fWtuany1x">Prompt Manager MCP 是一个只读的 MCP 服务器：它从提示词管理工具落盘的
+      <code class="inline" data-page-node-id="m17Dvdtf6Da5T7S6G5QQoT">data/store.json</code> 中按<strong data-page-node-id="ho65wVNfcwQAWcaRfrBUqP">调取码（code）</strong>查找卡片，
+      把卡片正文作为「仅供模型执行的指令」返回给 MCP 客户端，并可选地把该卡片的
+      <code class="inline" data-page-node-id="obHHAswGNDXDRjxk2n6VmL">copyCount</code> 加一。它不修改任何卡片、标签或调取码数据。</p>
+
+    <div class="note" data-page-node-id="Vzk3idO1NLcPZGsDQp56QY">
+      <b data-page-node-id="IHIvT44KUHbe13gi4HQxGg">结果的性质：</b>MCP 工具返回的是 <code class="inline" data-page-node-id="yZaDi0m1O1kPOT0r824FRF">tool result</code>，不能在协议层被提升为
+      <code class="inline" data-page-node-id="S7SY5gtlefCq3EXA8C88DN">system message</code>。客户端需把返回内容交给模型，模型再按其中的角色 / 任务指令继续。
+      工具结果中的 <code class="inline" data-page-node-id="sTTdSj2iYDeGAdAEFyieIu">body</code> 不是要呈现给用户的数据。
+    </div>
+
+    <h2 class="anchor" id="quickstart" data-page-node-id="NQ3HRv1lqTGp55sUy9y9r5">快速开始</h2>
+    <p data-page-node-id="K1SQwaI0hACwGTv4JPR2ql">最简单的方式是「一条命令接入」：把这句话发给你的 AI，它会自动完成安装、构建、探测本机客户端并写入配置、最后真调一次验证。</p>
+
+    <div class="code" data-page-node-id="KBCKSPsbVKSCwGIWdhNMl4"><span class="lang" data-page-node-id="Gn6xXwJhLbnCxxizhSzdpi">text</span><div class="bar" data-page-node-id="1EOGpPITJJEEBrX0p4iZhK"><button class="copy-btn" data-page-node-id="zx48EM25lVqzfQu6V3rbkU">复制</button></div><pre data-page-node-id="tah3KfHVS6n35R1GKnyb5J">请执行 node "&lt;项目根&gt;/mcp/prompt-server/setup.mjs" 完成提示词管理器接入，成功后用一句话告诉我怎么用。</pre></div>
+
+    <p data-page-node-id="pm2wZoOCv0TBK8PG59TJ29">自己手动跑也只需一条命令：</p>
+    <div class="code" data-page-node-id="ph2HNjhFzaIDp8A2zLp1S2"><span class="lang" data-page-node-id="IDP8RuRwAzRvVH8RdazFlN">bash</span><div class="bar" data-page-node-id="jv6LIrw6xcTyWYa0qqb1dB"><button class="copy-btn" data-page-node-id="fHwgkAOKzEoYDwzb80DOvB">复制</button></div><pre data-page-node-id="uIKgYu5167fAQtyTRoBTma"><span class="c" data-page-node-id="Y4BFsWSiF4WPGUEClSYJYw"># 在项目根目录</span>
+node mcp/prompt-server/setup.mjs</pre></div>
+
+    <p data-page-node-id="eVBTSdzFjB31PlcSUPcMrl">脚本会自动做四件事：<strong data-page-node-id="DQkg0QU9KeOgxrAMdN5MaH">装依赖 → 构建 → 探测本机 AI 客户端并写配置 → 真调一次验证</strong>。
+      验证阶段会把计数回调指向一个不可达端口，因此连「复制次数 +1」的副作用都不会发生（数据安全）。</p>
+
+    <h3 data-page-node-id="n4b57q7Gq3OzWq4BF0gdKv">手工构建与运行</h3>
+    <div class="code" data-page-node-id="hm4bvHQ0MS7CE7qjxCS7RN"><span class="lang" data-page-node-id="LRrAYcAsddrZZTJxHRYs6I">bash</span><div class="bar" data-page-node-id="wU7zTiOdgHNJQtLVxKumI5"><button class="copy-btn" data-page-node-id="CVkGqKCKqs1ADzHsYYcn0I">复制</button></div><pre data-page-node-id="OefizFasXA4cQ790XrQeDi"><span class="c" data-page-node-id="PakBsMBqaGCrSskd0bEVDc"># 进入 MCP 子包</span>
+cd mcp/prompt-server
+npm install
+npm run build        <span class="c" data-page-node-id="Uh31iriSf5geubahqj6mGg"># 产出 dist/index.js</span>
+node dist/index.js   <span class="c" data-page-node-id="93BRyJNNihpwqk5eeg6jYX"># stdio 模式，等待 MCP 客户端连接</span></pre></div>
+
+    <div class="warn" data-page-node-id="8ow0GZnjltbJsfALB5RQHa"><b data-page-node-id="nS9ey9BmxYTz9rzxgMCZjA">首次使用前置条件：</b>需要先启动一次 <code class="inline" data-page-node-id="Q4RCeAiJ0DqUIqA1wx9HX6">npm run dev</code> 并打开页面，
+      让数据落盘到 <code class="inline" data-page-node-id="9JMGYzmwajGCGqQKYzuIHX">data/store.json</code>。MCP 服务本身只依赖这个文件的存在，
+      <strong data-page-node-id="DibBWIh4jBcEjxZUC1dI2Z">不需要 dev 服务处于运行状态</strong>。只有「复制次数 +1」需要 dev 服务在
+      <code class="inline" data-page-node-id="B5cLqvqnorVDqqtqNrHx4N">http://localhost:3100</code>（可用环境变量 <code class="inline" data-page-node-id="m7pN1vs2ll3XRkpE2OsuF3">PROMPT_MANAGER_API_URL</code> 覆盖）。</div>
+
+    <h2 class="anchor" id="architecture" data-page-node-id="xsTBtAPIfAK0wgONMmKsl8">架构与数据流</h2>
+    <p data-page-node-id="wwmkoZAtvBkufVpgqQcvTV">服务器以 stdio 传输运行，通过 JSON-RPC 2.0 与 MCP 客户端通信。</p>
+    <div class="code" data-page-node-id="dxdErEFjtRbfwzayS7DjSA"><span class="lang" data-page-node-id="EN3lKTgf70CTPOWfxsxIxd">text</span><div class="bar" data-page-node-id="4eJFpkPdFRtGCAbgtadUuI"><button class="copy-btn" data-page-node-id="MBLcU6VaO6AejiEGSPonio">复制</button></div><pre data-page-node-id="5jA0f2AxlzkUVdEHe7JJRb">MCP 客户端 (WorkBuddy / Cursor / Claude …)
+      │  stdio + JSON-RPC 2.0
+      ▼
+prompt-manager-mcp-server  (dist/index.js)
+      │  读取
+      ▼
+data/store.json            ← Next.js dev 服务端实时落盘（同步源）
+      │
+      │ 命中后触发（失败静默跳过）
+      ▼
+POST localhost:3100/api/sync/increment-copy   →  card.copyCount + 1</pre></div>
+
+    <div class="note" data-page-node-id="tgY50EGV1hUspoEE8XCCNM">
+      <b data-page-node-id="KPPGFyFOuUHCDLkaTayGFf">运行方式与端口：</b>本 MCP 服务器通过 <strong data-page-node-id="ofnGEMit4EtdIqSuJswChB">stdio（标准输入输出）</strong>与客户端通信，
+      <strong data-page-node-id="bHlOaI0Ob4A8rMkNr33MxG">本身不监听任何 TCP 端口</strong>，因此不会占用或抢占项目的端口。
+      仅在「命中调取」时，它会以 <strong data-page-node-id="J8jZpktSxabQotgsqJOzff">HTTP 客户端</strong>身份向 dev 服务（默认 <code class="inline" data-page-node-id="pqoaIv78TZm82Vpo0PCYza">http://localhost:3100</code>）
+      发送一次计数请求（<code class="inline" data-page-node-id="jOCCzQsspVTvwmWgqvfgFK">POST /api/sync/increment-copy</code>）；该端口是 dev 服务自己的端口，
+      计数失败会静默跳过，不影响卡片读取。可用环境变量 <code class="inline" data-page-node-id="RkyIhFZob0t2FXREnO2AX4">PROMPT_MANAGER_API_URL</code> 覆盖这个地址。
+    </div>
+
+    <table class="tbl" data-page-node-id="nwaRYBHJz61oaEvERoywrB">
+      <thead data-page-node-id="vXPZGkrPnXp4KUtwAteoL8"><tr data-page-node-id="lfFMFFXnfxmI3NwUbpuOCG"><th data-page-node-id="tlrw3qAGaXjBVY0tE4aYs0">项目</th><th data-page-node-id="wi82Z0Pe6EoFNpYrCvzHRE">值</th></tr></thead>
+      <tbody data-page-node-id="gH9i98rXpNSyM8uOwJzKpV">
+        <tr data-page-node-id="CMPfRtSqNgw4P9BbIMoaE0"><td data-page-node-id="KGjFvdrbfS0UOMaK4adv1X">服务器名称</td><td data-page-node-id="ZhsqiOYQOaTbPmq2OOQLrZ"><code data-page-node-id="WgBi9XCS8T6RBJlJodVBNZ">prompt-manager-mcp-server</code></td></tr>
+        <tr data-page-node-id="Mi6tCSt6VZu4CgHkfQTOrz"><td data-page-node-id="MvHFS43hF7imFGOnGtdW8N">版本</td><td data-page-node-id="icsq5rN8mSWAnQr5BJIyj4"><code data-page-node-id="WMhBZRvHz9mqDFfu8DWCfm">0.1.0</code></td></tr>
+        <tr data-page-node-id="HOdGRJcnjlEIbIVmXcszzf"><td data-page-node-id="Z2QeHGEfyQyYDL3GF7Lxik">传输方式</td><td data-page-node-id="wEKnRSzY41fYtUYAGHFDN1">stdio（StdioServerTransport）</td></tr>
+        <tr data-page-node-id="Dtf8r3C1FT5Msqmq5MCBkZ"><td data-page-node-id="yC9hOHjrsTHjblRHemaWSd">协议</td><td data-page-node-id="aaWdF3PCkcRInZ2KBcIAV8">Model Context Protocol（JSON-RPC 2.0）</td></tr>
+        <tr data-page-node-id="omRMI6TP4m9dP2Ru1kem0f"><td data-page-node-id="7r0A51wQK6Z6nKXQO0bGHF">依赖</td><td data-page-node-id="pjdgRVfWG62epo4kNYoBtN"><code data-page-node-id="lZ3TFmG5NNmFsOwZyyLQdn">@modelcontextprotocol/sdk</code> ^1.6.1、<code data-page-node-id="D8z2bqV7EdBSbSbqBypJGi">zod</code> ^3.23.8</td></tr>
+        <tr data-page-node-id="HTCZUxXDIr7nMMLYUMxWGd"><td data-page-node-id="BqK4HNTEvdMKyVn7yTiEAn">Node 要求</td><td data-page-node-id="JcyNDPHW6qBZimWX49ZwDI"><code data-page-node-id="bTJWGTCUOCCT2t1RDxEqR2">&gt;=18</code></td></tr>
+        <tr data-page-node-id="DLSFAHFf8f705QctMN2Jh1"><td data-page-node-id="blp480wq1YCDpoAgDVNbRh">数据源</td><td data-page-node-id="5Z78S3AGS140lO9IMsyRcK"><code data-page-node-id="DPFAzzInCZ4KZOQxAWccTq">&lt;项目根&gt;/data/store.json</code></td></tr>
+      </tbody>
+    </table>
+
+    <h2 class="anchor" id="tool-activate" data-page-node-id="LKFsyAx9Zw7OWmvr7TETsP">工具：prompt_manager_activate_prompt</h2>
+    <p data-page-node-id="fXZAwZgFmhmtzmXbs9RHhe">按调取码加载一张提示词卡片。当用户说「调取 / 激活 / 加载 / 切换到 / 用 … 跑」加调取码时，客户端应立即调用本工具。</p>
+
+    <div class="endpoint" data-page-node-id="0MYKXQxeRfTk9vPPTq0EiQ"><span class="m" data-page-node-id="c6ZQDaikaJ9mEQH7NgHzDz">TOOL</span><span class="u" data-page-node-id="dAPxO1FTd5OmXeKD91Zb8U">prompt_manager_activate_prompt</span></div>
+
+    <h3 class="anchor" id="tool-params" data-page-node-id="OzZz8JTBaYj9TPAeJ0cSAT">请求参数</h3>
+    <p data-page-node-id="DapqT70AX0kmzzy0CCRQE7">输入使用 zod <code class="inline" data-page-node-id="g9bAGCt9S2loDP98voa6Az">.strict()</code> 校验——不接受 schema 之外的额外字段。</p>
+    <table class="tbl" data-page-node-id="GQl2jBc4nA0qGaSczVSCDx">
+      <thead data-page-node-id="7vrwJhk1bx7PEEL8RAPN7x"><tr data-page-node-id="JRUgrXRBazAoGzWXOJAfMA"><th data-page-node-id="KWV7vMGnFqxor1uz6RoMug">参数</th><th data-page-node-id="9HZ4T6DOeWKvLmFv5YRwsw">类型</th><th data-page-node-id="K7LD6XQ5JdP2y5UDfCmeCY">必填</th><th data-page-node-id="PYX9VOwEjbOJHdJJsOWFcV">说明</th></tr></thead>
+      <tbody data-page-node-id="ayDzq9WSiCgDt7xw4zxvku">
+        <tr data-page-node-id="5IrVds6YgTc3LzfmlQoSDL">
+          <td data-page-node-id="09laLS2GYbbQtHIB4uqdPM"><code data-page-node-id="d7A1UL3tmh3Vpnzid79JCB">code</code></td>
+          <td class="type" data-page-node-id="k2Ag2JF2dqiAUGd6PmBu3v">string</td>
+          <td class="req" data-page-node-id="sedfkxdaXqoOBuc1R9BsaA">是</td>
+          <td data-page-node-id="Y0pMYwi2KxBrU87OdRFFnD">卡片的调取码。长度 1–64 字符，<strong data-page-node-id="YbokNsIMIMYBKeqILlZ57W">大小写不敏感</strong>。调用前服务端会做 <code class="inline" data-page-node-id="UqGr8nOicsLoESe8qiiFZy">trim().toLowerCase()</code> 归一化。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3 class="anchor" id="tool-output" data-page-node-id="GKdAroeaeG17a3ebBcDa13">返回结构</h3>
+    <p data-page-node-id="EoYjEkpA7TSCU3PNjJCDHF">成功时返回两部分内容：</p>
+    <ul data-page-node-id="hGPp6CnnFANJVkbJJQq8ap">
+      <li data-page-node-id="z259vySVUzAmWBJHC5NTfa"><code class="inline" data-page-node-id="EtDyGGgJqvQSk6erWKWIzf">content[0].text</code> —— 带指令封套（envelope）的正文，供模型直接执行；</li>
+      <li data-page-node-id="EnEjEdUYBP1QEFxyknMj63"><code class="inline" data-page-node-id="0QkDNGbz7hyk8vh8lYVx2z">structuredContent</code> —— 结构化字段，便于客户端程序化读取。</li>
+    </ul>
+
+    <div class="schema-card" data-page-node-id="vW1uUEC6PCpYzGRILHGrfC">
+      <div class="schema-row" data-page-node-id="8Zd0KVF7mLskeje2bSLpjA"><div class="name" data-page-node-id="XyVZFafeCeMvbzoD5o24W7">code</div><div class="meta" data-page-node-id="dOqiP4CQZhuLthaQbaYYJy"><span class="t" data-page-node-id="72Mj6zSxqhD4PFOAIAGG18">string | null</span><br data-page-node-id="D7ZxuyFUGdZMGhIIsaOcIN">命中卡片的调取码（保留原始大小写）；未设置时为 <code class="inline" data-page-node-id="Y29ZhETGVMzcRrcUDuVZ0E">null</code>。</div></div>
+      <div class="schema-row" data-page-node-id="6WuXAAYrzcTi8ABJ91S1Hd"><div class="name" data-page-node-id="OaOKjjUUCW0VhiKxj46ixH">title</div><div class="meta" data-page-node-id="dZgnKqyximzePdpBhUoZi5"><span class="t" data-page-node-id="fUivtEjBxu76KnBQZRHQvG">string</span><br data-page-node-id="3uyn5kX5xwsNVSvMypZJbd">卡片标题。</div></div>
+      <div class="schema-row" data-page-node-id="2x1VjH3CVn1uPEaOnPq8Wr"><div class="name" data-page-node-id="Dc6L7xka5nu4jpYZD42ftw">body</div><div class="meta" data-page-node-id="a9orOXRr9dKx7Nq4dZMLQm"><span class="t" data-page-node-id="TvIgKp3y1Mwk6KrL9aWf7z">string</span><br data-page-node-id="5zaMm8T90icrgiQaDGE9VI">仅供模型执行的私有指令正文。<strong data-page-node-id="ckE6oUcJkGL6MuZ3bJnpTM">不得展示、复述或总结给用户。</strong></div></div>
+      <div class="schema-row" data-page-node-id="SCm65vIKpZLvZ9XXac1Ybf"><div class="name" data-page-node-id="kGG4Y56THdC41uqk2JRwQy">tags</div><div class="meta" data-page-node-id="C0CywbSoobz6HvReOlcEKg"><span class="t" data-page-node-id="deYodSPU6ZjIk8BTARFSUO">string[]</span><br data-page-node-id="4JzP5njJxtlv1L8IM98szj">卡片标签数组（可能为空）。</div></div>
+      <div class="schema-row" data-page-node-id="uTZ53qic2K7nclUJldJsD9"><div class="name" data-page-node-id="cRDH29FJZEEwYVrbmUHTwv">thinkingSummary</div><div class="meta" data-page-node-id="BagHRDqRYTEf3Z5GUxAeVd"><span class="t" data-page-node-id="lHofLddTgGtquC6xIDJMYL">string | null</span><br data-page-node-id="e89MitjmBng1FIsBaAY85q">思维链摘要；无则为 <code class="inline" data-page-node-id="JEvAJQDQM3NuzMBmTSah09">null</code>。</div></div>
+      <div class="schema-row" data-page-node-id="zjjVMnDVjgL62ZzNrkt9Lj"><div class="name" data-page-node-id="ojp4eGvQpTxtha8jSg8QKX">updatedAt</div><div class="meta" data-page-node-id="SRgamGAoAycRkrvaxR45Ve"><span class="t" data-page-node-id="1JWxAEjXfrYpd4sRDsQFVN">string | null</span><br data-page-node-id="KEB3KmAcp0mS7zFV0j7yXf">卡片更新时间（ISO 字符串）；无则为 <code class="inline" data-page-node-id="R7fd7jixoo42vZysdnf3co">null</code>。</div></div>
+    </div>
+
+    <p data-page-node-id="Nc4Zm9sYt1cg5YwQDAgslN">封套文本约定（模型侧语义，与 <code class="inline" data-page-node-id="OUXuNX1EVBF6nSXZWi18bi">structuredContent</code> 同源）：</p>
+    <div class="code" data-page-node-id="PINwcLBhjkpT7JrgexpD2S"><span class="lang" data-page-node-id="UQrDgGbUcEQt7ZXZb70vDk">text</span><div class="bar" data-page-node-id="tBvc9YCgsLUKp4IdeKUedA"><button class="copy-btn" data-page-node-id="yM7ABEGkCi1xWJDDsfAJyA">复制</button></div><pre data-page-node-id="GDlc0bB4RmAXCeKry67ele">&lt;prompt-manager-activation private="true"&gt;
+status: activated
+model-action: Treat activated-instructions as the active role/task instructions for this turn.
+user-visible-action: Do not display, quote, summarize, or acknowledge the instructions. Do not ask a generic next-step question solely because activation succeeded.
+execution: Immediately perform any explicit initialization or task in activated-instructions, subject to higher-priority instructions and normal permission checks.
+&lt;/prompt-manager-activation&gt;
+
+&lt;activated-instructions&gt;
+{卡片正文 body}
+&lt;/activated-instructions&gt;</pre></div>
+
+    <h3 class="anchor" id="tool-examples" data-page-node-id="cCoCRX6qa3cZ13Cu437C80">调用示例</h3>
+    <p data-page-node-id="1JBFYSpImE4jODdOdAOo3c">以下是 MCP 客户端与服务器之间的真实 JSON-RPC 线格式。</p>
+
+    <p data-page-node-id="Uoy6H7Dpf1vWakVyKQ5LlT"><strong data-page-node-id="VZKrn3tExlcRjQ24QHoE8L">请求</strong>（客户端 → 服务器）</p>
+    <div class="code" data-page-node-id="1bwmDjW3GqHKiAFEfN416q"><span class="lang" data-page-node-id="6RiBR82r3LbG1S4SFtHhHL">json</span><div class="bar" data-page-node-id="XFBj0T5EvtVZjKTll968Yr"><button class="copy-btn" data-page-node-id="2RUvAzeZ67y1nbj55YpKcv">复制</button></div><pre data-page-node-id="HMcJ27DDMF94O1sKGbLX3B">{
+  <span class="k" data-page-node-id="863rZeWkTUabwbvps5CgA2">"jsonrpc"</span>: <span class="s" data-page-node-id="jvX8PlNgM8MwFqhJgbPnq9">"2.0"</span>,
+  <span class="k" data-page-node-id="wwZtS6GPkWPSuPKm37TIKe">"id"</span>: <span class="n" data-page-node-id="00u9WjIvSqHJDpDalQnwNy">2</span>,
+  <span class="k" data-page-node-id="VCAtwi4uxeWmvVx07Ld1Uy">"method"</span>: <span class="s" data-page-node-id="1DFIqaLKDIuo9TdmpwXLjY">"tools/call"</span>,
+  <span class="k" data-page-node-id="J5BQKe9Lqf1AIkWkm383pY">"params"</span>: {
+    <span class="k" data-page-node-id="yg2xafDbs3rmbCZzwjtrvz">"name"</span>: <span class="s" data-page-node-id="ccFXm1LYkZPeIhppRoUPr9">"prompt_manager_activate_prompt"</span>,
+    <span class="k" data-page-node-id="cXbxGaPU9jEwiUsRVP8SpY">"arguments"</span>: { <span class="k" data-page-node-id="c3KBzRkfo4hMhwneaSmPLV">"code"</span>: <span class="s" data-page-node-id="zE4dM1GXXvVScVf5h2gkkd">"jbyj"</span> }
+  }
+}</pre></div>
+
+    <p data-page-node-id="DtMpAwHfLXvVdC7dpGpuvD"><strong data-page-node-id="xMUzv5mfstP0n981oW1D5X">响应</strong>（成功，服务器 → 客户端）</p>
+    <div class="code" data-page-node-id="7eNGjs0qHrocs2PEWn7IjZ"><span class="lang" data-page-node-id="XE0IBG0FF5jgbMGd1b63Qy">json</span><div class="bar" data-page-node-id="6SpA3cMiFwtzKLo6LD8qSf"><button class="copy-btn" data-page-node-id="rRx1ZEXnk98eYpU3S7NW2X">复制</button></div><pre data-page-node-id="DSlClc4OwyU5gI5P9NL8cC">{
+  <span class="k" data-page-node-id="Va5iEhFf2T6Rma1pPM3B4U">"jsonrpc"</span>: <span class="s" data-page-node-id="41A21DyIvJj9dmTcPj7jA1">"2.0"</span>,
+  <span class="k" data-page-node-id="p1YUyWSFOAWHNf7Wbh5DA5">"id"</span>: <span class="n" data-page-node-id="36H8WlTzdvekDKSGUtQCcF">2</span>,
+  <span class="k" data-page-node-id="5oBiWkFEfPBkC1QoPipdb1">"result"</span>: {
+    <span class="k" data-page-node-id="P5paaskHUC4oTz8IUBDJG7">"content"</span>: [
+      { <span class="k" data-page-node-id="Alcvgd0H53za0XEQpcrfvt">"type"</span>: <span class="s" data-page-node-id="Fi22DxlQyYsV05s6DySkDN">"text"</span>, <span class="k" data-page-node-id="YwFcVsK7agvCvZvMLXxHTU">"text"</span>: <span class="s" data-page-node-id="a7B7of4WZPAstoFpqIBbKW">"&lt;prompt-manager-activation …&gt;…&lt;/activated-instructions&gt;"</span> }
+    ],
+    <span class="k" data-page-node-id="kfHXEMzGNBVpYf5oOjECy2">"structuredContent"</span>: {
+      <span class="k" data-page-node-id="R12BXDp1OMzCL6TDapTbpc">"code"</span>: <span class="s" data-page-node-id="k50V4UqBXBAKMzaKIU3zcr">"jbyj"</span>,
+      <span class="k" data-page-node-id="BpTg248SxWx0NyNZxmSYru">"title"</span>: <span class="s" data-page-node-id="N70umIrVn9gsK1UvKuANGf">"会议纪要整理助手"</span>,
+      <span class="k" data-page-node-id="vvQokdkWz6lELatHX77ZSN">"body"</span>: <span class="s" data-page-node-id="Xssg7T8ngWnqKFJxhg3W8A">"你是会议纪要整理助手。收到录音转写后…"</span>,
+      <span class="k" data-page-node-id="uGDIpbpIs3kWWOxwLAWlEC">"tags"</span>: [<span class="s" data-page-node-id="OEkE1aqoDG4cCQXfZTcVGz">"写作"</span>, <span class="s" data-page-node-id="MUU77RFdii9lcWhf3rFwkj">"效率"</span>],
+      <span class="k" data-page-node-id="HBwufO3ji0Ecz5k0YUDHXv">"thinkingSummary"</span>: <span class="k" data-page-node-id="zMmhGCtcpEpzj1QTy9ztJ6">null</span>,
+      <span class="k" data-page-node-id="qaN1clFQpU9Y1OOnfTGIHo">"updatedAt"</span>: <span class="s" data-page-node-id="8dwau761caSRPXtwvbkvpo">"2026-08-29T09:12:44.000Z"</span>
+    },
+    <span class="k" data-page-node-id="CwXOcUfuZIrkbl1mWMQbk8">"isError"</span>: <span class="k" data-page-node-id="xWyOP8CWR2KpmRWqGaUaZk">false</span>
+  }
+}</pre></div>
+
+    <h3 class="anchor" id="tool-errors" data-page-node-id="BvEUYAZoI5qEpcBw7sNH7w">错误情况</h3>
+    <p data-page-node-id="rS7bFDGe0mblSpfU25MYij">所有错误都以 <code class="inline" data-page-node-id="7AGap3czI8c4otVZH2SElO">tool result</code> 形式返回，并带 <code class="inline" data-page-node-id="5bhYkfvKRB7xsaOVjPjwNN">"isError": true</code>，内容在 <code class="inline" data-page-node-id="Bh9BpR0YUqUQPRUKuIyJhc">content[0].text</code> 中以人类可读中文描述（不抛 JSON-RPC 协议错误，不影响连接）。</p>
+    <table class="tbl" data-page-node-id="YHL672C4HHiQ6igNSTPfM3">
+      <thead data-page-node-id="GluD66J9yl0wQOCvwjhSTJ"><tr data-page-node-id="TrBDhpAYeFKIp5oKbiMMNi"><th data-page-node-id="l8einbKvJyLR8YvBm59nwp">触发条件</th><th data-page-node-id="zULgJNej3hWaXefcESDNac">返回文本示例</th></tr></thead>
+      <tbody data-page-node-id="nBGLBgBXDuG6YcgEOYKSGF">
+        <tr data-page-node-id="NAZlRAQKhpq3njLhB41Qv2"><td data-page-node-id="ZCoepsUjBY2li6WwZoehCM">调取码为空</td><td data-page-node-id="oa0q81Sl5dUxUP3kSObkpp"><code data-page-node-id="GydxwNF3Y9FOOXKeJkfTXr">调取码不能为空</code></td></tr>
+        <tr data-page-node-id="A6pf1yWNHA6N8SKjloDSf6"><td data-page-node-id="wPwXAcaRNMwD0f7oOz148Z">未找到该调取码</td><td data-page-node-id="xsWCD90Wp0GGt6QHkGzMYQ"><code data-page-node-id="IAsGinqEJcHUvc8Xq8p5ee">未找到调取码为「xxx」的卡片。请确认调取码拼写，或在提示词管理工具中为该卡片设置调取码后再试。</code></td></tr>
+        <tr data-page-node-id="bSAtV9U3thoSObnYUcDNZJ"><td data-page-node-id="cnBTb9FiCuoo6cDh7VGwYi">读取 store.json 失败</td><td data-page-node-id="EwCa9T9mug3WJEPO73nAsB"><code data-page-node-id="xCyy5XPnuS9wHjZceehRDp">读取提示词库失败：{message}。请确认 dev 服务已启动并保存过数据（data/store.json 存在）。</code></td></tr>
+      </tbody>
+    </table>
+
+    <p data-page-node-id="ebstPZxpL4cb1I6zcJOETT"><strong data-page-node-id="OnYLNJozPi8Zmj4NGoItxK">响应</strong>（未命中，服务器 → 客户端）</p>
+    <div class="code" data-page-node-id="RDHnzn0pl27VVQ4Nc57PZS"><span class="lang" data-page-node-id="si1apttsNmI8g2Ks6mhRNC">json</span><div class="bar" data-page-node-id="bcyVGsAzxIzovCjP2a7yfY"><button class="copy-btn" data-page-node-id="vlIEoT8VfX7SWZxSA7o639">复制</button></div><pre data-page-node-id="NtOwU3ZCTAE9xA5qMp00Fo">{
+  <span class="k" data-page-node-id="GGHLQHv1FJzodzaHVLOVpA">"jsonrpc"</span>: <span class="s" data-page-node-id="Np3rRhLzmVvhYOkWDlXEkZ">"2.0"</span>,
+  <span class="k" data-page-node-id="qYDgOFtcditvsXzzduDF0S">"id"</span>: <span class="n" data-page-node-id="8wf2kbRpr9QGU1kcYM7JFG">2</span>,
+  <span class="k" data-page-node-id="lwNNNGxFDkuTh1x49pedpG">"result"</span>: {
+    <span class="k" data-page-node-id="5FypdT8AuAUNeS7EQrEQA6">"content"</span>: [
+      { <span class="k" data-page-node-id="JQR0BV45xHGAifngJOG5ar">"type"</span>: <span class="s" data-page-node-id="dB6BNC2XdLs6OXHYqrgAkm">"text"</span>, <span class="k" data-page-node-id="whD70EwzXHETLPuxR9LYhb">"text"</span>: <span class="s" data-page-node-id="oA1eJEbfUJSZBNxKCQ0DwS">"未找到调取码为「xxx」的卡片。请确认调取码拼写，或在提示词管理工具中为该卡片设置调取码后再试。"</span> }
+    ],
+    <span class="k" data-page-node-id="fF6khbUe8yR1h5vo5CrFHj">"isError"</span>: <span class="k" data-page-node-id="F87GLqHwGhEsmtswzJZZ18">true</span>
+  }
+}</pre></div>
+
+    <h3 class="anchor" id="tool-sideeffects" data-page-node-id="oDBN7UPoZnvx7ZhzWNwfqh">副作用</h3>
+    <div class="tip" data-page-node-id="qMZErWCg720RHOHijAbN6r">
+      <b data-page-node-id="WHEbLcEGnlWMWoVVRsqVoM">复制次数 +1：</b>每次命中调取，该卡片 <code class="inline" data-page-node-id="DgLl2KlcxnuVwy7fXq8ePZ">copyCount +1</code>（与用户在界面手动复制共用同一总数）。
+      通过 Next.js 计数 API <code class="inline" data-page-node-id="YaeKHksWpHH775g7oNbelF">POST /api/sync/increment-copy</code> 写入，避免跨进程直接改文件导致与内存 <code class="inline" data-page-node-id="uPLFo3ebIHjaGaPqosdFBO">serverStore</code> 不一致。
+      <strong data-page-node-id="gcmTED6IVH3bZwXYKRZEh9">计数失败不影响取卡片</strong>，会静默跳过（dev 服务未启动 / 端口不通时即如此）。
+    </div>
+
+    <h2 class="anchor" id="data-model" data-page-node-id="y5rvX1YrCiVO86e9byVCCB">数据模型</h2>
+    <p data-page-node-id="WAYAfZRqXFzvaMoZ67a8FX">数据源 <code class="inline" data-page-node-id="chExiZrsY90oU7c9nT1ANh">data/store.json</code> 的顶层结构：<code class="inline" data-page-node-id="Z0kn6IimfAFAsPaudaNE7D">{ "cards": [...] }</code>。
+      每个卡片对象（<code class="inline" data-page-node-id="4WZl0kqqxn8XpmXZBSUcsx">StoredCard</code>）字段如下。</p>
+    <table class="tbl" data-page-node-id="cCYgBOeww5c65fmvy4pVfJ">
+      <thead data-page-node-id="nBH1f9xRrhQZQnWU5nJ9Zo"><tr data-page-node-id="hKV2UKZDsjpnrwNuYWWhj4"><th data-page-node-id="wATPa8KTVsfCF2pS0QtxhG">字段</th><th data-page-node-id="wr9wftdhtG1qWDxPsErBFI">类型</th><th data-page-node-id="mPxBPX3DPnCEUPAEsXSzdr">说明</th></tr></thead>
+      <tbody data-page-node-id="BsSb3F7eE8Lp7KFhRGtEKR">
+        <tr data-page-node-id="2F9LDaF1HpfSG8DwDfCeeU"><td data-page-node-id="VnNgSEiHtQbBOWF0fWyEAv"><code data-page-node-id="wD7neB9bjXoTZGeYn0iHzP">id</code></td><td class="type" data-page-node-id="6006CIagRFivmYAjfzi9XE">string</td><td data-page-node-id="ZpODgGGWkkxUMhFSw0C4An">卡片唯一 ID（内部主键，调取不依赖它）。</td></tr>
+        <tr data-page-node-id="jsXvBK3xRQlf8cehfxS4SM"><td data-page-node-id="vJrRnOf8JrpGagzKmRjDGD"><code data-page-node-id="NcmBdInBXT7XKPSlQ6mshd">code</code></td><td class="type" data-page-node-id="IMerGiC7ELSV7cCaUUEDoQ">string | null</td><td data-page-node-id="cFSAuTkuaT4fEKFcltI9oD">调取码。工具按它的小写形式匹配；未设置则无法通过调取码命中。</td></tr>
+        <tr data-page-node-id="WqW8gmSeHIIusB9zt8FLBF"><td data-page-node-id="6qSZ9cCr7kDoTas8h7yHi7"><code data-page-node-id="70bli6WdbtVoWuyMlwkL5m">title</code></td><td class="type" data-page-node-id="D3cSMpLcnNkQoHB840XmRm">string</td><td data-page-node-id="fv5y8KT9YdPyU6DCNv6jks">卡片标题。</td></tr>
+        <tr data-page-node-id="jefKSbqFwieEZOATVdiXoq"><td data-page-node-id="6a0XuzQAI19N9Dypzc8Zjk"><code data-page-node-id="WC5O4Xm8O9o9ghH6y9xhSQ">body</code></td><td class="type" data-page-node-id="F1BAblWeqfwSCm5fSoqS72">string</td><td data-page-node-id="6dIWYLNB24kuCkxvnNPJmq">卡片正文，即加载后交给模型执行的指令。</td></tr>
+        <tr data-page-node-id="ClRiutI8KkZxWiHYHdaeB8"><td data-page-node-id="phr0c7DltKeBrvfrQUW18B"><code data-page-node-id="jKCR7jisyE1tDSipZS6ugl">tags</code></td><td class="type" data-page-node-id="igHmJqwZaSE1izSFOyhUEx">string[]</td><td data-page-node-id="k1OSfv8agjM8TZS8vsQ9pt">标签数组。</td></tr>
+        <tr data-page-node-id="xL8MXYvFn6rDiL6OTGkxrO"><td data-page-node-id="OnE1cttLH2hAMJ2i86QE8C"><code data-page-node-id="FkQ61tLJMXS7XmmaWPqn15">thinkingSummary</code></td><td class="type" data-page-node-id="uHXNOxFImaHJ89gQx8c1US">string | null</td><td data-page-node-id="MUxHGgBRtmTXVlzSFK6cps">思维链摘要。</td></tr>
+        <tr data-page-node-id="aYBeHoxCyn5H0ClIJADELd"><td data-page-node-id="NIwYb7jKo6hhnFmnN7ONpB"><code data-page-node-id="PX8rToGAcOFY9zRJrWB9pe">updatedAt</code></td><td class="type" data-page-node-id="qdo0BuueU7GmjHe6bE0ND2">string | null</td><td data-page-node-id="fmDcwGXhiFEXbWniIdqC0C">更新时间（ISO 字符串）。</td></tr>
+        <tr data-page-node-id="lqIM0DM6B15nPgJUeDms7R"><td data-page-node-id="tIhll7AYQeBkN9CMvT9QzP"><code data-page-node-id="afSf4oxU2gL31mLdWc3zTi">copyCount</code></td><td class="type" data-page-node-id="izpaWNRql0ErSXZeF5NlCN">number</td><td data-page-node-id="ORzoCiIC0WvkUXhpof7kM2">复制次数（命中调取或手动复制时累加；由服务端计数 API 维护）。</td></tr>
+      </tbody>
+    </table>
+
+    <p data-page-node-id="iZyfoN1gjaYDrrZPBEpj20">工具返回的 <code class="inline" data-page-node-id="G4BwA1I52T6r1IFAQAIja7">structuredContent</code> 是上述字段的子集（code / title / body / tags / thinkingSummary / updatedAt），
+      <code class="inline" data-page-node-id="Aa9Ivmirc3CAAa5GP4TEtD">copyCount</code> 与 <code class="inline" data-page-node-id="8wwAJISC2BzxgEr3AwclCt">id</code> 不在返回中暴露。</p>
+
+    <h2 class="anchor" id="count-api" data-page-node-id="M6wWJjtJ2sECt1TyO9z5AF">计数接口</h2>
+    <p data-page-node-id="5ttkHcEoBts5g0pFAAT8XW">这是 MCP 命中后触发的可选副作用端点，由 Next.js dev 服务（默认 <code class="inline" data-page-node-id="CMdCLdEZOuHDrWsCTZAa4d">localhost:3100</code>）提供。</p>
+
+    <div class="endpoint" data-page-node-id="v4sEhGPIXH551hkzg0RZpg"><span class="m" style="color:#86efac" data-page-node-id="SV28RogumlbfiP3QFoLRWL">POST</span><span class="u" data-page-node-id="tpww6RB8yOZExcd5QOsM3J">/api/sync/increment-copy</span></div>
+
+    <p data-page-node-id="2KAXDcfsteqMllSGIk7FEX"><strong data-page-node-id="jdKBE9N9TTPEkoU5uhwRaF">请求体</strong></p>
+    <div class="code" data-page-node-id="MrDqqWHEoG4B8sW3poLLYs"><span class="lang" data-page-node-id="8kruAHdRtT8AfiNsEpEwui">json</span><div class="bar" data-page-node-id="zMjI0e5WaZ97qWNWjGfG3x"><button class="copy-btn" data-page-node-id="aobcdy9E2CuR4E83u9YFya">复制</button></div><pre data-page-node-id="rBmW76Mk3XSbKgLOeGyV68">{ <span class="k" data-page-node-id="t4NPA6uBEamlCNmFVc6pQo">"code"</span>: <span class="s" data-page-node-id="wUpUHFEBDV3NAueWtooHM0">"jbyj"</span> }</pre></div>
+
+    <p data-page-node-id="SmoXGLp3hK6H3ycp73u0OL"><strong data-page-node-id="yKDXwlz9Rx8DEdmN5LZIVN">响应</strong>（成功 200）</p>
+    <div class="code" data-page-node-id="iCBhJgSgxHInBMKbtTaiRy"><span class="lang" data-page-node-id="BOyYBXyND8rbOd8FG6VqsY">json</span><div class="bar" data-page-node-id="014FWR2YFIrcIBE8yO7lnK"><button class="copy-btn" data-page-node-id="OATydXOf3u7xPnHcCA9e6A">复制</button></div><pre data-page-node-id="IXvCDxUxbHiPF2OdKUj9fD">{ <span class="k" data-page-node-id="szhqDrF4bEHMWLQ0tcDRjX">"code"</span>: <span class="s" data-page-node-id="w2p02ArTP7LAgBzmeFcV5i">"jbyj"</span>, <span class="k" data-page-node-id="yBmrtHFafi4FPxVlNjtSZX">"copyCount"</span>: <span class="n" data-page-node-id="u5nZyzSr5DOyA4j6N1LNHC">42</span> }</pre></div>
+
+    <table class="tbl" data-page-node-id="Qu7bKPukFWXhJbWHGoduD8">
+      <thead data-page-node-id="REpAFSsD1CxVfZWdIS0Y7l"><tr data-page-node-id="nsTzfryo0qEsS9O3YM9Jps"><th data-page-node-id="QBjU6z5ksC4Lg9nVTZ7td8">状态码</th><th data-page-node-id="aEjkRJsuKoKGGpNnrS1EyT">含义</th><th data-page-node-id="gSaGj96JQ4xAZUjfb11mqu">响应体</th></tr></thead>
+      <tbody data-page-node-id="TPjGsz6KHlZHGsbCGecFzv">
+        <tr data-page-node-id="HyLFmiIbK8GUPac7Ef8VVG"><td data-page-node-id="1nFALsu6Z6hLZcJai9redm"><span class="pill post" data-page-node-id="GZjJBaf91dOAomLQQryhJL">200</span></td><td data-page-node-id="TXCntVauSrEVv3mNRVMu1i">成功，已 +1</td><td data-page-node-id="atNsThKVuqc7KYUSPNKdDq"><code data-page-node-id="1oJjpcTEcUgo1D2clrrg8n">{ "code", "copyCount" }</code></td></tr>
+        <tr data-page-node-id="XdKwS9FadD9H2R1v3786H0"><td data-page-node-id="ZgXoWNmYp2RtiszXW4cmkg"><span class="pill err" data-page-node-id="qw8r2Y7EqFrd7a0yuoEMCj">400</span></td><td data-page-node-id="9IGhkopNKZsKAEBVHWAA3P">缺少 code 参数</td><td data-page-node-id="nJHtut3ffZ4Zk0nlNIAfXk"><code data-page-node-id="GxtdcGlRo6PvD1KDGdTh1T">{ "error": "缺少 code 参数" }</code></td></tr>
+        <tr data-page-node-id="txatRWyP7pyNhnOmRGmZwm"><td data-page-node-id="6HUgk4pNx6KlpvP32MXQ0Z"><span class="pill err" data-page-node-id="KYZb1a30IFr1qWeFbseH12">404</span></td><td data-page-node-id="u5l7XE5MEPhpn10Fzswih4">未找到该调取码</td><td data-page-node-id="MLV8vfAVR6oYQiCTryHiBD"><code data-page-node-id="d0W0Ni0C9QO0fFMIo5esxX">{ "error": "未找到调取码为 {code} 的卡片" }</code></td></tr>
+        <tr data-page-node-id="2HDVBLh3YEHIMrb9APC8je"><td data-page-node-id="nYOSOaVUcCBE1KSo3EBG1P"><span class="pill err" data-page-node-id="X1t5dnAyfayKpMqaRyHaHi">500</span></td><td data-page-node-id="PMLbXJHxNhNfddYrNQKhiC">服务器错误</td><td data-page-node-id="9H00vlqHM2iOAJd75DWkke"><code data-page-node-id="YknLHfTeVfkFOan8LxIL7U">{ "error": "..." }</code></td></tr>
+      </tbody>
+    </table>
+    <p data-page-node-id="mqiPEZXXFpHgKSjH0u3fUW">调用方（MCP 服务器）对失败做了 <code class="inline" data-page-node-id="ssDWATp1QKww7dUtsihhbD">.catch()</code> 静默处理，因此计数不可达时不影响卡片读取。</p>
+
+    <h2 class="anchor" id="config" data-page-node-id="Ru85CRhopD8ruQMKdscSjW">客户端配置</h2>
+    <p data-page-node-id="ayKPC8cnzUicQ9rQpL52Gd">接入后每个客户端需要做一次「收尾动作」（如点信任 / 重开会话），脚本 <code class="inline" data-page-node-id="0VWHulr9m6qjATzmBx9jYJ">setup.mjs</code> 会在结束时列出。</p>
+
+    <h3 class="anchor" id="config-cmd" data-page-node-id="R4ve03vnUMEzCNcZtQz0LK">按智能体接入（复制即用的命令）</h3>
+    <p data-page-node-id="oYjIvezO61NzkqH24W5A4B">每个智能体的接入命令不同——差别只在 <code class="inline" data-page-node-id="SQ7E1dAx1m9hhe6WJmsVe0">--client</code> 参数；脚本会自动把配置写到<strong data-page-node-id="0GJu2eV9grmeFSaGG2xqfQ">该智能体自己的位置</strong>、用正确的格式。在<strong data-page-node-id="GVXl9X6Hp4VxANpFCdYo0v">项目根目录</strong>运行下面任一条：</p>
+
+    <p data-page-node-id="Ia7qQhi2A32eKgdfRRZTbS"><strong data-page-node-id="ikmofkLWTLODBuqKUnNIwH">一键接入本机所有检测到的客户端</strong></p>
+    <div class="code" data-page-node-id="xVCttyjadRf9jGD7N5rbo5"><span class="lang" data-page-node-id="qhUm7gzyWUjuFEPhLg1kmw">bash</span><div class="bar" data-page-node-id="eaq8Rtl7tbcHYfJG16Bq23"><button class="copy-btn" data-page-node-id="WjKDdGj17sMx2UYSkKVERP">复制</button></div><pre data-page-node-id="PoAYLKZAaHDjzICSZ5SqpV">node mcp/prompt-server/setup.mjs</pre></div>
+
+    <p data-page-node-id="GI9n4Eo4rsCQdqQpBhJkrn">更常用：只接入某一个客户端（避免误改其他客户端配置）。每条都是独立可复制的命令：</p>
+
+    <div class="code" data-page-node-id="5gX8CjNUBB6ifukjEUtD7b"><span class="lang" data-page-node-id="8YxABHkCkPIOlGnN8AXDnM">bash</span><div class="bar" data-page-node-id="c9r6H6wbXWK892NBWUNQjt"><button class="copy-btn" data-page-node-id="85RuNyzeddH7zzn91IVsTZ">复制</button></div><pre data-page-node-id="gsUYMQybFLSB5vAFzP7PDm"><span class="c" data-page-node-id="CVU7ZWGMsDSrwveiNBz1fY"># WorkBuddy</span>
+node mcp/prompt-server/setup.mjs --client=workbuddy</pre></div>
+    <div class="code" data-page-node-id="kXr5JHMQoelHM7NVU7IyjL"><span class="lang" data-page-node-id="KaYFUZO0xtNz3krgK2xtga">bash</span><div class="bar" data-page-node-id="vZcpw0fM88p0QVhIAanQLr"><button class="copy-btn" data-page-node-id="t7enoRXrIof0SaCOzcEVdS">复制</button></div><pre data-page-node-id="3DDRBFDwlzGg6M2gl3THxc"><span class="c" data-page-node-id="EU2ngUhZSYiefpHXrbiN8W"># Codex CLI</span>
+node mcp/prompt-server/setup.mjs --client=codex</pre></div>
+    <div class="code" data-page-node-id="qjSRWZmnsQcDfowheAVTQn"><span class="lang" data-page-node-id="RXqQtD07Q6ED9VCxMwHyTP">bash</span><div class="bar" data-page-node-id="I7xKjA5Z7l8GynmSPnfreC"><button class="copy-btn" data-page-node-id="37KN2gY93cH3JF1xE4XdbS">复制</button></div><pre data-page-node-id="IzZSffaN5iEJHqdx7R9sjk"><span class="c" data-page-node-id="iFldeZ0wLBd8GmJIsFjD5x"># OpenCode</span>
+node mcp/prompt-server/setup.mjs --client=opencode</pre></div>
+    <div class="code" data-page-node-id="4B0zN5r3HC3g1wHqwtKrrq"><span class="lang" data-page-node-id="417AQmLLXNFWkjCFBwJ58k">bash</span><div class="bar" data-page-node-id="vpa78VuFtwoNGAtI3lCBRw"><button class="copy-btn" data-page-node-id="DqYHTDzWpjReBa4C9C7xNJ">复制</button></div><pre data-page-node-id="dfrBx3saMYczJlBRVQ9uRU"><span class="c" data-page-node-id="Lpfp0E8Yh0qT8ygvGl9X4m"># Cursor</span>
+node mcp/prompt-server/setup.mjs --client=cursor</pre></div>
+    <div class="code" data-page-node-id="DIcXYdBU7hEN9sUnkNawvS"><span class="lang" data-page-node-id="9skeyla1PRWfrRkUvpJmRs">bash</span><div class="bar" data-page-node-id="pps2laulkQ6zUGLsUBEEdS"><button class="copy-btn" data-page-node-id="NBPjJzX8J91yvVMMTGabo1">复制</button></div><pre data-page-node-id="vcT1hcgZ5zfeVhUAql2wVk"><span class="c" data-page-node-id="XhCjuwalQ4wVETmfgASb4V"># Claude Desktop</span>
+node mcp/prompt-server/setup.mjs --client=claude</pre></div>
+    <div class="code" data-page-node-id="mEQE7CSGs6dxzmKRxtwsAW"><span class="lang" data-page-node-id="b53e3MjuEUM1peGennuXrd">bash</span><div class="bar" data-page-node-id="FXTKq6Fuurq25nBUOaaXXs"><button class="copy-btn" data-page-node-id="gA4wI1SZ508Nq4szs3wgzZ">复制</button></div><pre data-page-node-id="IJIXdeCQUvexJJuC6eEOY4"><span class="c" data-page-node-id="QCsz4DFnuBC8fJAZ8wFogO"># Cline（VS Code）</span>
+node mcp/prompt-server/setup.mjs --client=cline</pre></div>
+    <div class="code" data-page-node-id="jgDlOE0FGBnpNI5sMDk0YK"><span class="lang" data-page-node-id="Gjpy8Okq9EV6ZhMDp6RIwX">bash</span><div class="bar" data-page-node-id="Zi9MVOES0A0cPDXLCgvh1q"><button class="copy-btn" data-page-node-id="EEfVKkd3yFmYir1lQUYm0n">复制</button></div><pre data-page-node-id="0pUFX4NX4KIeNbmpIuOTN4"><span class="c" data-page-node-id="qMz33eiotOobWPLbWCvf3L"># Windsurf</span>
+node mcp/prompt-server/setup.mjs --client=windsurf</pre></div>
+    <div class="code" data-page-node-id="nqAVdoKtBNeXssUCQMJdSF"><span class="lang" data-page-node-id="0lYCDzenodn12l5X7O3UEb">bash</span><div class="bar" data-page-node-id="mzQ08J5ZESX3PdsWE6OZeJ"><button class="copy-btn" data-page-node-id="GdCcyv0EqQtLabh9RXVIPq">复制</button></div><pre data-page-node-id="VAwlDNZ5SgYttSDIyNEPpS"><span class="c" data-page-node-id="3G1iCxnOqkrEuPd9x753Ma"># Gemini CLI</span>
+node mcp/prompt-server/setup.mjs --client=gemini</pre></div>
+
+    <div class="tip" data-page-node-id="n5rGYCwdiJ2Ecy5h1Y03FF">想自己跑 / 只预览不写文件加 <code class="inline" data-page-node-id="ft615UueHwHnK74ctuoyqx">--dry-run</code>；只体检加 <code class="inline" data-page-node-id="HnZGxOmWLwFbHYwsrkeVZ8">--check</code>；卸载加 <code class="inline" data-page-node-id="xE0rfMwatrOMraFW80psKT">--remove</code>。脚本写配置前会自动备份原文件（<code class="inline" data-page-node-id="VzMaMiMtD1uM8vxKPbgV6y">&lt;文件&gt;.bak-&lt;时间戳&gt;</code>）。</div>
+
+    <h3 class="anchor" id="config-locations" data-page-node-id="tqyU273G7uwDnPL2oQ1Isy">配置落点一览</h3>
+    <p data-page-node-id="0MgSGS3ukJPHtKBDpiE5kv">脚本按客户端把配置写到各自的位置；手工配置时参照下表。</p>
+    <table class="tbl" data-page-node-id="gC1qAsPc4RaVRnvhHbke1D">
+      <thead data-page-node-id="TT2qPTJ8YqWhUjLVqJ9sKd"><tr data-page-node-id="NyovSBgoyJiqfZ0rIDlmwb"><th data-page-node-id="d7lNfqDUdqrQwQTwOwnXdi">客户端</th><th data-page-node-id="uLGVmkxmw8utEYVi7IbxdT">配置位置</th><th data-page-node-id="4lrzZkVbLpVOOwzXCHxj3u">格式</th></tr></thead>
+      <tbody data-page-node-id="2aUniAqETl5joVzRyHUL49">
+        <tr data-page-node-id="4ayRo0TTa3qnQo3KlRtftO"><td data-page-node-id="tbB3UU946g7HuEc2DfnT5C">WorkBuddy</td><td data-page-node-id="4gq7vZ5tR3ie1TuxGMKOtR"><code data-page-node-id="QBRpFVTr2zeB4yDxUX6B8D">~/.workbuddy/mcp.json</code></td><td data-page-node-id="j6CRYjCYKUjbtMEsXmfCeG">JSON</td></tr>
+        <tr data-page-node-id="3X7cAT3LgAys8uencXUo4u"><td data-page-node-id="R9poLp8iskIbD5l5GivaM6">Codex CLI</td><td data-page-node-id="IJ3lTZfR1GcAGsrJgur0OH"><code data-page-node-id="9Y2TcgqLW5B4ckGtUtZ2Kb">~/.codex/config.toml</code></td><td data-page-node-id="Bm9snpo6wFFRNPDlaVlD2S">TOML</td></tr>
+        <tr data-page-node-id="gjgLOSoGxd0tCto9BKJsYG"><td data-page-node-id="LQUsciWeIEty2Oq2tZuLmn">OpenCode</td><td data-page-node-id="nX91h3wxFFQvjDUpoqHVKl"><code data-page-node-id="VAVEZK9q0CrHD6zwOVno0l">~/.config/opencode/opencode.jsonc</code></td><td data-page-node-id="2dvTfFPORrDVyXNerGrRBd">JSONC</td></tr>
+        <tr data-page-node-id="670rUj6fnPpOGI9ZPWUGkP"><td data-page-node-id="O8GD78FhLSmIBU9QsyBUE1">Cursor</td><td data-page-node-id="yBrePsESKEOECKsDjuTa6C"><code data-page-node-id="nr971kkHhgYUjvD8eF03tT">~/.cursor/mcp.json</code></td><td data-page-node-id="WyLIMtGTq8SCN1tIrLSreN">JSON</td></tr>
+        <tr data-page-node-id="Z68d6K9yzwDsIZqYS7BmS4"><td data-page-node-id="KwGS5LVAGqMiptoditcHLQ">Claude Desktop</td><td data-page-node-id="OTGaiuWsJr2nr6yAAjTa3h"><code data-page-node-id="5VLn62Eq8E07Lmvzdl07Sg">~/Library/Application Support/Claude/claude_desktop_config.json</code></td><td data-page-node-id="Tg4Ga6JXjms6Bqay5tuxHt">JSON</td></tr>
+        <tr data-page-node-id="hbUh26YgD9SeTqvqUDDu4s"><td data-page-node-id="HuChNci7AEVJUmQZMecMSE">Cline（VS Code）</td><td data-page-node-id="iMuxZKvDPStEkv6VNf89H6"><code data-page-node-id="MRDAhCTCgF4bs7ExklHqLk">~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json</code></td><td data-page-node-id="rrCHgiE8GmOy8gPMY4Hp2S">JSON</td></tr>
+        <tr data-page-node-id="Z0srdKVeubfajlxv6eCkwF"><td data-page-node-id="SDzJW77drUZyYclSJAmmHf">Windsurf</td><td data-page-node-id="2ktNDGXdWTlxFeDIselGse"><code data-page-node-id="yx4EQx6WvyAdM63pToaNBK">~/.codeium/windsurf/mcp_config.json</code></td><td data-page-node-id="MNGqJkIvCVFPov0NSrPK06">JSON</td></tr>
+        <tr data-page-node-id="BEaFQBFcDdefb0B7rYS9nK"><td data-page-node-id="CvZLYDkYMlFyFBhPlhcjBm">Gemini CLI</td><td data-page-node-id="FvYcEDWhLqryG8wDYvHCsA"><code data-page-node-id="sPT2f8WHwNnPEmHIYLMqem">~/.gemini/settings.json</code></td><td data-page-node-id="UmO0PqxhJzUPJUNhzuUNYz">JSON</td></tr>
+      </tbody>
+    </table>
+
+    <div class="warn" data-page-node-id="W6C5xCLKPUVXstgp69qlly"><b data-page-node-id="xUuhFwMsuHWMWgA43750RS">WorkBuddy 注意：</b>配置文件是 <code class="inline" data-page-node-id="x9mVBtDGwXw0VxiRGVQo0t">~/.workbuddy/mcp.json</code>（<strong data-page-node-id="M7bNbwY9J4RaP69P2xyD9d">不带点</strong>）；
+      带点的 <code class="inline" data-page-node-id="DGKa70rFPAjrTeqCHru4NX">~/.workbuddy/.mcp.json</code> 是 connector-proxy 专用，不要混用。</div>
+
+    <h3 class="anchor" id="config-manual" data-page-node-id="P2yVx8B4ehjl9CYEdkEUaq">各智能体手工配置示例</h3>
+    <p data-page-node-id="K24uPpin8JOXRVGm9eyZ5t">若不用脚本，可把下面片段合并进对应客户端的配置（JSON 客户端放进 <code class="inline" data-page-node-id="k8rJjlkZQTNFIdzPU5sKhP">mcpServers</code> 字段）。<code class="inline" data-page-node-id="WCTvOHhmsftAiOsK0YcDUK">command</code> 建议用<strong data-page-node-id="X8DTzaCXguSa4rO1DdLRDg">绝对路径的 node</strong>，因为 MCP 客户端进程常无 nvm / shell 的 PATH。</p>
+
+    <h4 data-page-node-id="mrFk14krjR8odRMIIWtoGS">WorkBuddy / Cursor / Claude / Cline / Windsurf / Gemini（JSON）</h4>
+    <div class="code" data-page-node-id="BH2DNqwKkXVkxxfjAChbHB"><span class="lang" data-page-node-id="5ys7jUvNXmD8WHOg3ojl9k">json</span><div class="bar" data-page-node-id="os8FIrJ8eIH5kQe74pqZ7F"><button class="copy-btn" data-page-node-id="MEfVxP2x6IVUoUAetN2T6M">复制</button></div><pre data-page-node-id="52ffQdqpRsgdZm0ZpIkU5t">{
+  <span class="k" data-page-node-id="feMQ5qICpg289zBoSRaAIR">"mcpServers"</span>: {
+    <span class="k" data-page-node-id="qICNm745QL6EoGiKaAI8yZ">"prompt-manager"</span>: {
+      <span class="k" data-page-node-id="97n6S3mvZmqVfGLiy3o8TO">"command"</span>: <span class="s" data-page-node-id="SlRIU1c2GXjVoB0Ud0QeVB">"/绝对路径/node"</span>,
+      <span class="k" data-page-node-id="YDSRDOZ8TNnsFkHPq9E16E">"args"</span>: [<span class="s" data-page-node-id="jVkUTjjcvFCHJO0Bqw3USm">"/绝对路径/项目根/mcp/prompt-server/dist/index.js"</span>]
+    }
+  }
+}</pre></div>
+    <div class="tip" data-page-node-id="NDjTd8oHEBPhJcoIcFtt3u">建议 <code class="inline" data-page-node-id="rBF19Xb4mfCqaBTpOnLQvM">command</code> 用<strong data-page-node-id="gXJGXNo1o4zs5Q3qKqgtNe">绝对路径的 node</strong>（如 <code class="inline" data-page-node-id="SQTYu9kPUEL3SBeFQS5rby">process.execPath</code> 输出），
+      因为 MCP 客户端进程常无 nvm / shell 的 PATH，裸 <code class="inline" data-page-node-id="yPFKFVnnn7VPkU1kmGiuGK">node</code> 会报找不到命令。脚本自动写入时即采用绝对路径。</div>
+
+    <h4 data-page-node-id="uvcVm7WJYma1CJNsVYjiKw">Codex CLI（TOML）</h4>
+    <div class="code" data-page-node-id="Keo3hAaiHlhY01oGZ01CCB"><span class="lang" data-page-node-id="zuedPeIGuCO3hEZRsrVbYB">toml</span><div class="bar" data-page-node-id="2SHv4IV5Bqre8sc8mOXcWZ"><button class="copy-btn" data-page-node-id="BIx7NtS4e3WC9cUsBKpsXZ">复制</button></div><pre data-page-node-id="fEJCt7qDCvjz8ydnOhEZkY"><span class="k" data-page-node-id="a39Rt3a6KIMP2yopCak9Xs">[mcp_servers.prompt-manager]</span>
+command = <span class="s" data-page-node-id="QjjYGXPWtczI4SORsv5sDP">"/绝对路径/node"</span>
+args = [<span class="s" data-page-node-id="5oekyhi3dyWR95QDZXKvbr">"/绝对路径/项目根/mcp/prompt-server/dist/index.js"</span>]</pre></div>
+
+    <h4 data-page-node-id="ohliL5rNVPw9Fg5H412D6f">OpenCode（JSONC）</h4>
+    <div class="code" data-page-node-id="3sFDuknyrQjzxDvcaBWu7q"><span class="lang" data-page-node-id="URDztC2K9wFLxQp4teiekl">jsonc</span><div class="bar" data-page-node-id="SmjHEOZGycaEnM1Crip5t1"><button class="copy-btn" data-page-node-id="rGmW0yGUQEdg3z6v3DleZj">复制</button></div><pre data-page-node-id="XFyMVCmxdPrRy1yjW2nROH">{
+  <span class="k" data-page-node-id="N9pTiRSxByfAN5zwL1Jz4z">"mcp"</span>: {
+    <span class="k" data-page-node-id="PFcAJxbuWThLPBvk718uT2">"prompt-manager"</span>: {
+      <span class="k" data-page-node-id="YOmUbH6t9OzzLADvPOwPoS">"type"</span>: <span class="s" data-page-node-id="Om0jmkObkuOtz49FeCAzb3">"local"</span>,
+      <span class="k" data-page-node-id="4sY0oCuOFstdkvySNEbqYN">"command"</span>: [<span class="s" data-page-node-id="nWg0ib4HdjHLoIpbHD9XGF">"/绝对路径/node"</span>, <span class="s" data-page-node-id="uGMKndpmkqyKCO9Iko0ZpX">"/绝对路径/项目根/mcp/prompt-server/dist/index.js"</span>],
+      <span class="k" data-page-node-id="JKuiomoklXahIZT8gGPyLE">"enabled"</span>: <span class="k" data-page-node-id="a8qfgv5A1Uq2B4uHVRcRFU">true</span>
+    }
+  }
+}</pre></div>
+
+    <h2 class="anchor" id="setup-cli" data-page-node-id="ucrLmVdovYtm9JDZdNkNYS">setup.mjs 选项</h2>
+    <p data-page-node-id="st3mfF2DKoHNpvBqCQ07WM">一键接入脚本支持以下命令行选项（可组合）。</p>
+    <table class="tbl" data-page-node-id="AHvdAXv1h1uQsoLBrZCsDT">
+      <thead data-page-node-id="936af6oB8qnNZFBBrVzYkI"><tr data-page-node-id="lQD47ZyH99NLQpUn6Cwi5V"><th data-page-node-id="HZHr5XB9xeIGYYNslFeAnw">选项</th><th data-page-node-id="kiFQIti3QJjAmUhHTLD8QD">作用</th></tr></thead>
+      <tbody data-page-node-id="5VQGdj7DcI9YYRBRpnrM6D">
+        <tr data-page-node-id="lCrO6gWKrQT2375DV0zZqO"><td data-page-node-id="3pM4LA19cNiuZXYFL9HPSH"><code data-page-node-id="lvud7HGASyFBVidkSP4XPJ">--dry-run</code></td><td data-page-node-id="WX2uRTbio3jH4GIi2p6vr5">只预览会改什么，不写任何文件。</td></tr>
+        <tr data-page-node-id="1o1nMDxDmcvNJFLgq43CG0"><td data-page-node-id="xSgPnTqf3Hx8CeBvpttbRc"><code data-page-node-id="RPmd0c8Xmu29HiM49tFYcy">--check</code></td><td data-page-node-id="qmcmHISmdq2HS8ODHC7Pa3">只体检（构建状态 + 配置状态 + 连通性），不写配置。</td></tr>
+        <tr data-page-node-id="Ts7xaMLuJXEsn5uwZ38sOB"><td data-page-node-id="Bmg61HL82iz1TaFb6pP8qx"><code data-page-node-id="EAGjj65UHqepAz6OaquMTh">--client=&lt;id&gt;</code></td><td data-page-node-id="YlvDgt6zmtUExKxXEkKN12">只接入指定客户端，逗号分隔。可选：<code data-page-node-id="vKWQjFXXdMJ9VGdhnZBhMe">workbuddy</code>、<code data-page-node-id="o6F2BPBXmAs898HAiKPBA5">codex</code>、<code data-page-node-id="aRx0S7DULwjCYN6cKUEBGc">opencode</code>、<code data-page-node-id="ZpENG0OmSKvhM0J0q7e4qy">cursor</code>、<code data-page-node-id="8V6fhv2SBGWUR2vrI6IaxQ">claude</code>、<code data-page-node-id="UbSCZPheeGGYJHnzVhqbTa">cline</code>、<code data-page-node-id="a3EWtS5qfFGrV8GtP4B6eV">windsurf</code>、<code data-page-node-id="mcSSfBq4SBx21DsMAS2hLj">gemini</code>。</td></tr>
+        <tr data-page-node-id="UboQ9zv6gVSdkByaGJsrna"><td data-page-node-id="Ay0G3yqKzgCOFAGMsE9VF5"><code data-page-node-id="mFpbuSwroUEqMVMruFEOZB">--remove</code></td><td data-page-node-id="CTHtEMXgbKVTWs7iDaDgCJ">从各客户端配置中移除本 MCP。</td></tr>
+        <tr data-page-node-id="06GadybkN5srHv821lFr5G"><td data-page-node-id="CwfZuO6FbPrHuQDEHSEs8W"><code data-page-node-id="RVMAAm49O5qsGr9aQxbpNa">--json</code></td><td data-page-node-id="n5HQto3irhRXctxjtcUVSa">机器可读输出，便于 AI 解析。</td></tr>
+      </tbody>
+    </table>
+    <p data-page-node-id="2mBuqlj326Upbskk7j5eAW">写配置前脚本会自动备份原文件（<code class="inline" data-page-node-id="0PFHY2O94SiBbgkyfhrC96">&lt;文件&gt;.bak-&lt;时间戳&gt;</code>）。</p>
+
+    <h2 class="anchor" id="env" data-page-node-id="gXXdXhtlDQxNRUJO2EDwDB">环境变量</h2>
+    <table class="tbl" data-page-node-id="TB75UzedmcbPgLXL5hsNQB">
+      <thead data-page-node-id="4FpNmZm3qvmtoC4ZBfQYQ3"><tr data-page-node-id="QOE3830slnkC3t4WGcZPHm"><th data-page-node-id="Ai8mYsvzM7akZW4sQKVZxb">变量</th><th data-page-node-id="n4JnlGKYWCjb8dwxX6eAzq">默认</th><th data-page-node-id="ExLeEB1p70wEvbvczpY11V">说明</th></tr></thead>
+      <tbody data-page-node-id="6ql26i8d6DEKhYf8mktG6J">
+        <tr data-page-node-id="28b4zCSpvWDXBnx5nCRdbN"><td data-page-node-id="Lu7SfQUZ5VewBur7IF4kQv"><code data-page-node-id="g1QuHGMrygPb4JaSPZVFgP">PROMPT_MANAGER_API_URL</code></td><td data-page-node-id="nsXHrl5bUAEPKnjiVqEXnA"><code data-page-node-id="sFtBgEjGEJ93PEQWO70bUz">http://localhost:3100</code></td><td data-page-node-id="pOIzLeXuD72Vae9lxb7bMp">覆盖计数 API 的基础地址。当 dev 服务改端口或部署到其他主机时设置。</td></tr>
+      </tbody>
+    </table>
+
+    <h2 class="anchor" id="contract" data-page-node-id="OIRq12j4TRwxpqmeGGjDQ7">行为契约</h2>
+    <ul data-page-node-id="U80z3GVVsIY3sAm5IEyewv">
+      <li data-page-node-id="fENJTlxb6CtCPiLH2nFUkH"><strong data-page-node-id="Hqzh0bxraQynHiSW6k2Cyr">只读：</strong>工具只读取 <code class="inline" data-page-node-id="UbKnIVgzo8ZghZDmQN0Xtt">store.json</code>，不修改任何卡片、标签、调取码或数据文件。<code class="inline" data-page-node-id="0fyQ6qZ2njuHG0K2GHHkMy">setup.mjs</code> 同样只读提示词库。</li>
+      <li data-page-node-id="9I3h3iBj1HDbkkeeJBv36s"><strong data-page-node-id="hFzQ1yhWULm0yUTLoDnOqf">大小写不敏感匹配：</strong>调取码在匹配前统一 <code class="inline" data-page-node-id="CKRClYHHsmn6KogwPaXeBA">trim().toLowerCase()</code>。</li>
+      <li data-page-node-id="No4DblT4KrEXhrYIzlnQvn"><strong data-page-node-id="mmCsfHvhrc7AhiIzBTESvB">正文私有：</strong><code class="inline" data-page-node-id="ui82HLDPt3zEzam2nrwfNe">body</code> 是仅供模型执行的指令，客户端/模型不得向用户展示、复述或总结；不得仅因激活成功而追问「下一步做什么」。</li>
+      <li data-page-node-id="bV05zH5o5h6tvDKBbPou7M"><strong data-page-node-id="NO24eou4KDpGz2XpN8bEM4">非 system message：</strong>返回的是 <code class="inline" data-page-node-id="DJ7WtMHhliYtwuOmaFEbji">tool result</code>，不能协议级提升为 system prompt；需客户端把结果交给模型才生效。</li>
+      <li data-page-node-id="nKLXtMHDPOL0ME66ozYJpO"><strong data-page-node-id="kRr2Qiy8DF9OItXtM7w7FZ">幂等与计数：</strong>每次命中都会触发一次 <code class="inline" data-page-node-id="jjFhYTo575fPkxwNrEMFNI">copyCount +1</code>（不幂等）；计数失败不影响读取。</li>
+      <li data-page-node-id="3dxJlMWvKIXv0P58VakU0N"><strong data-page-node-id="nMxQLLdUvzUGNDQcY9gQtF">严格输入：</strong>输入 schema 为 <code class="inline" data-page-node-id="MdVPDBC0Ne3UdfJMIFqfu7">.strict()</code>，多余字段会被拒绝。</li>
+    </ul>
+
+    <h2 class="anchor" id="errors" data-page-node-id="Z4zST82D2AWCtCtA4peObY">错误码参考</h2>
+    <table class="tbl" data-page-node-id="oYxDMOMumD42tzAMIVL1iz">
+      <thead data-page-node-id="cJoYAuUS0EftWAP8XOd7ZC"><tr data-page-node-id="DiGmny7y18j7HovmqOrA92"><th data-page-node-id="mJGEIDn2yLqcE3z5XoTNph">层级</th><th data-page-node-id="aBLISko2lbtEm7AWK8kLA6">条件</th><th data-page-node-id="NbCIT3IDlneVzTf5hF6FC8">表现</th></tr></thead>
+      <tbody data-page-node-id="yWfwGnEx8eieP5rbHpbsVj">
+        <tr data-page-node-id="LMJBGBEULFJkaGSlMe87HQ"><td data-page-node-id="2jabWuqNEKAqtQo7E2tQGZ">MCP 工具</td><td data-page-node-id="YsG2lWgW1N91MPOIvpO8RY">调取码为空</td><td data-page-node-id="7YXE3lfJiAFVPp0vHHFkBp"><code data-page-node-id="N5QgikgMiETdXgG6Eysg1Q">isError:true</code> + 文本「调取码不能为空」</td></tr>
+        <tr data-page-node-id="UZ000ddYq1pMlg7XDktoH9"><td data-page-node-id="WnW5jYFkSRukSSV8nj77BI">MCP 工具</td><td data-page-node-id="wFeMRaHib5o8GreUvOI4uI">调取码未命中</td><td data-page-node-id="UPlJkEkUKQlKqwhq51Qqfh"><code data-page-node-id="DWJCep6fsC0MaUE7cAhtWH">isError:true</code> + 文本提示确认拼写 / 设置调取码</td></tr>
+        <tr data-page-node-id="xrXQDtOEJng8CeZnnmvPB7"><td data-page-node-id="sIiZchYM7diiDFqXgFaeiU">MCP 工具</td><td data-page-node-id="p5tH5o1TI8YjCEfHVryZRw">store.json 读取失败</td><td data-page-node-id="AWiIeJgyUV1BmtbQM7iA7s"><code data-page-node-id="NcnsUXwliuKI88kH99EfG8">isError:true</code> + 文本提示确认数据已落盘</td></tr>
+        <tr data-page-node-id="mBsqNdg7GmtkmCeZlJ5NL0"><td data-page-node-id="Bj5tNxk3DBZz1lrWd5DODd">计数 API</td><td data-page-node-id="Y7BJF1jyZzr7uxWVhUp6rc">缺 code</td><td data-page-node-id="JJxJDCDiOrd2xO8Lu6SMMm">HTTP 400 <code data-page-node-id="nfXtlcis4b26FnghzyfzwL">{ "error": "缺少 code 参数" }</code></td></tr>
+        <tr data-page-node-id="BRCBOgM0W9JVi1xpEhjBPa"><td data-page-node-id="98qbgAjFDaWmiijHOGasNo">计数 API</td><td data-page-node-id="PFGAHooCokF6m9yNrfFKx5">code 未命中</td><td data-page-node-id="dRYGjBXnDA7YIHhRErDQBn">HTTP 404 <code data-page-node-id="UxGkkadKxbfHy7EUuJL66O">{ "error": "未找到调取码为 {code} 的卡片" }</code></td></tr>
+        <tr data-page-node-id="EDmMCeCxUx4OD89YTXOC01"><td data-page-node-id="c7C65WjqyrejYILOgpdIIs">计数 API</td><td data-page-node-id="Y3GBm5GZ915PAXXZXMG8Uw">服务端异常</td><td data-page-node-id="WiwQjVruFzwEc7rGA5G62M">HTTP 500 <code data-page-node-id="cRq2BEJYVarzVbhkJcy18k">{ "error": "..." }</code></td></tr>
+      </tbody>
+    </table>
+
+    <div class="divider" data-page-node-id="EgFmHf1vgQFSbH9sKtutUY"></div>
+    <footer class="page" data-page-node-id="VoA9JDdMP7Jscm5oZFsmVo">
+      本文档依据 <code class="inline" data-page-node-id="XRQ4HgK9JXdXsm5ZzHsQBR">mcp/prompt-server/src/index.ts</code>（v0.1.0）、<code class="inline" data-page-node-id="0Gv4yhWqgBsVqrrXHKXvWB">setup.mjs</code> 与
+      <code class="inline" data-page-node-id="waCI8LLbACMtNkUhYznOdB">src/app/api/sync/increment-copy/route.ts</code> 整理，面向开发者对接提示词管理器 MCP。
+      单文件 HTML，无外部依赖。
+    </footer>
+  </main>
+</div>
+
+<script>
+  // 复制按钮
+  document.querySelectorAll('.code').forEach(function (block) {
+    var btn = block.querySelector('.copy-btn');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      var pre = block.querySelector('pre');
+      var text = pre ? pre.innerText : block.innerText;
+      navigator.clipboard.writeText(text).then(function () {
+        var old = btn.textContent;
+        btn.textContent = '已复制';
+        setTimeout(function () { btn.textContent = old; }, 1200);
+      });
+    });
+  });
+
+  // 侧边栏滚动高亮
+  var links = Array.prototype.slice.call(document.querySelectorAll('.sidebar a[href^="#"]'));
+  var map = {};
+  links.forEach(function (a) {
+    var id = a.getAttribute('href').slice(1);
+    var el = document.getElementById(id);
+    if (el) map[id] = a;
+  });
+  var observer = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (e.isIntersecting) {
+        links.forEach(function (l) { l.classList.remove('active'); });
+        var a = map[e.target.id];
+        if (a) a.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-70px 0px -75% 0px', threshold: 0 });
+  Object.keys(map).forEach(function (id) {
+    observer.observe(document.getElementById(id));
+  });
+</script>
+</body>
+</html>

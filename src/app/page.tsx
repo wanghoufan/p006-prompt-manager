@@ -704,21 +704,50 @@ export default function Home() {
 
   // ===== 标签实体 CRUD（ID 解耦，绝不删 Prompt）=====
 
-  /** 创建标签（管理区 + 编辑时「创建新标签」）。返回 {ok,error} 供 TagPanel 显示校验错误。 */
-  function handleCreateTag(name: string, parentId: string | null): { ok: boolean; error?: string } {
+  /**
+   * 创建标签（管理区 + 编辑时「创建新标签」）。返回 {ok,error} 供 TagPanel 显示校验错误。
+   * 支持路径创建（Bug #2 修复）：名称含「/」时按「父/子/孙」逐级建立层级，叶子为最终创建的目标标签，
+   * 与 resolveTagIds 的路径解析保持一致；createdRootId 为路径根节点 id（供 TagPanel 自动展开显示层级）。
+   */
+  function handleCreateTag(
+    name: string,
+    parentId: string | null,
+  ): { ok: boolean; error?: string; createdRootId?: string } {
     const trimmed = name.trim()
     if (!trimmed) return { ok: false, error: '标签名称不能为空' }
     if (trimmed.length > 50) return { ok: false, error: '标签名称不超过 50 字' }
-    if (!isNameUnique(tags, parentId, trimmed)) return { ok: false, error: '同一父级下已存在同名标签' }
     // 新建标签无 tagId，不存在成环可能；只需校验父级实体存在（assertNoCycle 用于移动/已有标签）
     if (parentId !== null && !tags.some((t) => t.id === parentId)) {
       return { ok: false, error: '父标签不存在' }
     }
+    const path = trimmed.includes('/') ? trimmed.split('/').map((p) => p.trim()).filter(Boolean) : [trimmed]
+    if (path.length === 0) return { ok: false, error: '标签名称不能为空' }
+    if (path.some((p) => p.length > 50)) return { ok: false, error: '标签名称不超过 50 字' }
+
     const snapshot = captureTagSnapshot()
-    const [nextTags, tag] = createTag(tags, trimmed, parentId)
+    let nextTags = tags
+    let cur: string | null = parentId
+    let rootId: string | undefined
+    let created = 0
+    for (const part of path) {
+      const existing = nextTags.find((t) => t.parent_id === cur && t.name === part)
+      if (existing) {
+        if (rootId === undefined) rootId = existing.id
+        cur = existing.id
+        continue
+      }
+      const [updated, tag] = createTag(nextTags, part, cur)
+      nextTags = updated
+      created++
+      if (rootId === undefined) rootId = tag.id
+      cur = tag.id
+    }
+    if (created === 0) {
+      return { ok: false, error: '同一父级下已存在同名标签' }
+    }
     setTags(nextTags)
-    notifyWithUndo(`已创建标签「${tag.name}」`, () => restoreTagSnapshot(snapshot))
-    return { ok: true }
+    notifyWithUndo(`已创建标签「${path.join('/')}」`, () => restoreTagSnapshot(snapshot))
+    return { ok: true, createdRootId: rootId }
   }
 
   /** 全局重命名标签（交接 §7）：仅改 Tag.name，Prompt 与关系不动。 */

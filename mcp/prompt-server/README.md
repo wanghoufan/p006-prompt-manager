@@ -22,7 +22,7 @@ node mcp/prompt-server/setup.mjs
 |---|---|
 | `--dry-run` | 只预览会改什么，不写文件 |
 | `--check` | 只体检（构建状态 + 配置状态 + 连通性），不写配置 |
-| `--client=<id>` | 只接入指定客户端，逗号分隔。可选：`workbuddy`、`codex`、`cursor`、`claude`、`cline`、`windsurf`、`gemini` |
+| `--client=<id>` | 只接入指定客户端，逗号分隔。可选：`workbuddy`、`codex`、`opencode`、`cursor`、`claude`、`cline`、`windsurf`、`gemini` |
 | `--remove` | 从各客户端配置中移除 |
 | `--json` | 机器可读输出，便于 AI 解析 |
 
@@ -63,6 +63,7 @@ node dist/index.js   # stdio 模式，等待 MCP 客户端连接
 |---|---|---|
 | WorkBuddy | `~/.workbuddy/mcp.json` → `mcpServers` | JSON |
 | Codex CLI | `~/.codex/config.toml` → `[mcp_servers.xxx]` | TOML |
+| OpenCode | `~/.config/opencode/opencode.jsonc` → `mcp` | JSONC |
 | Cursor | `~/.cursor/mcp.json` → `mcpServers` | JSON |
 | Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` → `mcpServers` | JSON |
 | Cline（VS Code） | `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` → `mcpServers` | JSON |
