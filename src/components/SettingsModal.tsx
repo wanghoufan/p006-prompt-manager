@@ -24,6 +24,8 @@ const SETUP_AGENT_INSTRUCTION = `请执行 ${SETUP_COMMAND} 完成提示词管�
  */
 const SETUP_CLIENTS = 'WorkBuddy · Codex · Cursor · Claude Desktop · Cline · Windsurf · Gemini CLI'
 
+const CONNECTION_TEST_TIMEOUT_MS = 35_000
+
 /**
  * 通用AI接口的服务商注册表（Phase 2）。
  * 模型列表固定在客户端；仅 OpenRouter 支持自定义模型名称。
@@ -183,6 +185,8 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
   async function testConnection() {
     setIsTestingConnection(true)
     setConnectionTest(null)
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), CONNECTION_TEST_TIMEOUT_MS)
     const baseUrl = settings.aiBaseUrl || aiService?.defaultBaseUrl || ''
     const apiKey = keyDraft || settings.aiApiKey
     const headers: Record<string, string> = {
@@ -197,9 +201,10 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
       const res = await fetch('/api/ai/summarize-thinking', {
         method: 'POST',
         headers,
+        signal: controller.signal,
         body: JSON.stringify({
           body: '连接测试',
-          customPrompt: '请仅回复“连接成功”。内容：{body}',
+          prompt: '请仅回复“连接成功”。内容：{body}',
         }),
       })
       const data = (await res.json().catch(() => ({}))) as { error?: unknown }
@@ -210,9 +215,15 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
     } catch (e) {
       setConnectionTest({
         success: false,
-        message: e instanceof Error ? e.message : '连接测试失败，请检查配置后重试',
+        message:
+          controller.signal.aborted
+            ? '连接测试超时（35 秒），请稍后重试或更换模型'
+            : e instanceof Error
+              ? e.message
+              : '连接测试失败，请检查配置后重试',
       })
     } finally {
+      window.clearTimeout(timeout)
       setIsTestingConnection(false)
     }
   }
@@ -442,6 +453,18 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
                   </option>
                 ))}
               </select>
+            )}
+            {settings.aiProvider === 'opencode' && (
+              <p className="mt-1.5 text-xs leading-relaxed text-muted">
+                <a
+                  href="https://opencode.ai/docs/zh-cn/zen"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-gold underline underline-offset-2 hover:text-paper"
+                >
+                  查看当前可用的免费模型
+                </a>
+              </p>
             )}
             <label htmlFor="settings-ai-base-url" className="mt-3 block text-xs text-muted">
               Base URL（可选，留空使用默认）

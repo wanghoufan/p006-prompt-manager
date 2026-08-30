@@ -7,6 +7,8 @@ export const OPENCODE_DEFAULT_BASE_URL = (
 
 export const OPENCODE_GO_DEFAULT_BASE_URL = 'https://opencode.ai/zen/go/v1'
 
+const OPENCODE_REQUEST_TIMEOUT_MS = 30_000
+
 type EndpointType = 'responses' | 'messages' | 'chat' | 'google'
 
 export const FREE_ENDPOINTS: Record<string, Extract<EndpointType, 'responses' | 'chat'>> = {
@@ -77,7 +79,13 @@ function getGoogleContents(messages: ChatMessage[], system: string) {
 }
 
 function firstNonEmptyString(...values: unknown[]): string | undefined {
-  return values.find((value): value is string => typeof value === 'string' && Boolean(value.trim()))
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value
+    if (value && typeof value === 'object' && 'value' in value) {
+      const nested = (value as { value?: unknown }).value
+      if (typeof nested === 'string' && nested.trim()) return nested
+    }
+  }
 }
 
 function getResponsesContent(data: unknown): string | undefined {
@@ -87,6 +95,7 @@ function getResponsesContent(data: unknown): string | undefined {
     reasoning?: unknown
     output?: {
       type?: string
+      text?: unknown
       reasoning_content?: unknown
       reasoning?: unknown
       summary?: { text?: unknown }[]
@@ -103,7 +112,8 @@ function getResponsesContent(data: unknown): string | undefined {
 
   return firstNonEmptyString(
     response.output_text,
-    ...parts.filter((part) => part.type === 'output_text').map((part) => part.text),
+    ...outputs.map((output) => output.text),
+    ...parts.map((part) => part.text),
     response.reasoning_content,
     response.reasoning,
     ...outputs.flatMap((output) => [output.reasoning_content, output.reasoning]),
@@ -171,9 +181,10 @@ export class OpenCodeAdapter extends BaseAIAdapter {
                 ...(options.maxTokens ? { max_tokens: options.maxTokens } : {}),
               }
 
-    let res: Response
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), OPENCODE_REQUEST_TIMEOUT_MS)
     try {
-      res = await fetch(endpoint, {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
@@ -181,29 +192,39 @@ export class OpenCodeAdapter extends BaseAIAdapter {
         },
         body: JSON.stringify(body),
         cache: 'no-store',
+        signal: controller.signal,
       })
-    } catch {
+
+      if (!res.ok) {
+        throw new AiError(`OpenCode 接口返回错误（${res.status}）：${(await res.text()).slice(0, 200)}`)
+      }
+
+      const data: unknown = await res.json()
+      const content =
+        endpointType === 'responses'
+          ? getResponsesContent(data)
+          : endpointType === 'messages'
+            ? (data as { content?: { text?: unknown }[] }).content?.[0]?.text
+            : endpointType === 'google'
+              ? (data as { candidates?: { content?: { parts?: { text?: unknown }[] } }[] }).candidates?.[0]
+                  ?.content?.parts?.[0]?.text
+              : getChatContent(data)
+
+      if (typeof content !== 'string' || !content.trim()) {
+        throw new AiError('OpenCode 返回内容为空')
+      }
+      return content
+    } catch (error) {
+      if (error instanceof AiError) throw error
+      if (controller.signal.aborted) {
+        throw new AiError('OpenCode 请求超时（30 秒），请稍后重试或更换模型', 504)
+      }
+      if (error instanceof SyntaxError) {
+        throw new AiError('OpenCode 返回了无法解析的响应')
+      }
       throw new AiError(`无法连接 OpenCode Zen（${this.baseUrl}）`, 503)
+    } finally {
+      clearTimeout(timeout)
     }
-
-    if (!res.ok) {
-      throw new AiError(`OpenCode 接口返回错误（${res.status}）：${(await res.text()).slice(0, 200)}`)
-    }
-
-    const data: unknown = await res.json()
-    const content =
-      endpointType === 'responses'
-        ? getResponsesContent(data)
-        : endpointType === 'messages'
-          ? (data as { content?: { text?: unknown }[] }).content?.[0]?.text
-          : endpointType === 'google'
-            ? (data as { candidates?: { content?: { parts?: { text?: unknown }[] } }[] }).candidates?.[0]
-                ?.content?.parts?.[0]?.text
-            : getChatContent(data)
-
-    if (typeof content !== 'string' || !content.trim()) {
-      throw new AiError('OpenCode 返回内容为空')
-    }
-    return content
   }
 }
