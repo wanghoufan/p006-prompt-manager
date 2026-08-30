@@ -181,6 +181,11 @@ export default function Home() {
       setHydrated(true)
       return
     }
+    console.log('[AI settings] initial server snapshot applied', {
+      provider: remote.settings.aiProvider,
+      model: remote.settings.aiModel,
+      version: remote.version,
+    })
     setServerOnline(true)
     // 服务端为空但本机有数据：首次迁移上传，避免两边永远为空
     if (remote.cards.length === 0) {
@@ -202,6 +207,10 @@ export default function Home() {
     }
     // 订阅实时同步：另一台电脑改动时自动拉取最新数据
     syncUnsubRef.current = subscribeSync((rc, rs, rt, rpt) => {
+      console.log('[AI settings] SSE snapshot applied', {
+        provider: rs.aiProvider,
+        model: rs.aiModel,
+      })
       setCards(rc)
       setSettings(rs)
       setTags(rt)
@@ -247,7 +256,13 @@ export default function Home() {
   }, [notify])
 
   useEffect(() => {
-    if (hydrated) saveSettings(settings)
+    if (hydrated) {
+      console.log('[AI settings] page state persisted', {
+        provider: settings.aiProvider,
+        model: settings.aiModel,
+      })
+      saveSettings(settings)
+    }
   }, [settings, hydrated])
 
   useEffect(() => {

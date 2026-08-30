@@ -107,6 +107,7 @@ const AI_SERVICES: {
     models: [
       'muse-spark-1.2-contributor-free', 'big-pickle', 'mimo-v2.5-free', 'hy3-free',
       'ling-3.0-flash-fin-free', 'nemotron-3-ultra-free', 'nemotron-3.5-lightning-free',
+      'deepseek-v4-flash-free', 'laguna-s-2.1-free',
     ],
     defaultBaseUrl: 'https://opencode.ai/zen/v1',
     docsUrl: 'https://opencode.ai/auth',
@@ -119,8 +120,9 @@ const AI_SERVICES: {
       'grok-4.6', 'gpt-5.6-luna', 'muse-spark-1.2-contributor', 'minimax-m3', 'minimax-m2.7',
       'minimax-m2.5', 'qwen3.8-max', 'qwen3.8-flash', 'qwen3.7-max', 'qwen3.7-plus',
       'qwen3.6-plus', 'glm-5.3-flash', 'glm-5.3', 'glm-5.2', 'glm-5.1', 'kimi-k3',
-      'kimi-k2.7-code', 'kimi-k2.6', 'longcat-2.0', 'deepseek-v4-pro', 'deepseek-v4-flash',
-      'deepseek-v4-flash-vision-exp', 'mimo-v2.5', 'mimo-v2.5-pro', 'hy4-preview', 'hy3',
+      'glm-5', 'kimi-k2.7-code', 'kimi-k2.6', 'kimi-k2.5', 'longcat-2.0', 'deepseek-v4-pro',
+      'deepseek-v4-flash', 'deepseek-v4-flash-vision-exp', 'mimo-v2.5', 'mimo-v2.5-pro',
+      'mimo-v2-pro', 'mimo-v2-omni', 'hy4-preview', 'hy3-preview', 'hy3',
     ],
     defaultBaseUrl: 'https://opencode.ai/zen/go/v1',
     docsUrl: 'https://opencode.ai/go',
@@ -165,7 +167,16 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
     setConnectionTest(null)
     // 设置控件可能连续触发更新；从最新状态合并，避免陈旧渲染快照把刚选的
     // 服务商或模型覆盖回之前的值。
-    onSave((current) => ({ ...current, ...patch }))
+    onSave((current) => {
+      const next = { ...current, ...patch }
+      console.log('[AI settings] SettingsModal onChange', {
+        previousProvider: current.aiProvider,
+        patchProvider: patch.aiProvider,
+        nextProvider: next.aiProvider,
+        nextModel: next.aiModel,
+      })
+      return next
+    })
     if (aiSaveTimer.current) window.clearTimeout(aiSaveTimer.current)
     aiSaveTimer.current = window.setTimeout(() => onNotify?.('AI配置已保存'), 800)
   }
