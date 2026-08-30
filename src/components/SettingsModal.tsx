@@ -123,7 +123,7 @@ const AI_SERVICES: {
       'nemotron-3-ultra-free', 'nemotron-3.5-lightning-free', 'muse-spark-1.2-contributor-free',
     ],
     defaultBaseUrl: 'https://opencode.ai/zen/v1',
-    docsUrl: 'https://opencode.ai/auth',
+    docsUrl: 'https://opencode.ai/docs/zh-cn/zen',
   },
   {
     provider: 'opencode-go',
@@ -138,7 +138,7 @@ const AI_SERVICES: {
       'hy4-preview', 'hy3',
     ],
     defaultBaseUrl: 'https://opencode.ai/zen/go/v1',
-    docsUrl: 'https://opencode.ai/go',
+    docsUrl: 'https://opencode.ai/docs/zh-cn/go',
   },
 ]
 
