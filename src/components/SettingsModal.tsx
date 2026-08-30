@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { Settings } from '@/lib/types'
 import type { AIProvider } from '@/lib/ai/types'
+import { AiError } from '@/lib/ai/adapter'
 import { DEFAULT_THINKING_PROMPT } from '@/lib/prompts'
 import { useModalFocus } from '@/hooks/useModalFocus'
 import { maskApiKey } from '@/lib/util'
@@ -107,8 +108,8 @@ const AI_SERVICES: {
     label: 'OpenCode（免费）',
     available: true,
     models: [
-      'muse-spark-1.2-contributor-free', 'hy3-free', 'ling-3.0-flash-fin-free',
-      'nemotron-3.5-lightning-free',
+      'big-pickle', 'mimo-v2.5-free', 'hy3-free', 'ling-3.0-flash-fin-free',
+      'nemotron-3-ultra-free', 'nemotron-3.5-lightning-free', 'muse-spark-1.2-contributor-free',
     ],
     defaultBaseUrl: 'https://opencode.ai/zen/v1',
     docsUrl: 'https://opencode.ai/auth',
@@ -209,18 +210,18 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
       })
       const data = (await res.json().catch(() => ({}))) as { error?: unknown }
       if (!res.ok) {
-        throw new Error(typeof data.error === 'string' ? data.error : `请求失败（${res.status}）`)
+        throw new AiError(typeof data.error === 'string' ? data.error : `请求失败（${res.status}）`, res.status)
       }
       setConnectionTest({ success: true, message: '连接成功' })
     } catch (e) {
+      const reason = controller.signal.aborted
+        ? '连接测试超时（35 秒），请稍后重试或更换模型'
+        : e instanceof Error
+          ? e.message
+          : '未知错误'
       setConnectionTest({
         success: false,
-        message:
-          controller.signal.aborted
-            ? '连接测试超时（35 秒），请稍后重试或更换模型'
-            : e instanceof Error
-              ? e.message
-              : '连接测试失败，请检查配置后重试',
+        message: e instanceof AiError ? e.message : `连接失败：${reason}`,
       })
     } finally {
       window.clearTimeout(timeout)

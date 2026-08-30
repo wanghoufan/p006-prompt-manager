@@ -12,10 +12,13 @@ const OPENCODE_REQUEST_TIMEOUT_MS = 30_000
 type EndpointType = 'responses' | 'messages' | 'chat' | 'google'
 
 export const FREE_ENDPOINTS: Record<string, Extract<EndpointType, 'responses' | 'chat'>> = {
-  'muse-spark-1.2-contributor-free': 'responses',
+  'big-pickle': 'chat',
+  'mimo-v2.5-free': 'chat',
   'hy3-free': 'chat',
   'ling-3.0-flash-fin-free': 'chat',
+  'nemotron-3-ultra-free': 'chat',
   'nemotron-3.5-lightning-free': 'chat',
+  'muse-spark-1.2-contributor-free': 'responses',
 }
 
 export const GO_ENDPOINTS: Record<string, Extract<EndpointType, 'responses' | 'messages' | 'chat'>> = {
@@ -130,6 +133,19 @@ function getChatContent(data: unknown): string | undefined {
   return firstNonEmptyString(message?.content, message?.reasoning_content, message?.reasoning)
 }
 
+function getUpstreamErrorMessage(body: string): string | undefined {
+  try {
+    const data = JSON.parse(body) as { message?: unknown; error?: unknown }
+    const nestedError =
+      data.error && typeof data.error === 'object'
+        ? (data.error as { message?: unknown }).message
+        : data.error
+    return firstNonEmptyString(data.message, nestedError)
+  } catch {
+    return body.trim() || undefined
+  }
+}
+
 /** OpenCode Zen：按每个模型的明确端点映射构造与解析上游请求。 */
 export class OpenCodeAdapter extends BaseAIAdapter {
   constructor(config: AIConfig) {
@@ -196,7 +212,17 @@ export class OpenCodeAdapter extends BaseAIAdapter {
       })
 
       if (!res.ok) {
-        throw new AiError(`OpenCode 接口返回错误（${res.status}）：${(await res.text()).slice(0, 200)}`)
+        const upstreamMessage = getUpstreamErrorMessage((await res.text()).slice(0, 2_000))
+        if (/model is disabled/i.test(upstreamMessage ?? '')) {
+          throw new AiError(`模型 ${this.model} 已被禁用，请更换其他模型`, res.status)
+        }
+        if (res.status === 401 || res.status === 403) {
+          throw new AiError('API Key 无效，请检查后重试', res.status)
+        }
+        throw new AiError(
+          `OpenCode 接口返回错误（${res.status}）：${upstreamMessage ?? '未提供错误信息'}`,
+          res.status,
+        )
       }
 
       const data: unknown = await res.json()
@@ -222,7 +248,7 @@ export class OpenCodeAdapter extends BaseAIAdapter {
       if (error instanceof SyntaxError) {
         throw new AiError('OpenCode 返回了无法解析的响应')
       }
-      throw new AiError(`无法连接 OpenCode Zen（${this.baseUrl}）`, 503)
+      throw new AiError(`无法连接到 ${this.baseUrl}，请检查网络`, 503)
     } finally {
       clearTimeout(timeout)
     }
