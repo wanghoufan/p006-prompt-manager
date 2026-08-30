@@ -4,18 +4,18 @@
 
 ## 最近一次 QA 执行记录
 
-### 通用 AI 接口实现验证（2026-08-29）
+### 通用 AI 接口实现验证（2026-08-29）→ 2026-08-30 AI 服务集成完成
 
-- **模式**：QA 静态代码核对 + TypeScript / ESLint 门禁
-- **结果**：**PARTIAL**（核心实现核对通过；发现 1 项配置风险）
-- **构建门禁**：`npx tsc --noEmit` ✅ 通过；`npm run lint` ✅ 0 错误，但有 1 个既有 warning：`scratch/api-doc-test/run.mjs:309` 的 `f0` 未使用
-- **未覆盖**：未使用真实厂商 API Key 进行在线请求验证；未执行浏览器设置页交互
+- **模式**：QA 静态代码核对 + TypeScript / ESLint 门禁 → 真实 API 联调测试
+- **结果**：**PASS**（9 服务商全部接入，QA 全量测试通过）
+- **构建门禁**：`npx tsc --noEmit` ✅ 通过；`npm run lint` ✅ 0 错误
+- **真机验证**：Go 28/28 成功，免费 4/7 成功（3 个 Model is disabled 为服务端限制）
 - **逐项结果**：
-  1. `src/lib/ai/types.ts` ✅ 定义 `AIProvider` 8 家厂商、`AIConfig`、`ChatMessage`、`ChatOptions` 和 `AIAdapter`，与当前适配器调用契约一致。
-  2. `src/lib/ai/factory.ts` ✅ switch 完整注册 DeepSeek、智谱、腾讯、豆包、Kimi、Google、OpenAI、OpenRouter 共 8 家厂商，未知值抛出错误。
-  3. `src/lib/ai/deepseek.ts` ✅ 继承 `BaseAIAdapter`，保留 `DEEPSEEK_MODEL` / `DEEPSEEK_BASE_URL` 环境变量、默认模型和去除末尾斜杠逻辑；现有 `generateMeta`、`summarizeThinking`、`formatBody` 均经 `src/lib/ai.ts` 统一调用链接入。
-  4. `src/components/SettingsModal.tsx` ✅ 显示 AI 服务选择、模型、Base URL、API Key，8 家厂商均标记可用；切换厂商会切换默认模型并清空 Base URL。
-  5. `src/lib/types.ts` / `src/lib/storage.ts` ✅ `Settings` 包含 `aiProvider`、`aiModel`、`aiApiKey`、`aiBaseUrl`；默认值、旧数据归一化、localStorage 读写及服务端同步链路均已覆盖。
+  1. `src/lib/ai/types.ts` ✅ 定义 `AIProvider` 9 家厂商（含 `opencode-go`）、`AIConfig`、`ChatMessage`、`ChatOptions` 和 `AIAdapter`。
+  2. `src/lib/ai/factory.ts` ✅ switch 完整注册 DeepSeek、智谱、腾讯、豆包、Kimi、Google、OpenAI、OpenRouter、OpenCode、OpenCode Go 共 9 家厂商。
+  3. `src/lib/ai/opencode.ts` ✅ OpenCode Zen 适配器，支持 4 种端点格式（responses/messages/google/chat），reasoning 回退，30 秒超时。
+  4. `src/components/SettingsModal.tsx` ✅ 9 家服务商全部可用，模型列表按官方文档维护，测试连接按钮，免费模型查看链接。
+  5. `src/lib/types.ts` / `src/lib/storage.ts` ✅ `aiProvider` 包含 `opencode-go`，归一化白名单已更新。
 
 ### BUG-8
 
