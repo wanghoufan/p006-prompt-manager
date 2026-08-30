@@ -11,11 +11,8 @@ type EndpointType = 'responses' | 'messages' | 'chat' | 'google'
 
 export const FREE_ENDPOINTS: Record<string, Extract<EndpointType, 'responses' | 'chat'>> = {
   'muse-spark-1.2-contributor-free': 'responses',
-  'big-pickle': 'chat',
-  'mimo-v2.5-free': 'chat',
   'hy3-free': 'chat',
   'ling-3.0-flash-fin-free': 'chat',
-  'nemotron-3-ultra-free': 'chat',
   'nemotron-3.5-lightning-free': 'chat',
 }
 
@@ -77,6 +74,50 @@ function getGoogleContents(messages: ChatMessage[], system: string) {
     contents.unshift({ role: 'user', parts: [{ text: system }] })
   }
   return contents
+}
+
+function firstNonEmptyString(...values: unknown[]): string | undefined {
+  return values.find((value): value is string => typeof value === 'string' && Boolean(value.trim()))
+}
+
+function getResponsesContent(data: unknown): string | undefined {
+  const response = data as {
+    output_text?: unknown
+    reasoning_content?: unknown
+    reasoning?: unknown
+    output?: {
+      type?: string
+      reasoning_content?: unknown
+      reasoning?: unknown
+      summary?: { text?: unknown }[]
+      content?: {
+        type?: string
+        text?: unknown
+        reasoning_content?: unknown
+        reasoning?: unknown
+      }[]
+    }[]
+  }
+  const outputs = response.output ?? []
+  const parts = outputs.flatMap((output) => output.content ?? [])
+
+  return firstNonEmptyString(
+    response.output_text,
+    ...parts.filter((part) => part.type === 'output_text').map((part) => part.text),
+    response.reasoning_content,
+    response.reasoning,
+    ...outputs.flatMap((output) => [output.reasoning_content, output.reasoning]),
+    ...parts.flatMap((part) => [part.reasoning_content, part.reasoning]),
+    ...outputs.flatMap((output) => output.summary?.map((part) => part.text) ?? []),
+  )
+}
+
+function getChatContent(data: unknown): string | undefined {
+  const message = (data as {
+    choices?: { message?: { content?: unknown; reasoning_content?: unknown; reasoning?: unknown } }[]
+  }).choices?.[0]?.message
+
+  return firstNonEmptyString(message?.content, message?.reasoning_content, message?.reasoning)
 }
 
 /** OpenCode Zen：按每个模型的明确端点映射构造与解析上游请求。 */
@@ -152,15 +193,13 @@ export class OpenCodeAdapter extends BaseAIAdapter {
     const data: unknown = await res.json()
     const content =
       endpointType === 'responses'
-        ? (data as { output?: { type?: string; content?: { type?: string; text?: unknown }[] }[] }).output?.find(
-            (output) => output.type === 'message',
-          )?.content?.find((part) => part.type === 'output_text')?.text
+        ? getResponsesContent(data)
         : endpointType === 'messages'
           ? (data as { content?: { text?: unknown }[] }).content?.[0]?.text
           : endpointType === 'google'
             ? (data as { candidates?: { content?: { parts?: { text?: unknown }[] } }[] }).candidates?.[0]
                 ?.content?.parts?.[0]?.text
-            : (data as { choices?: { message?: { content?: unknown } }[] }).choices?.[0]?.message?.content
+            : getChatContent(data)
 
     if (typeof content !== 'string' || !content.trim()) {
       throw new AiError('OpenCode 返回内容为空')
