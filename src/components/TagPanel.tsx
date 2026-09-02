@@ -17,6 +17,7 @@ export interface TagPanelProps {
   onIncludeDescendantsChange: (value: boolean) => void
   onResetFilters: () => void
   offline?: boolean
+  syncMode?: 'cloud' | 'legacy'
   /** demo/只读视图不传以下操作回调（隐藏管理入口） */
   onCreateTag?: (name: string, parentId: string | null) => { ok: boolean; error?: string; createdRootId?: string }
   onRenameTag?: (id: string, name: string) => { ok: boolean; error?: string }
@@ -319,6 +320,7 @@ export function TagPanel({
   onIncludeDescendantsChange,
   onResetFilters,
   offline,
+  syncMode = 'legacy',
   onCreateTag,
   onRenameTag,
   onMoveTag,
@@ -740,7 +742,9 @@ export function TagPanel({
       <div className="border-t border-line px-4 py-3 text-[11px] leading-relaxed text-muted">
         {offline
           ? '未连接同步服务，已使用本机本地数据'
-          : '已开启局域网实时同步（服务端共享存储），离线时回退本机缓存'}
+          : syncMode === 'cloud'
+            ? '已开启 Supabase 云端实时同步；本机保留离线缓存'
+            : '已开启局域网实时同步（服务端共享存储），离线时回退本机缓存'}
       </div>
     </aside>
   )

@@ -6,6 +6,7 @@ import type { AIProvider } from '@/lib/ai/types'
 import { DEFAULT_THINKING_PROMPT } from '@/lib/prompts'
 import { useModalFocus } from '@/hooks/useModalFocus'
 import { maskApiKey } from '@/lib/util'
+import { McpCloudAccess } from '@/components/McpCloudAccess'
 
 const MCP_PROJECT_ROOT = '/Users/zzymima0000/Developer/coding/1.Active/ing丨0813提示词管理器 mac gpt桌面 v1.0'
 
@@ -289,6 +290,7 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
               <option value="light">亮色</option>
             </select>
           </div>
+          <McpCloudAccess />
           <div className="rounded-lg border border-line bg-ink-900 px-3.5 py-3">
             <label htmlFor="settings-composer-add-mode" className="text-sm text-paper">
               添加模式
@@ -504,9 +506,9 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
             </div>
           </div>
           <div className="rounded-lg border border-line bg-ink-900 px-3.5 py-3">
-            <p className="text-sm text-paper">一键接入</p>
+            <p className="text-sm text-paper">一键接入 MCP 客户端</p>
             <p className="mt-0.5 text-xs text-muted">
-              把下面这句话发给你的 AI，它会自动完成安装、配置和验证。你不需要看任何技术细节。
+              先在上方为本机生成令牌并保存 `.env.local`，再把下面这句话发给你的 AI；它会自动完成安装、配置和协议验证。
             </p>
             <button
               type="button"
@@ -535,7 +537,7 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
                   {SETUP_COMMAND}
                 </pre>
                 <p className="text-xs leading-relaxed text-muted">
-                  脚本会自动装依赖、构建、找出你本装的 AI 客户端并逐个配好，最后真调一次验证。它只读提示词库，不会改动任何卡片、标签或调取码。
+                  脚本会自动装依赖、构建、找出你本装的 AI 客户端并逐个配好，最后验证 MCP 协议。调取时直接访问云端，不依赖本机提示词文件。
                 </p>
                 <p className="text-xs leading-relaxed text-muted">已支持：{SETUP_CLIENTS}</p>
                 <p className="text-xs leading-relaxed text-muted">

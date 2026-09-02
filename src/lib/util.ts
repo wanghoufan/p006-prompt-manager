@@ -1,8 +1,22 @@
 export function uid(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return crypto.randomUUID()
+  const webCrypto = typeof globalThis.crypto === 'undefined' ? undefined : globalThis.crypto
+  if (webCrypto && typeof webCrypto.randomUUID === 'function') {
+    return webCrypto.randomUUID()
   }
-  return `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+  // Supabase 主键使用 UUID。少数不支持 randomUUID 的旧环境也必须生成合法 UUID，
+  // 不能退回旧版 `id-...` 字符串，否则本地创建的数据无法同步到 PostgreSQL uuid 列。
+  const bytes = new Uint8Array(16)
+  if (webCrypto && typeof webCrypto.getRandomValues === 'function') {
+    webCrypto.getRandomValues(bytes)
+  } else {
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = Math.floor(Math.random() * 256)
+    }
+  }
+  bytes[6] = (bytes[6] & 0x0f) | 0x40
+  bytes[8] = (bytes[8] & 0x3f) | 0x80
+  const hex = [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }
 
 export function nowIso(): string {

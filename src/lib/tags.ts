@@ -45,9 +45,14 @@ export function normalizeTag(t: Tag): Tag {
 
 // ===================== 工具 =====================
 
-/** 生成稳定且唯一的 tag id（tag_ 前缀 + uuid） */
+/**
+ * 生成稳定且唯一的 tag id。
+ *
+ * 云端 `prompt_manager.tags.id` 是 PostgreSQL UUID，不能再添加旧版的
+ * `tag_` 前缀；现代浏览器的 `uid()` 使用 `crypto.randomUUID()`。
+ */
 export function newTagId(): string {
-  return `tag_${uid()}`
+  return uid()
 }
 
 export function newTag(name: string, parentId: string | null = null): Tag {

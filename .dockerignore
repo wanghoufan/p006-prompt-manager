@@ -1,0 +1,22 @@
+# Docker 构建只需要应用源码、依赖清单和构建配置。
+node_modules
+.next
+.git
+.worktrees
+.opencode
+
+# 私密配置、用户数据、备份和临时资料绝不进入镜像。
+.env*
+data
+scratch
+
+# MCP 是独立的本机 stdio 服务，不在 Web 容器内运行。
+mcp
+docker
+
+# 本地开发与编辑器产物。
+.DS_Store
+*.log
+coverage
+out
+build

@@ -5,6 +5,64 @@
 
 ## 当前目标
 
+### Supabase 云端多端同步迁移（2026-09-01，实施中）
+
+**目标**：把提示词管理器迁移到共享 Supabase 项目的独立 `prompt_manager` Schema；以记录级读写、Supabase Auth、RLS、Realtime 和记录级 `revision` 替代当前 `data/store.json` 整快照覆盖与进程内 SSE。
+
+**当前事实**：
+
+- 当前同步源为 `serverStore` + `data/store.json`，浏览器以 `/api/sync` 整体提交 `cards/settings/tags/promptTags`；SSE 只能通知同一个 Next.js 进程中的客户端。
+- `localStorage` 是每台设备独立的离线缓存；MCP 直接读取本机 `data/store.json`。
+- 当前数据包含旧格式 ID；正式导入必须先生成 UUID 映射并更新卡片、版本、标签和关联，不能直接把本机快照覆盖云端。
+- 共享数据库平台仓库位于 `/Users/zzymima0000/Developer/coding/1.Active/平台丨共享 Supabase 数据库`；`prompt_manager` Schema 和外键索引 Migration 已发布并完成 RLS/策略/安全检查验收，待 Dashboard 暴露 Data API 后才可由应用读写。
+
+**实施边界**：
+
+- 本仓库负责业务 UI、Supabase 客户端、Repository、Auth 会话、迁移导入工具和 MCP 改造。
+- 独立的共享数据库平台仓库负责 `prompt_manager` Schema Migration；禁止在 Supabase Dashboard 手工建表后不补 Migration，禁止本仓库和其他工具并发执行生产 `db push`。
+- `aiApiKey` 继续仅保存在本机 localStorage；不得迁移、日志化或同步。所有 `NEXT_PUBLIC_*` 变量只能是 Supabase URL 与 publishable key，绝不放 Secret/service_role。
+- 切换前保留现有 JSON 同步；只有云端 Schema、RLS、Realtime、导入和双端验收全部通过后才删除或停用旧链路。
+
+**目标模型**：
+
+| 表 | 责任 | 关键字段/约束 |
+|---|---|---|
+| `prompt_manager.cards` | 提示词主体 | UUID、`owner_user_id`、`revision`、`updated_at`、调取码唯一性、评分/复制次数检查 |
+| `prompt_manager.card_versions` | 正文历史 | UUID、卡片外键、所有者、创建时间；保留最近 10 条 |
+| `prompt_manager.tags` | 标签树 | UUID、自引用父标签、同父同名唯一、所有者、排序字段 |
+| `prompt_manager.prompt_tags` | 卡片-标签关系 | 复合主键/唯一约束、卡片/标签外键、所有者一致性 |
+| `prompt_manager.settings` | 共享非敏感设置 | 每位用户一行；不含 `aiApiKey` |
+
+**实施步骤**：
+
+1. 用户确认共享 Supabase 项目、现有 Auth 方式、唯一导入数据源与 MCP 云端访问范围；建立/定位独立共享数据库平台仓库。
+2. 在平台仓库创建可审查 Migration：Schema、表、索引、外键、RLS、最小 grants、Realtime publication、必要的 `security invoker` 原子 RPC；在隔离环境验证后由唯一发布者执行生产发布。
+3. 在本仓库增加不含 Secret 的 `.env.example`、Supabase 浏览器/服务端客户端和 Repository；Auth 使用当前用户会话，UI 不直接使用 service role。
+4. 替换 `serverStore` / `/api/sync` 整快照写入：卡片、标签、关系、设置分别进行记录级 mutation；卡片更新带 `revision`，冲突时刷新该记录并给出明确提示。
+5. 用 Realtime 订阅 `prompt_manager` 目标表，处理 INSERT/UPDATE/DELETE、断线重连与本机回声；不以 Realtime 代替初始查询。
+6. 导入前冻结旧写入，导出各设备候选数据；校验并生成 UUID 映射后一次导入，保留本地备份且不提交 Git。
+7. MCP 改为受限云端读取与原子复制计数；不得再直接读取 `data/store.json`，不得配置 Supabase service_role。
+8. 完成 Mac/PC 双向 CRUD、版本冲突、标签关系、Auth/RLS 越权、MCP、断线重连、恢复演练验收后，才停用 JSON 同步。
+
+**当前实施记录（2026-09-02）**：已增加浏览器 Supabase 客户端、Magic Link UI、Google OAuth 入口和登录状态切换后的自动重连。浏览器端使用 PKCE 登录流程；默认邮件模板无需自定义 SMTP。共享平台仓库中的 `prompt_manager` Schema、RLS、Realtime 与外键索引已发布，且 Data API 的自定义 Schema 暴露已由用户完成。三份本地来源（33 + 47 + 47 条）已在不连接云端的导入脚本中合并：按标题去重并保留最完整正文，不同正文写入历史版本；冲突调取码 `sop` 已按用户确认保留给最新、最完整卡片。事务导入后、以及本轮代码调整后的远端复核均为 52 cards / 18 card_versions / 24 tags / 91 prompt_tags / 1 settings，外键孤儿为 0；`settings.aiApiKey` 未进入导入包或数据库。应用现已接入 Supabase 初始读取、Realtime 全量重读、卡片/历史版本/标签/标签关系/设置的记录级写入；卡片和标签带 `revision` 条件更新，所有 mutation 串行，标签关系使用“先新增、再删除”的增量策略，失败保留未同步基线并自动重试。MCP 已改为调用同一 Schema 的受限 `activate_prompt` RPC：每台设备有独立、可撤销令牌，数据库仅保存令牌哈希，MCP 不再读取 `data/store.json` 或使用 service_role；设置页可生成和撤销令牌。已在真实 MCP 进程中成功调取云端 `sop`（正文未输出），复制计数按规则递增。已在远端即时修复 `activate_prompt` 的 `code` 名称歧义；共享数据库仓库的正式 Migration 文件已创建但尚待写入同一修复，系统当前拒绝该仓库写权限，恢复权限后必须先补齐再进行后续数据库发布。旧 JSON/SSE 链路仍作为未登录或云端不可用时的兼容兜底；真实双设备 CRUD/MCP 验收尚未完成。
+
+**2026-09-02 复核补记**：共享平台仓库的文件系统写权限现已确认恢复；`20260901163555_fix_prompt_manager_activate_prompt_variable_conflict.sql` 已包含与线上函数语义一致的修复内容，并已通过线上函数定义比对。该文件尚未作为生产 Migration 发布：远端登记仍只有 `20260901152616` 与 `20260901152750`。本轮未执行 `supabase db push`、Dashboard SQL 或其他生产数据库写入；在双设备验收、备份恢复演练和共享 Supabase 数据库审核人审查前，不得自行发布或宣布收口。`activate_prompt` 的 `SECURITY DEFINER` + anon/authenticated EXECUTE 仍有两条 Security Advisor WARN，作为能力令牌例外待审核人决定。
+
+**风险与决策**：
+
+- 未确认哪台设备拥有完整数据前，禁止导入或切换；否则可能丢失另一端的本地记录。
+- 若保留离线编辑，必须实现按记录保存的离线操作队列及重放冲突处理；第一阶段可先提供只读缓存/导出，不能继续“恢复后整快照推送”。
+- MCP 需要独立、可撤销的用户级访问方式；此项与浏览器 Supabase 登录会话不同，必须在实施前确认。
+- 自定义 Schema 需要在 Supabase Data API 设置中显式 Expose，且 grants 和 RLS 同时配置；这是一项用户 Dashboard 操作。
+
+**验收标准**：
+
+- 独立 `prompt_manager` Schema、Migration、RLS、Realtime publication 和数据库目录均可追溯；未触及其他工具 Schema。
+- 浏览器只使用 publishable key；所有查询、写入和 Realtime 仅返回当前 `auth.uid()` 的数据。
+- 无整库快照覆盖；同一记录并发编辑得到明确冲突，不同记录并发编辑不互相丢失。
+- Mac 与 PC 的 INSERT/UPDATE/DELETE、标签关系和复制计数均双向同步；断线重连后重新拉取。
+- 本地迁移结果、RLS 越权、备份与恢复演练均通过；`aiApiKey` 不出现在数据库、导出、日志或 Git。
+
 0. **P0级用户反馈问题整改**（2026-08-28 用户反馈，最高优先级 — 全部完成）：
    - P0-D 标签切换逻辑修复：单击标签切换筛选，再次单击取消筛选 ✅
    - P0-E 标签拖拽功能实现：拖拽排序、设为子标签、合并标签 ✅

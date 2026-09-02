@@ -34,7 +34,7 @@
 | 示例知识库 | 内置 12 张示例卡片（自带调取码），覆盖全部功能形态，一键载入本地仓库 |
 | 复制统计 | 卡片「复制」写入剪贴板并累计次数；**MCP 调取同样计入**；支持清零 |
 | 调取码（code） | 用户自定义短码（英文/数字/短横线，≤12 字符，大小写不敏感，可选填），供 MCP 调取；输入时标题 `x/20`、调取码 `x/12` 实时计数，非法字符即时过滤并提示「仅支持英文/数字/短横线」 |
-| MCP 集成 | 子包 `mcp/prompt-server/`，工具 `prompt_manager_activate_prompt(code)`：取卡片并立即将其正文作为新的系统提示词注入会话 |
+| MCP 集成 | 子包 `mcp/prompt-server/`，工具 `prompt_manager_activate_prompt(code)`：通过独立、可撤销令牌从共享 Supabase 调取卡片并立即将其正文作为新的系统提示词注入会话 |
 | 全局搜索 | SortBar 搜索框（300ms 防抖，纯前端过滤），范围标题/正文/标签/调取码/备注（大小写不敏感）+ `@code` 直达（仅按调取码匹配）+ `<mark>` 纯文本高亮（XSS 免疫）+ 「命中 x / 共 y」计数 + 空态引导；**搜索激活时按相关度排序（标题 4 > 调取码/标签 3 > 备注 2 > 正文 1，同分再按更新/复制/评分二级排序；`@code` 隔离保持原排序）**；搜索词不持久化（刷新即清） |
 | 星级评分 | 点击 `1`~`5` 打星、`0` 清除 |
 | 标签筛选 | 左侧标签面板单选筛选（再点取消），按数量排序；筛选态下新建卡片默认携带当前选中标签（强制首位，其余 AI 标签去重补充，最多 3 个；「全部」与 demo 视图不强制） |
@@ -101,14 +101,50 @@ npm run dev
 
 > 首次打开时若本机已有旧数据（localStorage），会自动迁移上传到服务端。
 
-### 生产部署（可选）
+### 生产部署（Docker / Mac Mini）
 
-```bash
-npm run build
-npm run start        # 3100 端口
+本项目的正式运行模型是：**Mac Mini 运行唯一一个 Docker 容器，PC 和其他 Mac 只用浏览器访问它**。PC 不需要安装 Node、拉取项目或运行 `npm run dev`。
+
+```text
+PC / 其他 Mac 浏览器
+        ↓  http://Mac-mini.local:3100
+Mac Mini Docker：Prompt Manager Web 服务
+        ↓
+Supabase：Auth + prompt_manager 云端主数据
 ```
 
-> 端口统一为 **3100**（`package.json` 的 dev/start 与 `dev-server.sh` 的 `PORT`）。改端口时这三处要一起改，另外 `mcp/prompt-server/src/index.ts` 里计数 API 的默认地址也要同步。
+Docker 配置文件位于项目根目录的 `Dockerfile`、`compose.yaml` 与 `.dockerignore`。它们是部署模板，**不是**在开发目录直接运行正式服务的授权：正式代码须先从开发源码区通过 Git 部署流程更新到：
+
+```text
+/Users/zzymima0000/Services/prompt-manager/
+```
+
+在该正式目录中，先复制项目内的 `docker/env.template` 为不提交 Git 的 `.env.local`，再填写占位符并至少确认：
+
+```bash
+cp docker/env.template .env.local
+```
+
+```dotenv
+NEXT_PUBLIC_APP_URL=http://Mac-mini.local:3100
+PROMPT_MANAGER_DATA_DIR=/Users/zzymima0000/DockerData/prompt-manager/legacy-store
+PROMPT_MANAGER_PORT=3100
+```
+
+`NEXT_PUBLIC_SUPABASE_URL` 与 `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` 也必须保留；它们是公开浏览器配置。`DEEPSEEK_API_KEY`、MCP 令牌及所有 Secret 仍只能留在 `.env.local`，不得放进 Dockerfile、compose 文件或 Git。
+
+在创建好上述业务持久化目录后，从 `Services/prompt-manager` 运行：
+
+```bash
+docker compose --env-file .env.local up -d --build
+docker compose ps
+```
+
+访问地址固定为：`http://Mac-mini.local:3100`。只在局域网内使用，不要在路由器上配置端口转发。若要让其他设备登录，Supabase Auth 的 **Site URL** 与 Redirect URLs 都应加入这个精确地址；Google Cloud 的 Authorized JavaScript origin 也应加入该地址，但 Google 的 Authorized redirect URI 仍只能是 Supabase 显示的 `/auth/v1/callback`，不是 3100 端口。
+
+> Docker 不会运行 Supabase 数据库，也不会创建数据库 Volume。云端 Supabase 是主数据源；`DockerData/prompt-manager/legacy-store` 只保存尚未下线的 `data/store.json` 兼容副本。备份产物统一放在 `/Users/zzymima0000/DockerBackups/prompt-manager/`，并且不能提交 Git。
+
+> 端口统一为 **3100**（`package.json` 的 dev/start 与 `dev-server.sh` 的 `PORT`）。MCP 已直接使用 Supabase 云端 RPC，不再依赖本机端口或 `data/store.json`。
 
 ## 局域网实时同步
 
@@ -119,13 +155,15 @@ npm run start        # 3100 端口
 
 ## MCP 接入（WorkBuddy / 其他支持 MCP 的 Agent）
 
-1. 构建 MCP server：
+1. 在提示词管理器登录云端，打开「设置 → MCP 云端访问」，为这台电脑生成令牌；复制一次性内容并保存到 `mcp/prompt-server/.env.local`（参考 `.env.example`）。
+
+2. 构建 MCP server：
 
    ```bash
    cd mcp/prompt-server && npm install && npm run build
    ```
 
-2. 把 `prompt-manager` 注册到 `~/.workbuddy/mcp.json`（**不带点**；注意 `.mcp.json` 带点的是 connector-proxy 专用，别写错）：
+3. 把 `prompt-manager` 注册到 `~/.workbuddy/mcp.json`（**不带点**；注意 `.mcp.json` 带点的是 connector-proxy 专用，别写错）：
 
    ```json
    {
@@ -133,7 +171,7 @@ npm run start        # 3100 端口
        "prompt-manager": {
          "command": "node",
          "args": ["<项目根>/mcp/prompt-server/dist/index.js"],
-         "description": "本地提示词管理库：通过调取码（code）返回卡片正文"
+         "description": "共享云端提示词库：通过调取码（code）返回卡片正文"
        }
      }
    }
@@ -141,8 +179,8 @@ npm run start        # 3100 端口
 
    > `command` 也可写成 Node 绝对路径（运行 `which node` 查看），确保 WorkBuddy 进程能找到 Node。
 
-3. 在 WorkBuddy「连接器」→「配置 MCP」里保存并**信任**该 server；之后**新开会话**生效。
-4. 使用：输入「**调取 <调取码>**」（如 `调取 jbyj`），WorkBuddy 会调用 `prompt_manager_activate_prompt`，把卡片正文作为新的系统提示词直接执行，并给该卡片复制次数 +1。
+4. 在 WorkBuddy「连接器」→「配置 MCP」里保存并**信任**该 server；之后**新开会话**生效。
+5. 使用：输入「**调取 <调取码>**」（如 `调取 jbyj`），WorkBuddy 会调用 `prompt_manager_activate_prompt`，把卡片正文作为新的系统提示词直接执行，并在云端给该卡片复制次数 +1。
 
 > 详细接入说明见 `mcp/prompt-server/README.md`。
 
@@ -224,7 +262,12 @@ dev-server.sh                                # dev 服务 watchdog 管理脚本
 | `DEEPSEEK_API_KEY` | 是 | DeepSeek 密钥（https://platform.deepseek.com），仅存于服务端 `.env.local` |
 | `DEEPSEEK_MODEL` | 否 | 默认 `deepseek-v4-flash` |
 | `DEEPSEEK_BASE_URL` | 否 | 默认 `https://api.deepseek.com`（兼容 `/v1` 前缀） |
-| `PROMPT_MANAGER_API_URL` | 否 | MCP server 计数 API 地址，默认 `http://localhost:3100` |
+| `NEXT_PUBLIC_SUPABASE_URL` | 云端同步必填 | Supabase 项目 URL；可公开 |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | 云端同步必填 | Supabase publishable key；可公开，绝不能使用 secret/service role |
+| `NEXT_PUBLIC_APP_URL` | Docker 部署必填 | 统一访问地址，例如 `http://Mac-mini.local:3100` |
+| `PROMPT_MANAGER_DATA_DIR` | Docker 部署必填 | `DockerData/prompt-manager/legacy-store` 的绝对路径，仅保留 JSON/SSE 兼容数据 |
+| `PROMPT_MANAGER_PORT` | 否 | Docker 对外端口，默认 `3100` |
+| `PROMPT_MANAGER_API_URL` | 否 | 旧版 MCP 计数 API 地址，默认 `http://localhost:3100` |
 
 ## 存储与备份
 
@@ -235,8 +278,11 @@ dev-server.sh                                # dev 服务 watchdog 管理脚本
 
 ## 常见问题（FAQ）
 
+**Q：Docker 部署后，PC 应该打开哪个地址？**
+A：打开 `http://Mac-mini.local:3100`，然后在右上角登录同一个 Supabase 账号。不要打开 PC 自己的 `localhost:3100`；那代表 PC 本机，除非它自己运行了服务。
+
 **Q：另一台电脑打不开 / 无法同步？**
-A：确认运行 dev 服务的那台电脑 `npm run dev` 仍在运行；对方用 `http://<本机IP或.local>:3100` 访问。若提示跨域拦截，把该 IP/主机名加入 `next.config.ts` 的 `allowedDevOrigins` 并重启。
+A：开发模式下，确认运行 dev 服务的那台电脑 `npm run dev` 仍在运行；Docker 模式下检查 Mac Mini 上 `docker compose ps` 是否为 running。对方必须使用 Mac Mini 的 `.local` 地址，而非自己的 localhost。若是开发服务提示跨域拦截，把该 IP/主机名加入 `next.config.ts` 的 `allowedDevOrigins` 并重启。
 
 **Q：IP 变了之后同步失效？**
 A：路由器重分配 IP 后，旧 IP 失效。改用 `.local` 主机名访问，或更新 `allowedDevOrigins` 里的 IP 并重启服务。

@@ -2,6 +2,7 @@
 
 import { useRef } from 'react'
 import { DemoMenu, type ViewMode } from '@/components/DemoMenu'
+import { SupabaseAuthControl } from '@/components/SupabaseAuthControl'
 
 interface TopBarProps {
   view: ViewMode
@@ -75,6 +76,7 @@ export function TopBar({
             e.target.value = ''
           }}
         />
+        <SupabaseAuthControl />
         <button type="button" className="btn" onClick={onOpenSettings}>
           设置
         </button>

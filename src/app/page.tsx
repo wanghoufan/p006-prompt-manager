@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Card, Settings, SortMode, Tag, PromptTag, TagFilterMode, TagFilters } from '@/lib/types'
 import { loadCards, loadSettings, loadTags, loadPromptTags, parseImport, saveCards, saveSettings, saveTags, savePromptTags, buildMarkdownExport, isServerAvailable, loadFromServer, pushToServer, subscribeSync, sanitizePromptTags, setConflictRefreshHandler } from '@/lib/storage'
+import { deletePromptCard, deletePromptTag, getPromptCloudUserId, loadPromptCloudSnapshot, replacePromptCardVersions, savePromptCard, savePromptSettings, savePromptTag, subscribeToPromptCloudChanges, syncPromptCardTags } from '@/lib/supabase/promptRepository'
 import { createCard, normalizeBody, parseTags, rollbackToVersion, saveBodyOnly, saveBodyWithVersion } from '@/lib/cards'
 import { DEMO_CARDS } from '@/lib/demo'
 import { nowIso } from '@/lib/util'
@@ -52,6 +53,33 @@ function compareBySortMode(a: Card, b: Card, mode: SortMode): number {
   return b.updatedAt.localeCompare(a.updatedAt)
 }
 
+/** 仅包含 cards 表的字段；标签关联和历史版本各有独立表，不能导致卡片重复写入。 */
+function cardCloudFingerprint(card: Card): string {
+  return JSON.stringify({
+    id: card.id,
+    title: card.title,
+    body: card.body,
+    code: card.code,
+    rating: card.rating,
+    copyCount: card.copyCount,
+    thinkingSummary: card.thinkingSummary,
+    notes: card.notes,
+    sourceUrl: card.sourceUrl,
+    createdAt: card.createdAt,
+    updatedAt: card.updatedAt,
+  })
+}
+
+function relationsByCard(relations: PromptTag[]): Map<string, string[]> {
+  const result = new Map<string, string[]>()
+  for (const relation of relations) {
+    const ids = result.get(relation.prompt_id) ?? []
+    ids.push(relation.tag_id)
+    result.set(relation.prompt_id, ids)
+  }
+  return result
+}
+
 export default function Home() {
   const [cards, setCards] = useState<Card[]>([])
   // Composer 的 AI 补全在异步请求完成后才回调。保留最新卡片快照，避免回调闭包仍指向创建前的 cards。
@@ -91,8 +119,17 @@ export default function Home() {
   const [showSettings, setShowSettings] = useState(false)
   const [toast, setToast] = useState<{ msg: string; detail?: string[] | null; withUndo?: boolean } | null>(null)
   const [serverOnline, setServerOnline] = useState<boolean | null>(null)
+  const [cloudMode, setCloudMode] = useState(false)
   // P2-7：实时同步订阅句柄，重连前先关闭旧订阅，避免 EventSource 叠加
   const syncUnsubRef = useRef<(() => void) | null>(null)
+  const cloudCardsRef = useRef<Map<string, string> | null>(null)
+  const cloudVersionsRef = useRef<Map<string, string> | null>(null)
+  const cloudSettingsRef = useRef<string | null>(null)
+  const cloudTagsRef = useRef<Map<string, string> | null>(null)
+  const cloudPromptTagsRef = useRef<Map<string, string> | null>(null)
+  const cloudWriteQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const cloudWritesInFlightRef = useRef(0)
+  const [cloudRetryTick, setCloudRetryTick] = useState(0)
   // P2-11 批量多选：选中卡片 id 集合（demo 视图不启用）
   const [bulkIds, setBulkIds] = useState<ReadonlySet<string>>(new Set())
   const undoRef = useRef<(() => void) | null>(null)
@@ -100,6 +137,25 @@ export default function Home() {
   const notify = useCallback((msg: string, detail?: string[]) => {
     undoRef.current = null
     setToast({ msg, detail: detail && detail.length > 0 ? detail : null })
+  }, [])
+
+  const retryCloudSync = useCallback(() => {
+    window.setTimeout(() => setCloudRetryTick((value) => value + 1), 2000)
+  }, [])
+
+  /** 所有云端 mutation 串行执行，卡片、标签和关系不会发生竞态。 */
+  const enqueueCloudWrite = useCallback((work: () => Promise<void>) => {
+    const run = async () => {
+      cloudWritesInFlightRef.current += 1
+      try {
+        await work()
+      } finally {
+        cloudWritesInFlightRef.current -= 1
+      }
+    }
+    const queued = cloudWriteQueueRef.current.then(run, run)
+    cloudWriteQueueRef.current = queued.catch(() => undefined)
+    return queued
   }, [])
 
   useEffect(() => {
@@ -163,6 +219,44 @@ export default function Home() {
       syncUnsubRef.current = null
     }
     setServerOnline(null)
+    try {
+      const cloud = await loadPromptCloudSnapshot(loadSettings().aiApiKey)
+      if (cloud?.hasCloudData) {
+        const applyCloud = (next: NonNullable<typeof cloud>) => {
+          setCards(next.cards)
+          setSettings(next.settings ?? loadSettings())
+          setTags(next.tags)
+          setPromptTags(next.promptTags)
+          cloudCardsRef.current = new Map(next.cards.map((card) => [card.id, cardCloudFingerprint(card)]))
+          cloudVersionsRef.current = new Map(next.cards.map((card) => [card.id, JSON.stringify(card.versions)]))
+          cloudSettingsRef.current = JSON.stringify(next.settings ?? loadSettings())
+          cloudTagsRef.current = new Map(next.tags.map((tag) => [tag.id, JSON.stringify(tag)]))
+          cloudPromptTagsRef.current = new Map(next.promptTags.map((relation) => [`${relation.prompt_id}\u0000${relation.tag_id}`, JSON.stringify(relation)]))
+        }
+        applyCloud(cloud)
+        setCloudMode(true)
+        setServerOnline(true)
+        syncUnsubRef.current = subscribeToPromptCloudChanges(() => {
+          // 本机写入会回显为 Realtime 事件；等待当前队列清空后再读取，避免
+          // 读到半完成快照覆盖正在编辑的本地状态。
+          const refresh = () => {
+            if (cloudWritesInFlightRef.current > 0) {
+              window.setTimeout(refresh, 300)
+              return
+            }
+            void loadPromptCloudSnapshot(loadSettings().aiApiKey).then((latest) => {
+              if (latest?.hasCloudData) applyCloud(latest)
+            })
+          }
+          window.setTimeout(refresh, 250)
+        })
+        setHydrated(true)
+        return
+      }
+    } catch {
+      // 未登录或云端暂不可用时，继续兼容旧的局域网同步链路。
+    }
+    setCloudMode(false)
     const serverOk = await isServerAvailable()
     if (!serverOk) {
       // 离线兜底：使用本机 localStorage 数据
@@ -225,6 +319,14 @@ export default function Home() {
   }, [connect])
 
   useEffect(() => {
+    const onAuthChanged = () => {
+      void connect()
+    }
+    window.addEventListener('prompt-manager-auth-changed', onAuthChanged)
+    return () => window.removeEventListener('prompt-manager-auth-changed', onAuthChanged)
+  }, [connect])
+
+  useEffect(() => {
     if (!hydrated) return
     if (!saveCards(cards)) {
       const timer = window.setTimeout(
@@ -233,7 +335,45 @@ export default function Home() {
       )
       return () => window.clearTimeout(timer)
     }
-  }, [cards, hydrated, notify])
+    if (!cloudMode) return
+    const nextCards = new Map(cards.map((card) => [card.id, cardCloudFingerprint(card)]))
+    const nextVersions = new Map(cards.map((card) => [card.id, JSON.stringify(card.versions)]))
+    void enqueueCloudWrite(async () => {
+      const previousCards = cloudCardsRef.current
+      const previousVersions = cloudVersionsRef.current
+      if (!previousCards || !previousVersions) return
+
+      for (const card of cards) {
+        if (previousCards.get(card.id) !== nextCards.get(card.id)) {
+          const result = await savePromptCard(card)
+          if (!result.ok) {
+            notify(`云端卡片保存失败：${result.message}`)
+            retryCloudSync()
+            return
+          }
+        }
+        if (previousVersions.get(card.id) !== nextVersions.get(card.id)) {
+          const result = await replacePromptCardVersions(card)
+          if (!result.ok) {
+            notify(`云端历史版本保存失败：${result.message}`)
+            retryCloudSync()
+            return
+          }
+        }
+      }
+      for (const id of previousCards.keys()) {
+        if (nextCards.has(id)) continue
+        const result = await deletePromptCard(id)
+        if (!result.ok) {
+          notify(`云端卡片删除失败：${result.message}`)
+          retryCloudSync()
+          return
+        }
+      }
+      cloudCardsRef.current = nextCards
+      cloudVersionsRef.current = nextVersions
+    })
+  }, [cards, cloudMode, cloudRetryTick, enqueueCloudWrite, hydrated, notify, retryCloudSync])
 
   // P0-A 版本冲突回调：另一设备已更新且本次写入被拒绝 → 重载服务端权威视图并提示用户重试
   useEffect(() => {
@@ -247,12 +387,78 @@ export default function Home() {
   }, [notify])
 
   useEffect(() => {
-    if (hydrated) saveSettings(settings)
-  }, [settings, hydrated])
+    if (!hydrated) return
+    saveSettings(settings)
+    if (!cloudMode) return
+    const serialized = JSON.stringify(settings)
+    if (cloudSettingsRef.current === serialized) return
+    void enqueueCloudWrite(async () => {
+      if (cloudSettingsRef.current === serialized) return
+      const userId = await getPromptCloudUserId()
+      if (!userId) {
+        notify('云端设置未保存：登录状态已失效')
+        return
+      }
+      const result = await savePromptSettings(settings, userId)
+      if (!result.ok) {
+        notify(`云端设置保存失败：${result.message}`)
+        retryCloudSync()
+        return
+      }
+      cloudSettingsRef.current = serialized
+    })
+  }, [settings, cloudMode, cloudRetryTick, enqueueCloudWrite, hydrated, notify, retryCloudSync])
 
   useEffect(() => {
     if (hydrated) saveTags(tags)
   }, [tags, hydrated])
+
+  useEffect(() => {
+    if (!hydrated || !cloudMode) return
+    const nextTags = new Map(tags.map((tag) => [tag.id, JSON.stringify(tag)]))
+    const nextRelations = new Map(promptTags.map((relation) => [`${relation.prompt_id}\u0000${relation.tag_id}`, JSON.stringify(relation)]))
+    void enqueueCloudWrite(async () => {
+      const previousTags = cloudTagsRef.current
+      const previousRelations = cloudPromptTagsRef.current
+      if (!previousTags || !previousRelations) return
+      for (const tag of tags) {
+        if (previousTags.get(tag.id) === nextTags.get(tag.id)) continue
+        const result = await savePromptTag(tag)
+        if (!result.ok) {
+          notify(`云端标签保存失败：${result.message}`)
+          retryCloudSync()
+          return
+        }
+      }
+      const previousByCard = relationsByCard(
+        [...previousRelations.values()].map((serialized) => JSON.parse(serialized) as PromptTag),
+      )
+      const nextByCard = relationsByCard(promptTags)
+      const changedCardIds = new Set([...previousByCard.keys(), ...nextByCard.keys()])
+      for (const cardId of changedCardIds) {
+        const previousIds = previousByCard.get(cardId) ?? []
+        const nextIds = nextByCard.get(cardId) ?? []
+        if (JSON.stringify(previousIds) === JSON.stringify(nextIds)) continue
+        const result = await syncPromptCardTags(cardId, previousIds, nextIds)
+        if (!result.ok) {
+          notify(`云端标签关联保存失败：${result.message}`)
+          retryCloudSync()
+          return
+        }
+      }
+      for (const tagId of previousTags.keys()) {
+        if (nextTags.has(tagId)) continue
+        const result = await deletePromptTag(tagId)
+        if (!result.ok) {
+          notify(`云端标签删除失败：${result.message}`)
+          retryCloudSync()
+          return
+        }
+      }
+      cloudTagsRef.current = nextTags
+      cloudPromptTagsRef.current = nextRelations
+    })
+  }, [tags, promptTags, cloudMode, cloudRetryTick, enqueueCloudWrite, hydrated, notify, retryCloudSync])
 
   useEffect(() => {
     if (hydrated) savePromptTags(promptTags)
@@ -1156,6 +1362,7 @@ export default function Home() {
           onIncludeDescendantsChange={handleIncludeDescendantsChange}
           onResetFilters={resetTagFilters}
           offline={serverOnline === false}
+          syncMode={cloudMode ? 'cloud' : 'legacy'}
           onCreateTag={isDemoView ? undefined : handleCreateTag}
           onRenameTag={isDemoView ? undefined : handleRenameTag}
           onMoveTag={isDemoView ? undefined : handleMoveTag}
@@ -1244,9 +1451,9 @@ export default function Home() {
                   {/* P2-7 空/离线态区分：常驻同步态横幅，避免误判「真空」与「未连上服务端」 */}
                   {!isDemoView && serverOnline === false && (
                     <div className="flex w-full max-w-sm flex-col items-center gap-2 rounded-lg border border-rust/40 bg-rust/10 px-4 py-3">
-                      <span className="text-sm font-medium text-rust">同步服务离线</span>
+                      <span className="text-sm font-medium text-rust">{cloudMode ? '云端同步离线' : '同步服务离线'}</span>
                       <p className="max-w-xs text-xs leading-relaxed text-muted">
-                        未连接到同步服务，当前显示本机缓存（共 {cards.length} 张本地卡片）。修改不会同步到其他设备。
+                        未连接到{cloudMode ? ' Supabase 云端' : '同步服务'}，当前显示本机缓存（共 {cards.length} 张本地卡片）。修改不会同步到其他设备。
                       </p>
                       <button type="button" className="btn px-3 py-1 text-xs" onClick={() => void connect()}>
                         重试连接
@@ -1255,11 +1462,11 @@ export default function Home() {
                   )}
                   {!isDemoView && serverOnline === null && (
                     <div className="w-full max-w-sm rounded-lg border border-line bg-ink-850 px-4 py-2 text-xs text-muted">
-                      正在连接同步服务…
+                      正在连接{cloudMode ? ' Supabase 云端' : '同步服务'}…
                     </div>
                   )}
                   {!isDemoView && serverOnline === true && (
-                    <div className="w-full max-w-sm text-[11px] text-muted">已连接同步服务</div>
+                    <div className="w-full max-w-sm text-[11px] text-muted">{cloudMode ? '已连接 Supabase 云端同步' : '已连接同步服务'}</div>
                   )}
                   <span className="font-serif text-2xl tracking-widest text-paper-dim">提示词库还是空的</span>
                   <p className="max-w-sm text-sm leading-relaxed text-muted">

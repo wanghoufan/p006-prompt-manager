@@ -3,7 +3,7 @@
  * 提示词管理器 · 一键接入
  *
  * 目标：让「接入」这件事只剩一条命令。
- * 用户把一句话发给自己的 AI，AI 执行本脚本，脚本负责：装依赖 → 构建 → 探测客户端 → 写配置 → 真调一次验证。
+ * 用户把一句话发给自己的 AI，AI 执行本脚本，脚本负责：装依赖 → 构建 → 探测客户端 → 写配置 → 协议验证。
  *
  * 用法：
  *   node setup.mjs                     自动接入所有检测到的客户端
@@ -13,9 +13,9 @@
  *   node setup.mjs --remove            卸载（从各客户端配置里移除）
  *   node setup.mjs --json              机器可读输出（给 AI 解析）
  *
- * 数据安全：本脚本只读提示词库（data/store.json）用于统计与验证，
- * 不修改任何卡片、标签或调取码。验证调用会把计数回调指向一个不可达端口，
- * 因此连「复制次数 +1」的副作用都不会发生。
+ * 数据安全：MCP 服务只使用本机 `.env.local` 中可撤销的访问令牌调用云端 RPC；
+ * 不读取 data/store.json，不使用 Supabase service_role。验证只做 MCP 协议握手，
+ * 因此不会修改任何卡片、标签或复制次数。
  */
 
 import { spawn, spawnSync } from 'node:child_process'
@@ -29,7 +29,7 @@ const PROJECT_ROOT = resolve(HERE, '..', '..')
 const HOME = os.homedir()
 const SERVER_NAME = 'prompt-manager'
 const ENTRY = join(HERE, 'dist', 'index.js')
-const STORE = join(PROJECT_ROOT, 'data', 'store.json')
+const MCP_ENV = join(HERE, '.env.local')
 const TOOL_NAME = 'prompt_manager_activate_prompt'
 
 /* ────────────────────────── 参数 ────────────────────────── */
@@ -388,8 +388,6 @@ function probe(entry, code) {
   return new Promise((done) => {
     const env = {
       ...process.env,
-      // 指向不可达端口：命中卡片时的「复制次数 +1」回调会静默失败，不碰用户数据
-      PROMPT_MANAGER_API_URL: 'http://127.0.0.1:9',
     }
     let child
     try {
@@ -501,24 +499,6 @@ function probe(entry, code) {
   })
 }
 
-/* ────────────────────────── 读取提示词库（只读） ────────────────────────── */
-
-function peekStore() {
-  try {
-    const data = JSON.parse(readFileSync(STORE, 'utf8'))
-    const cards = Array.isArray(data.cards) ? data.cards : []
-    const codes = cards.map((c) => (c.code ?? '').trim()).filter(Boolean)
-    return {
-      exists: true,
-      cards: cards.length,
-      withCode: codes.length,
-      probeCode: codes[0] ?? null,
-    }
-  } catch (e) {
-    return { exists: existsSync(STORE), cards: 0, withCode: 0, probeCode: null, error: e.message }
-  }
-}
-
 /* ────────────────────────── 主流程 ────────────────────────── */
 
 function usage() {
@@ -541,13 +521,12 @@ async function main() {
     return { status: 'help' }
   }
 
-  const store = peekStore()
   const result = {
     status: 'ok',
     action: OPT.remove ? 'remove' : OPT.check ? 'check' : OPT.dryRun ? 'dry-run' : 'install',
     projectRoot: PROJECT_ROOT,
     entry: ENTRY,
-    store: { path: STORE, exists: store.exists, cards: store.cards, withCode: store.withCode },
+    env: { path: MCP_ENV, exists: existsSync(MCP_ENV) },
     build: null,
     clients: [],
     verify: null,
@@ -573,14 +552,14 @@ async function main() {
   }
   const entry = { command: build.nodeBin, args: [ENTRY] }
   result.build = { ok: build.ok, node: entry.command, steps: build.steps }
-  log(`  提示词库：${tilde(STORE)}（${store.cards} 张卡片，其中 ${store.withCode} 张已设调取码）`)
+  log(`  MCP 令牌文件：${tilde(MCP_ENV)}${existsSync(MCP_ENV) ? '（已找到）' : '（尚未创建）'}`)
   log(`  运行文件：${tilde(ENTRY)}`)
   log(`  Node：${entry.command}`)
   if (!build.ok) result.problems.push(...build.steps)
   for (const s of build.steps) log('  · ' + s)
 
-  if (!store.exists) {
-    result.problems.push(`没找到 ${tilde(STORE)}。请先启动一次提示词管理器（npm run dev）并打开页面，数据会自动落盘。`)
+  if (!existsSync(MCP_ENV)) {
+    result.problems.push(`没找到 ${tilde(MCP_ENV)}。请先在提示词管理器「设置 → MCP 云端访问」生成令牌并保存该文件。`)
   }
 
   /* 2. 探测客户端 */
@@ -637,22 +616,12 @@ async function main() {
   /* 4. 验证 */
   log('')
   log('[4/4] 实际调用验证')
-  const p = await probe(entry, store.probeCode)
+  const p = await probe(entry, null)
   result.verify = p
   if (p.ok) {
     log(`  ✓ 服务能启动，协议握手正常（${p.serverInfo?.name ?? 'prompt-manager'}）`)
     log(`  ✓ 工具已注册：${p.tools.join(', ')}`)
-    if (p.call) {
-      if (p.call.isError) {
-        log(`  ✗ 调取失败：${p.call.text}`)
-        result.problems.push(`调取验证失败：${p.call.text}`)
-      } else {
-        log(`  ✓ 实调「${store.probeCode}」成功，返回卡片《${p.call.title}》`)
-        log('    （本次验证把计数回调指向了不可达端口，复制次数没有被改动）')
-      }
-    } else {
-      log('  · 库里还没有设了调取码的卡片，跳过实调，只验证了工具注册')
-    }
+    log('  · 为避免验证时增加复制次数，未执行卡片调取；首次使用时将直接从云端验证令牌。')
   } else {
     const why =
       p.reason === 'timeout'

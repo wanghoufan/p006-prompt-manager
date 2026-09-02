@@ -26,6 +26,23 @@
 - [ ] localStorage 空间不足时 → 提示「保存失败」并建议导出备份
 - [ ] 首次启动服务端为空 + 本机有数据 → 自动迁移上传到服务端
 
+### Supabase 云端同步迁移（2026-09-01，待实施）
+
+- [ ] 已登录后无需手动刷新：页面自动重连并显示云端卡片；退出后回退到本地兼容模式
+- [ ] 未登录状态不能读取或写入 `prompt_manager` 业务数据；登录后只读取自己的数据
+- [ ] cards/tags/card_versions/prompt_tags/settings 均启用 RLS；以另一用户身份无法 SELECT/INSERT/UPDATE/DELETE 当前用户数据
+- [ ] cards 新增、编辑、删除均是单记录写入；不存在上传全量 cards/settings/tags/promptTags 快照的接口
+- [ ] 同一 card 以过期 revision 更新时被拒绝并提示冲突；不同卡片并发修改均保留
+- [ ] tags 的父级、同父重名、无环与 prompt_tags 外键/唯一约束均由数据库拒绝非法写入
+- [ ] 标签合并、删除子树、撤销恢复和正文保存版本均保持事务一致性，且卡片不被误删
+- [ ] Mac 与 PC 分别执行卡片/标签 INSERT、UPDATE、DELETE；另一端经 Realtime 正确更新
+- [ ] 断网后恢复连接会重新拉取云端数据；若启用离线编辑，操作按记录重放且冲突可见
+- [ ] MCP 令牌可创建、仅显示一次、可单设备撤销；撤销后该设备无法再调取，其他设备不受影响
+- [ ] MCP 读取云端同一用户的调取码卡片，复制计数原子递增；MCP 不读取本机 `data/store.json`
+- [ ] 导入前后卡片、标签、关联和版本数量一致；UUID 映射后无悬空外键、无重复关联、无重复调取码
+- [ ] `aiApiKey` 不在 Supabase、接口响应、日志、导出或 Git 中；浏览器 bundle 不含 service_role/secret key
+- [ ] 在隔离环境完成 Migration、RLS、Realtime 与恢复演练；生产发布后复核 migration list 与备份
+
 ### 导入导出
 - [ ] JSON 格式导出 → 导入恢复全部卡片和设置
 - [ ] Markdown 格式导出 → 导入恢复（正文 + 标签 + 调取码 + 版本历史）
