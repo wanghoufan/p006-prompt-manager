@@ -59,3 +59,6 @@ mcp/prompt-server/dist/
 
 # ===== opencode 本地技能/配置（不进仓库） =====
 .opencode/
+
+# ===== Supabase CLI 本地产物（link 临时文件；Migration 真相源在平台仓库，不进本项目） =====
+/supabase/
