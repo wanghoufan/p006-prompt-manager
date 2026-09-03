@@ -1398,7 +1398,7 @@ supabase/migrations/20260901163555_fix_prompt_manager_activate_prompt_variable_c
 | # | 优先级 | 事项 | 状态 |
 |---|---|---|---|
 | 1 | P1 | 写队列停摆修复（单项超时+自愈，冲突回归）PM-3 | ✅ 已修复并部署（`503cf86`，容器已重建、线上 bundle 含修复标识）；**冲突回归按用户决定搁置——用户长期只用 Mini 单设备，不做双设备测试，后续会话不得再要求**；状态如实标注「已部署、未做冲突回归」，不标通过 |
-| 3 | P2 | legacy `/api/sync` 退场独立变更申请（裁定要求限期） | ⏳ 待申请 |
+| 3 | P2 | legacy `/api/sync` 退场独立变更申请（裁定要求限期） | 📄 草稿已建待管理员审批：`docs/review/独立变更申请丨legacy-sync退场丨prompt_manager丨2026-09-03.md`（方案 A 先收写缓退役 + 影响面/回滚/验收齐备；批准前不实施） |
 | 4 | P2 | ~~平台仓库 remote/备份~~ **已完成**（2026-09-03 治理侧销项：私有远端 `wanghoufan/alw-db-governance`，本地与远端同步于 `cbbd123`，Migration 5/5 已推） | ✅ 已完成 |
 | 4 | P3 | 连字符调取码规则（PM-4） | ⏳ 产品评估 |
 | — | — | ~~git 分叉整合~~ **已完成**（2026-09-03 核验：本地 master `6144cae` 已合并 origin/master，收尾提交 `73bf618`，双端同点；遗留仅未跟踪 `supabase/`（CLI link 临时文件 + .DS_Store），待用户决定加入 .gitignore 或删除） | ✅ 已完成 |
@@ -1453,7 +1453,7 @@ supabase/migrations/20260901163555_fix_prompt_manager_activate_prompt_variable_c
 
 下一步按优先级（需用户启动）：
 1. P1 写队列停摆修复（单项超时+自愈，冲突回归）— 最高优
-2. P2 legacy /api/sync 退场独立变更申请
+2. P2 legacy /api/sync 退场独立变更申请——草稿已建：`docs/review/独立变更申请丨legacy-sync退场丨prompt_manager丨2026-09-03.md`，待用户转送管理员审批；批准前不实施
 3. ~~P2 平台仓库 remote/备份~~ 已完成（治理侧销项 PM-1：私有远端 alw-db-governance 已同步）
 4. P3 连字符调取码规则
 5. ~~git 分叉整合~~ 已完成（master 6144cae = origin/master，be1600d/450b62c 收尾已推）
