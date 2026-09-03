@@ -1400,9 +1400,8 @@ supabase/migrations/20260901163555_fix_prompt_manager_activate_prompt_variable_c
 | 1 | P1 | 写队列停摆修复（单项超时+自愈，冲突回归）PM-3 | ⏳ 待开发定级（观察项最高优） |
 | 3 | P2 | legacy `/api/sync` 退场独立变更申请（裁定要求限期） | ⏳ 待申请 |
 | 4 | P2 | 平台仓库 remote/备份（PM-1 单点风险） | ⏳ 待配置（remote 为空） |
-| 5 | P3 | 连字符调取码规则（PM-4） | ⏳ 产品评估 |
-| — | — | git 分叉整合（`origin/mcp-delivery` ↔ `origin/master` 7 提交） | ⏳ 需用户授权 |
-| — | — | 今日未提交改动是否提交由用户决定（§16.17 E 清单） | ⚠️ 未提交 |
+| 4 | P3 | 连字符调取码规则（PM-4） | ⏳ 产品评估 |
+| — | — | ~~git 分叉整合~~ **已完成**（2026-09-03 核验：本地 master `6144cae` 已合并 origin/master，收尾提交 `73bf618`，双端同点；遗留仅未跟踪 `supabase/`（CLI link 临时文件 + .DS_Store），待用户决定加入 .gitignore 或删除） | ✅ 已完成 |
 
 ### 2. 下一步任务（严格按序）
 
@@ -1410,7 +1409,7 @@ supabase/migrations/20260901163555_fix_prompt_manager_activate_prompt_variable_c
 2. **P2 legacy 退场申请**：评估 `/api/sync` 收缩为只读或直接退役的独立变更申请（保留 SSE 只读可缓办），提交审核人。
 3. **P2 平台远端备份**：为平台仓库配置私有 remote 并推送或纳入 pbackup 周期备份并验证（PM-1）。
 4. **P3 连字符调取码**：产品二选一（改规则避开 `-` 或在 MCP 工具描述明确精确传参）。
-5. **git 分叉整合**：先处理未提交工作树（用户决定提交范围）→ 合并 `origin/master` 7 提交；Air 克隆现停 `mcp-delivery`。
+5. ~~**git 分叉整合**~~：已完成（master `6144cae` = origin/master，收尾提交 `73bf618`）；剩小项：`supabase/` 未跟踪目录（CLI link 临时文件）由用户决定 gitignore 或删除。
 6. **小项**：保留无码测试卡按决定清理；关 QA Chrome；scratch 脚本可留。
 7. **发布归档**：管理员将按惯例核对线上状态后收口归档；项目侧无需重复发布。
 
