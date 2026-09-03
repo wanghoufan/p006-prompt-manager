@@ -98,6 +98,8 @@ export function PreviewPanel({
   const [summaryLoading, setSummaryLoading] = useState(false)
   const [formatLoading, setFormatLoading] = useState(false)
   const [metaLoading, setMetaLoading] = useState(false)
+  const [metaFeedback, setMetaFeedback] = useState<'success' | 'error' | null>(null)
+  const metaFeedbackTimer = useRef<number | null>(null)
   const [showSummary, setShowSummary] = useState(false)
   const [showVersions, setShowVersions] = useState(false)
   // P3-2：当前展开完整内容/diff 的版本 id（单开，再点收起）
@@ -340,6 +342,7 @@ export function PreviewPanel({
     return () => {
       if (notesTimer.current) window.clearTimeout(notesTimer.current)
       if (codeTipTimer.current) window.clearTimeout(codeTipTimer.current)
+      if (metaFeedbackTimer.current) window.clearTimeout(metaFeedbackTimer.current)
       metaAbortRef.current?.abort()
       summaryAbortRef.current?.abort()
       formatAbortRef.current?.abort()
@@ -383,6 +386,8 @@ export function PreviewPanel({
   async function regenMeta() {
     if (!card) return
     metaAbortRef.current?.abort()
+    if (metaFeedbackTimer.current) window.clearTimeout(metaFeedbackTimer.current)
+    setMetaFeedback(null)
     const ac = new AbortController()
     metaAbortRef.current = ac
     setMetaLoading(true)
@@ -400,9 +405,13 @@ export function PreviewPanel({
       const newTags = data.tags ?? []
       onUpdateMeta(card.id, newTitle, newTags)
       setDraft((d) => ({ ...d, title: newTitle, tagsText: newTags.join('、') }))
+      setMetaFeedback('success')
+      metaFeedbackTimer.current = window.setTimeout(() => setMetaFeedback(null), 2000)
       notify('已重新生成标签与标题')
     } catch (e) {
       if (ac.signal.aborted) return
+      setMetaFeedback('error')
+      metaFeedbackTimer.current = window.setTimeout(() => setMetaFeedback(null), 2000)
       notify(`重新生成失败：${e instanceof Error ? e.message : '未知错误'}`)
     } finally {
       if (!ac.signal.aborted && metaAbortRef.current === ac) setMetaLoading(false)
@@ -679,8 +688,17 @@ export function PreviewPanel({
                 className="btn-ghost shrink-0 text-[10px]"
                 onClick={() => void regenMeta()}
                 disabled={metaLoading}
+                title="使用 AI 为当前提示词生成标题和标签"
               >
-                {metaLoading ? '生成中…' : '⟳ 生成'}
+                {metaLoading
+                  ? '正在生成标题与标签…'
+                  : metaFeedback === 'success'
+                    ? '✓ 已生成'
+                    : metaFeedback === 'error'
+                      ? '✗ 失败'
+                      : draft.title.trim() || parseTags(draft.tagsText).length > 0
+                        ? '重新生成标题与标签'
+                        : '生成标题与标签'}
               </button>
             </div>
             {codeConflict && (

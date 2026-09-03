@@ -7,16 +7,18 @@ export const OPENCODE_DEFAULT_BASE_URL = (
 
 export const OPENCODE_GO_DEFAULT_BASE_URL = 'https://opencode.ai/zen/go/v1'
 
+const OPENCODE_REQUEST_TIMEOUT_MS = 30_000
+
 type EndpointType = 'responses' | 'messages' | 'chat' | 'google'
 
 export const FREE_ENDPOINTS: Record<string, Extract<EndpointType, 'responses' | 'chat'>> = {
-  'muse-spark-1.2-contributor-free': 'responses',
   'big-pickle': 'chat',
   'mimo-v2.5-free': 'chat',
   'hy3-free': 'chat',
   'ling-3.0-flash-fin-free': 'chat',
   'nemotron-3-ultra-free': 'chat',
   'nemotron-3.5-lightning-free': 'chat',
+  'muse-spark-1.2-contributor-free': 'responses',
 }
 
 export const GO_ENDPOINTS: Record<string, Extract<EndpointType, 'responses' | 'messages' | 'chat'>> = {
@@ -79,6 +81,71 @@ function getGoogleContents(messages: ChatMessage[], system: string) {
   return contents
 }
 
+function firstNonEmptyString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value
+    if (value && typeof value === 'object' && 'value' in value) {
+      const nested = (value as { value?: unknown }).value
+      if (typeof nested === 'string' && nested.trim()) return nested
+    }
+  }
+}
+
+function getResponsesContent(data: unknown): string | undefined {
+  const response = data as {
+    output_text?: unknown
+    reasoning_content?: unknown
+    reasoning?: unknown
+    output?: {
+      type?: string
+      text?: unknown
+      reasoning_content?: unknown
+      reasoning?: unknown
+      summary?: { text?: unknown }[]
+      content?: {
+        type?: string
+        text?: unknown
+        reasoning_content?: unknown
+        reasoning?: unknown
+      }[]
+    }[]
+  }
+  const outputs = response.output ?? []
+  const parts = outputs.flatMap((output) => output.content ?? [])
+
+  return firstNonEmptyString(
+    response.output_text,
+    ...outputs.map((output) => output.text),
+    ...parts.map((part) => part.text),
+    response.reasoning_content,
+    response.reasoning,
+    ...outputs.flatMap((output) => [output.reasoning_content, output.reasoning]),
+    ...parts.flatMap((part) => [part.reasoning_content, part.reasoning]),
+    ...outputs.flatMap((output) => output.summary?.map((part) => part.text) ?? []),
+  )
+}
+
+function getChatContent(data: unknown): string | undefined {
+  const message = (data as {
+    choices?: { message?: { content?: unknown; reasoning_content?: unknown; reasoning?: unknown } }[]
+  }).choices?.[0]?.message
+
+  return firstNonEmptyString(message?.content, message?.reasoning_content, message?.reasoning)
+}
+
+function getUpstreamErrorMessage(body: string): string | undefined {
+  try {
+    const data = JSON.parse(body) as { message?: unknown; error?: unknown }
+    const nestedError =
+      data.error && typeof data.error === 'object'
+        ? (data.error as { message?: unknown }).message
+        : data.error
+    return firstNonEmptyString(data.message, nestedError)
+  } catch {
+    return body.trim() || undefined
+  }
+}
+
 /** OpenCode Zen：按每个模型的明确端点映射构造与解析上游请求。 */
 export class OpenCodeAdapter extends BaseAIAdapter {
   constructor(config: AIConfig) {
@@ -130,9 +197,10 @@ export class OpenCodeAdapter extends BaseAIAdapter {
                 ...(options.maxTokens ? { max_tokens: options.maxTokens } : {}),
               }
 
-    let res: Response
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), OPENCODE_REQUEST_TIMEOUT_MS)
     try {
-      res = await fetch(endpoint, {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
@@ -140,31 +208,49 @@ export class OpenCodeAdapter extends BaseAIAdapter {
         },
         body: JSON.stringify(body),
         cache: 'no-store',
+        signal: controller.signal,
       })
-    } catch {
-      throw new AiError(`无法连接 OpenCode Zen（${this.baseUrl}）`, 503)
-    }
 
-    if (!res.ok) {
-      throw new AiError(`OpenCode 接口返回错误（${res.status}）：${(await res.text()).slice(0, 200)}`)
-    }
+      if (!res.ok) {
+        const upstreamMessage = getUpstreamErrorMessage((await res.text()).slice(0, 2_000))
+        if (/model is disabled/i.test(upstreamMessage ?? '')) {
+          throw new AiError(`模型 ${this.model} 已被禁用，请更换其他模型`, res.status)
+        }
+        if (res.status === 401 || res.status === 403) {
+          throw new AiError('API Key 无效，请检查后重试', res.status)
+        }
+        throw new AiError(
+          `OpenCode 接口返回错误（${res.status}）：${upstreamMessage ?? '未提供错误信息'}`,
+          res.status,
+        )
+      }
 
-    const data: unknown = await res.json()
-    const content =
-      endpointType === 'responses'
-        ? (data as { output?: { type?: string; content?: { type?: string; text?: unknown }[] }[] }).output?.find(
-            (output) => output.type === 'message',
-          )?.content?.find((part) => part.type === 'output_text')?.text
-        : endpointType === 'messages'
-          ? (data as { content?: { text?: unknown }[] }).content?.[0]?.text
-          : endpointType === 'google'
-            ? (data as { candidates?: { content?: { parts?: { text?: unknown }[] } }[] }).candidates?.[0]
-                ?.content?.parts?.[0]?.text
-            : (data as { choices?: { message?: { content?: unknown } }[] }).choices?.[0]?.message?.content
+      const data: unknown = await res.json()
+      const content =
+        endpointType === 'responses'
+          ? getResponsesContent(data)
+          : endpointType === 'messages'
+            ? (data as { content?: { text?: unknown }[] }).content?.[0]?.text
+            : endpointType === 'google'
+              ? (data as { candidates?: { content?: { parts?: { text?: unknown }[] } }[] }).candidates?.[0]
+                  ?.content?.parts?.[0]?.text
+              : getChatContent(data)
 
-    if (typeof content !== 'string' || !content.trim()) {
-      throw new AiError('OpenCode 返回内容为空')
+      if (typeof content !== 'string' || !content.trim()) {
+        throw new AiError('OpenCode 返回内容为空')
+      }
+      return content
+    } catch (error) {
+      if (error instanceof AiError) throw error
+      if (controller.signal.aborted) {
+        throw new AiError('OpenCode 请求超时（30 秒），请稍后重试或更换模型', 504)
+      }
+      if (error instanceof SyntaxError) {
+        throw new AiError('OpenCode 返回了无法解析的响应')
+      }
+      throw new AiError(`无法连接到 ${this.baseUrl}，请检查网络`, 503)
+    } finally {
+      clearTimeout(timeout)
     }
-    return content
   }
 }

@@ -544,6 +544,15 @@ export async function loadFromServer(): Promise<ServerSnapshot | null> {
       ? (data.cards.filter(isCard).map(normalizeCard) as Card[])
       : []
     const remoteSettings = normalizeSettings(data.settings)
+    console.log('[AI settings] loadFromServer normalized snapshot', {
+      rawProvider:
+        data.settings && typeof data.settings === 'object' && 'aiProvider' in data.settings
+          ? data.settings.aiProvider
+          : undefined,
+      normalizedProvider: remoteSettings.aiProvider,
+      normalizedModel: remoteSettings.aiModel,
+      version: typeof data.version === 'number' ? data.version : null,
+    })
     // P1-AI1：服务端不存 Key，取回后补回本机 localStorage 中保存的 Key，避免同步覆盖丢失
     if (!remoteSettings.aiApiKey) {
       remoteSettings.aiApiKey = loadSettings().aiApiKey
@@ -636,11 +645,22 @@ export function subscribeSync(
       return
     }
     if (version === null) return
+    console.log('[AI settings] SSE version received', {
+      version,
+      knownVersion,
+      lastPushedVersion,
+    })
     // EventSource 建连会立即推送当前版本。若首条消息对应的是已经由
     // loadFromServer 载入的快照，无需再异步回拉；否则该请求可能在用户刚
     // 修改 AI 设置后才返回，用旧快照覆盖本地的新选择。
-    if (knownVersion !== null && version <= knownVersion) return
-    if (lastPushedVersion !== null && version === lastPushedVersion) return // 自己的回声，忽略
+    if (knownVersion !== null && version <= knownVersion) {
+      console.log('[AI settings] SSE snapshot skipped: not newer', { version, knownVersion })
+      return
+    }
+    if (lastPushedVersion !== null && version === lastPushedVersion) {
+      console.log('[AI settings] SSE snapshot skipped: local echo', { version })
+      return // 自己的回声，忽略
+    }
     void loadFromServer().then((r) => {
       if (r) onRemote(r.cards, r.settings, r.tags, r.promptTags)
     })

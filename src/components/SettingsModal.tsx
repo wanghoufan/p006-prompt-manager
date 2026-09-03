@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { Settings } from '@/lib/types'
 import type { AIProvider } from '@/lib/ai/types'
+import { AiError } from '@/lib/ai/adapter'
 import { DEFAULT_THINKING_PROMPT } from '@/lib/prompts'
 import { useModalFocus } from '@/hooks/useModalFocus'
 import { maskApiKey } from '@/lib/util'
@@ -25,6 +26,8 @@ const SETUP_AGENT_INSTRUCTION = `请执行 ${SETUP_COMMAND} 完成提示词管�
  */
 const SETUP_CLIENTS = 'WorkBuddy · Codex · Cursor · Claude Desktop · Cline · Windsurf · Gemini CLI'
 
+const CONNECTION_TEST_TIMEOUT_MS = 35_000
+
 /**
  * 通用AI接口的服务商注册表（Phase 2）。
  * 模型列表固定在客户端；仅 OpenRouter 支持自定义模型名称。
@@ -41,17 +44,21 @@ const AI_SERVICES: {
     provider: 'deepseek',
     label: 'DeepSeek',
     available: true,
-    models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
+    models: ['deepseek-v4-pro', 'deepseek-v4-flash-vision-exp', 'deepseek-v4-flash'],
     defaultBaseUrl: 'https://api.deepseek.com',
-    docsUrl: 'https://api-docs.deepseek.com/',
+    docsUrl: 'https://api-docs.deepseek.com/zh-cn/',
   },
   {
     provider: 'zhipu',
     label: '智谱（GLM）',
     available: true,
-    models: ['glm-4-plus', 'glm-4', 'glm-4-flash', 'glm-4v-plus'],
+    models: [
+      'glm-5.3', 'glm-5.3-flash', 'glm-5.2',
+      'glm-4.7', 'glm-4.7-flashx', 'glm-4.6', 'glm-4.5-air', 'glm-4.5-airx',
+      'glm-4-long', 'glm-4-flashx-250414', 'glm-4-flash-250414', 'glm-3-turbo',
+    ],
     defaultBaseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-    docsUrl: 'https://docs.bigmodel.cn/api-reference/introduction',
+    docsUrl: 'https://docs.bigmodel.cn/cn/guide/start/model-overview',
   },
   {
     provider: 'tencent',
@@ -65,17 +72,24 @@ const AI_SERVICES: {
     provider: 'doubao',
     label: '豆包（火山引擎）',
     available: true,
-    models: ['doubao-pro-256k', 'doubao-pro-128k', 'doubao-lite-128k'],
+    models: [
+      'doubao-seed-2-1-pro-260628', 'doubao-seed-evolving', 'doubao-seed-2-1-turbo-260628',
+      'doubao-seed-2-0-pro-260215', 'doubao-seed-2-0-code-preview-260215',
+      'doubao-seed-2-0-lite-260215', 'doubao-seed-2-0-mini-260215',
+    ],
     defaultBaseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
-    docsUrl: 'https://www.volcengine.com/docs/82379/1099522',
+    docsUrl: 'https://www.volcengine.com/docs/82379/1330310',
   },
   {
     provider: 'kimi',
     label: 'Kimi（月之暗面）',
     available: true,
-    models: ['moonshot-v1-128k', 'moonshot-v1-32k', 'moonshot-v1-8k'],
+    models: [
+      'kimi-k3', 'kimi-k2.7-code', 'kimi-k2.6', 'kimi-k2.5',
+      'moonshot-v1-128k', 'moonshot-v1-32k', 'moonshot-v1-8k',
+    ],
     defaultBaseUrl: 'https://api.moonshot.cn/v1',
-    docsUrl: 'https://platform.moonshot.cn/docs/intro',
+    docsUrl: 'https://platform.kimi.com/docs/models',
   },
   {
     provider: 'google',
@@ -106,11 +120,11 @@ const AI_SERVICES: {
     label: 'OpenCode（免费）',
     available: true,
     models: [
-      'muse-spark-1.2-contributor-free', 'big-pickle', 'mimo-v2.5-free', 'hy3-free',
-      'ling-3.0-flash-fin-free', 'nemotron-3-ultra-free', 'nemotron-3.5-lightning-free',
+      'big-pickle', 'mimo-v2.5-free', 'hy3-free', 'ling-3.0-flash-fin-free',
+      'nemotron-3-ultra-free', 'nemotron-3.5-lightning-free', 'muse-spark-1.2-contributor-free',
     ],
     defaultBaseUrl: 'https://opencode.ai/zen/v1',
-    docsUrl: 'https://opencode.ai/auth',
+    docsUrl: 'https://opencode.ai/docs/zh-cn/zen',
   },
   {
     provider: 'opencode-go',
@@ -120,11 +134,12 @@ const AI_SERVICES: {
       'grok-4.6', 'gpt-5.6-luna', 'muse-spark-1.2-contributor', 'minimax-m3', 'minimax-m2.7',
       'minimax-m2.5', 'qwen3.8-max', 'qwen3.8-flash', 'qwen3.7-max', 'qwen3.7-plus',
       'qwen3.6-plus', 'glm-5.3-flash', 'glm-5.3', 'glm-5.2', 'glm-5.1', 'kimi-k3',
-      'kimi-k2.7-code', 'kimi-k2.6', 'longcat-2.0', 'deepseek-v4-pro', 'deepseek-v4-flash',
-      'deepseek-v4-flash-vision-exp', 'mimo-v2.5', 'mimo-v2.5-pro', 'hy4-preview', 'hy3',
+      'glm-5', 'kimi-k2.7-code', 'kimi-k2.6', 'kimi-k2.5', 'longcat-2.0', 'deepseek-v4-pro',
+      'deepseek-v4-flash', 'deepseek-v4-flash-vision-exp', 'mimo-v2.5', 'mimo-v2.5-pro',
+      'hy4-preview', 'hy3',
     ],
     defaultBaseUrl: 'https://opencode.ai/zen/go/v1',
-    docsUrl: 'https://opencode.ai/go',
+    docsUrl: 'https://opencode.ai/docs/zh-cn/go',
   },
 ]
 
@@ -166,7 +181,16 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
     setConnectionTest(null)
     // 设置控件可能连续触发更新；从最新状态合并，避免陈旧渲染快照把刚选的
     // 服务商或模型覆盖回之前的值。
-    onSave((current) => ({ ...current, ...patch }))
+    onSave((current) => {
+      const next = { ...current, ...patch }
+      console.log('[AI settings] SettingsModal onChange', {
+        previousProvider: current.aiProvider,
+        patchProvider: patch.aiProvider,
+        nextProvider: next.aiProvider,
+        nextModel: next.aiModel,
+      })
+      return next
+    })
     if (aiSaveTimer.current) window.clearTimeout(aiSaveTimer.current)
     aiSaveTimer.current = window.setTimeout(() => onNotify?.('AI配置已保存'), 800)
   }
@@ -174,6 +198,8 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
   async function testConnection() {
     setIsTestingConnection(true)
     setConnectionTest(null)
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), CONNECTION_TEST_TIMEOUT_MS)
     const baseUrl = settings.aiBaseUrl || aiService?.defaultBaseUrl || ''
     const apiKey = keyDraft || settings.aiApiKey
     const headers: Record<string, string> = {
@@ -188,22 +214,29 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
       const res = await fetch('/api/ai/summarize-thinking', {
         method: 'POST',
         headers,
+        signal: controller.signal,
         body: JSON.stringify({
           body: '连接测试',
-          customPrompt: '请仅回复“连接成功”。内容：{body}',
+          prompt: '请仅回复“连接成功”。内容：{body}',
         }),
       })
       const data = (await res.json().catch(() => ({}))) as { error?: unknown }
       if (!res.ok) {
-        throw new Error(typeof data.error === 'string' ? data.error : `请求失败（${res.status}）`)
+        throw new AiError(typeof data.error === 'string' ? data.error : `请求失败（${res.status}）`, res.status)
       }
       setConnectionTest({ success: true, message: '连接成功' })
     } catch (e) {
+      const reason = controller.signal.aborted
+        ? '连接测试超时（35 秒），请稍后重试或更换模型'
+        : e instanceof Error
+          ? e.message
+          : '未知错误'
       setConnectionTest({
         success: false,
-        message: e instanceof Error ? e.message : '连接测试失败，请检查配置后重试',
+        message: e instanceof AiError ? e.message : `连接失败：${reason}`,
       })
     } finally {
+      window.clearTimeout(timeout)
       setIsTestingConnection(false)
     }
   }
@@ -434,6 +467,18 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
                   </option>
                 ))}
               </select>
+            )}
+            {settings.aiProvider === 'opencode' && (
+              <p className="mt-1.5 text-xs leading-relaxed text-muted">
+                <a
+                  href="https://opencode.ai/docs/zh-cn/zen"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-gold underline underline-offset-2 hover:text-paper"
+                >
+                  查看当前可用的免费模型
+                </a>
+              </p>
             )}
             <label htmlFor="settings-ai-base-url" className="mt-3 block text-xs text-muted">
               Base URL（可选，留空使用默认）
