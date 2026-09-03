@@ -18,7 +18,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 - 项目名称：提示词管理工具（Prompt Manager）
 - 项目类型：Next.js 应用 + 共享 Supabase 云端存储 + Docker 自托管 + MCP 子包
-- 当前阶段：Supabase 云端多端同步已完成、收口材料最终版已修订（2026-09-03），待审核人裁定；Mini 单设备安全运行期
+- 当前阶段：Supabase 云端多端同步已完成并获 APPROVED_FOR_EXECUTION（2026-09-03 15:00 裁定放行），Migration 5/5 已发布；legacy 退场草稿待审批；Mini 单设备安全运行期
 - 主要目标：管理、编辑与测试提示词
 - 主要用户：使用 GPT 等大模型、需要集中管理 Prompt 的个人 / 团队
 
@@ -26,10 +26,10 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 - 前端：Next.js 16（App Router）+ React 19 + TypeScript 5
 - 服务端：Next.js Route Handler（AI 代理、`/api/mcp-access-tokens` MCP 令牌服务端生成）
-- 共享存储：Supabase `prompt_manager` Schema（Postgres + RLS + Realtime，记录级 `revision` 条件更新，`owner_user_id` 归属）为主；`/api/sync` + `data/store.json` + localStorage 为未登录/离线兼容兜底（审核放行前保留）
+- 共享存储：Supabase `prompt_manager` Schema（Postgres + RLS + Realtime，记录级 `revision` 条件更新，`owner_user_id` 归属）为主；`/api/sync` + `data/store.json` + localStorage 为未登录/离线兼容兜底（已获 APPROVED_FOR_EXECUTION，限期退场草稿已提交待审批，批准前保留）
 - 实时同步：Supabase Realtime（cards/card_versions/tags/prompt_tags/settings 5 表，`wss://…/realtime/v1/websocket`）；旧 SSE 链路仅作兼容保留
 - 认证：Supabase Auth（Magic Link + Google OAuth PKCE），`http://192.168.31.60:3100` 为已核验访问地址（`localhost`/`.local` 不在白名单/被代理劫持）
-- MCP：`mcp/prompt-server/`（`@modelcontextprotocol/sdk` + zod，stdio，v0.2.0 直连 Supabase RPC），工具 `prompt_manager_activate_prompt`（`prompt_manager.activate_prompt` RPC，能力令牌 SHA-256 哈希，`SECURITY DEFINER` 待审核裁定）
+- MCP：`mcp/prompt-server/`（`@modelcontextprotocol/sdk` + zod，stdio，v0.2.0 直连 Supabase RPC），工具 `prompt_manager_activate_prompt`（`prompt_manager.activate_prompt` RPC，能力令牌 SHA-256 哈希，`SECURITY DEFINER` 已裁定接受，2 WARN 存档）
 - 部署：Docker 自托管（`prompt-manager-prompt-manager-1` 绑定 `0.0.0.0:3100`，`DockerData/prompt-manager/legacy-store` bind mount，`DockerBackups/prompt-manager/` 备份不进 Git）
 - AI 调用：通用 `AI_PROVIDER/AI_MODEL/AI_BASE_URL/AI_API_KEY`（支持 opencode-go 等 8 厂商），`docker/env.template` 为模板，`Services/prompt-manager/.env.local`（600 权限）不提交
 - 样式方案：Tailwind CSS v4
@@ -50,7 +50,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ### 当前进展与产物索引
 
-- 当前状态：P0/P1/P2 全部 CLOSED（2026-08-28）；**2026-09-01~09-03 Supabase 云端多端同步已完成并获 APPROVED_FOR_EXECUTION（2026-09-03 15:00 裁定放行）**：独立 `prompt_manager` Schema（6 表 + RLS + Realtime，`20260901163555` 已补录发布 4/4）、Auth（Magic Link + Google OAuth PKCE）、记录级 `revision`、MCP RPC、Docker 自托管、双设备验收（BUG-11/并发/MCP 隔离）、55 卡备份 + 隔离重放全绿；**收口材料已回填 §9/§10 并登记发布**，剩余 P1/P2/P3 观察项按转送清单优先级待办；Mini 单设备安全运行期（`http://192.168.31.60:3100`）
+- 当前状态：P0/P1/P2 全部 CLOSED（2026-08-28）；**2026-09-01~09-03 Supabase 云端多端同步已完成并获 APPROVED_FOR_EXECUTION（2026-09-03 15:00 裁定放行）**：独立 `prompt_manager` Schema（6 表 + RLS + Realtime，`20260901163555` 已发布，Remote 5/5 含 habit_tracker 统一）、Auth（Magic Link + Google OAuth PKCE）、记录级 `revision`、MCP RPC、Docker 自托管、双设备验收（BUG-11/并发/MCP 隔离）、55 卡备份 + 隔离重放全绿；**收口材料已回填 §9/§10 并登记发布**，剩余 P1 已闭环（写队列 30s 超时已部署，冲突回归按用户决定搁置），P2/P3 观察项按转送清单待办；Mini 单设备安全运行期（`http://192.168.31.60:3100`）
 - 需求文档：`docs/pm/提示词管理工具-需求文档.md`
 - 产品报告：`docs/pm/产品报告.md`
 - 实施计划：`docs/pm/PLAN.md`（Supabase 迁移已完成并放行，§16.18）
@@ -59,8 +59,8 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - 交接上下文：`docs/handoff/HANDOFF.md`（§16.18 为当前唯一有效入口，2026-09-03 八次收束，裁定后+已发布）
 - 质量记录：`docs/qa/BUGS.md`（BUG-9/10/11 FIXED，并发/MCP 隔离/备份全绿；待办 P1/P2/P3 见转送清单）、`docs/qa/QA_CHECKLIST.md`
 - 规范：数据库 `2026-09-03 丨 共享 Supabase 项目与独立 Schema 数据库规范 丨 V1.3.md`（存于 `1.Active/alw丨数据库管理专家/`）+ Docker `2026-09-02 丨 Mac Mini 本地项目自托管 Docker 规范 丨 V1.0.md`
-- 平台仓库：`/Users/zzymima0000/Developer/coding/1.Active/alw丨数据库管理专家/平台丨共享 Supabase 数据库`（HEAD `efddca5`，4/4 Migration 已发布，含 `20260901163555`）
-- 远程仓库：https://github.com/wanghoufan/prompt-manager.git（`master` + `origin/mcp-delivery` 分叉待整合）
+- 平台仓库：`/Users/zzymima0000/Developer/coding/1.Active/alw丨数据库管理专家/平台丨共享 Supabase 数据库`（HEAD `2e92f08`，Remote 5/5 已发布，含 `20260901163555` + `20260903160500` 统一治理）
+- 远程仓库：https://github.com/wanghoufan/prompt-manager.git（`master` 已整合，`origin/mcp-delivery` 已合入；本地 `061d807` 含 legacy 退场草稿待推送）
 - 审查裁定：`/Users/zzymima0000/Developer/coding/1.Active/alw丨数据库管理专家/项目审查丨prompt_manager/收口审查裁定丨prompt_manager丨2026-09-03.md`（APPROVED_FOR_EXECUTION）
 - MCP 接入说明：`mcp/prompt-server/README.md`
 - 用户级模型执行指南（Stage Manager 只读引用）：`/Users/zzymima0000/.workbuddy/AI_MODEL_GUIDE.md`

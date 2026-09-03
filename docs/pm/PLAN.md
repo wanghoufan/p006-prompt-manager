@@ -11,10 +11,10 @@
 
 **当前事实（2026-09-03 已验证）**：
 
-- 同步源已切换为 **Supabase `prompt_manager` Schema**（记录级 `revision` 写入，Realtime 订阅 cards/card_versions/tags/prompt_tags/settings 5 表）；旧 `serverStore` + `data/store.json` + `/api/sync` + SSE 仅作未登录/离线兼容兜底（审核放行前保留，裁定要求限期退场）。
+- 同步源已切换为 **Supabase `prompt_manager` Schema**（记录级 `revision` 写入，Realtime 订阅 cards/card_versions/tags/prompt_tags/settings 5 表）；旧 `serverStore` + `data/store.json` + `/api/sync` + SSE 仅作未登录/离线兼容兜底（已获 APPROVED_FOR_EXECUTION，限期退场草稿已提交待审批，批准前保留）。
 - `localStorage` 为本机离线缓存；MCP 已直连 Supabase RPC `activate_prompt`（不再读 `data/store.json`，不使用 `service_role`）。
 - 数据已完成 UUID 映射与去重导入（52 基线 + 1 授权补传 → 53；当前 54 含 1 张保留测试卡），外键孤儿 0。
-- 共享数据库平台仓库位于 `/Users/zzymima0000/Developer/coding/1.Active/alw丨数据库管理专家/平台丨共享 Supabase 数据库`（HEAD `efddca5`，2026-09-03 14:48 commit，含 `20260901152616`/`20260901152750`/`20260901163555` 3 份 + habit_tracker `20260903141849`；已 `supabase link`，管理员隔离重放零错误）；Data API 自定义 Schema 已暴露，RLS 6 表×4 策略已启用。
+- 共享数据库平台仓库位于 `/Users/zzymima0000/Developer/coding/1.Active/alw丨数据库管理专家/平台丨共享 Supabase 数据库`（HEAD `2e92f08`，Remote 5/5 已发布，含 `20260901152616`/`20260901152750`/`20260901163555` + `20260903141849`/`20260903160500` habit_tracker 统一；已 `supabase link`，管理员隔离重放零错误）；Data API 自定义 Schema 已暴露，RLS 6 表×4 策略已启用。
 
 **实施边界**：
 

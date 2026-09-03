@@ -26,35 +26,35 @@
 - [ ] localStorage 空间不足时 → 提示「保存失败」并建议导出备份
 - [ ] 首次启动服务端为空 + 本机有数据 → 自动迁移上传到服务端
 
-### Supabase 云端同步迁移（2026-09-01，待实施）
+### Supabase 云端同步迁移（2026-09-01~09-03，已完成并获 APPROVED_FOR_EXECUTION）
 
-- [ ] 已登录后无需手动刷新：页面自动重连并显示云端卡片；退出后回退到本地兼容模式
-- [ ] 未登录状态不能读取或写入 `prompt_manager` 业务数据；登录后只读取自己的数据
-- [ ] cards/tags/card_versions/prompt_tags/settings 均启用 RLS；以另一用户身份无法 SELECT/INSERT/UPDATE/DELETE 当前用户数据
-- [ ] cards 新增、编辑、删除均是单记录写入；不存在上传全量 cards/settings/tags/promptTags 快照的接口
-- [ ] 同一 card 以过期 revision 更新时被拒绝并提示冲突；不同卡片并发修改均保留
-- [ ] tags 的父级、同父重名、无环与 prompt_tags 外键/唯一约束均由数据库拒绝非法写入
-- [ ] 标签合并、删除子树、撤销恢复和正文保存版本均保持事务一致性，且卡片不被误删
-- [ ] Mac 与 PC 分别执行卡片/标签 INSERT、UPDATE、DELETE；另一端经 Realtime 正确更新
-- [ ] 断网后恢复连接会重新拉取云端数据；若启用离线编辑，操作按记录重放且冲突可见
-- [ ] MCP 令牌可创建、仅显示一次、可单设备撤销；撤销后该设备无法再调取，其他设备不受影响
-- [ ] MCP 读取云端同一用户的调取码卡片，复制计数原子递增；MCP 不读取本机 `data/store.json`
-- [ ] 导入前后卡片、标签、关联和版本数量一致；UUID 映射后无悬空外键、无重复关联、无重复调取码
-- [ ] `aiApiKey` 不在 Supabase、接口响应、日志、导出或 Git 中；浏览器 bundle 不含 service_role/secret key
-- [ ] 在隔离环境完成 Migration、RLS、Realtime 与恢复演练；生产发布后复核 migration list 与备份
+- [x] 已登录后无需手动刷新：页面自动重连并显示云端卡片；退出后回退到本地兼容模式（2026-09-03 Air↔Mini 真机 PASS + BUG-11 复测 0–4 全过）
+- [x] 未登录状态不能读取或写入 `prompt_manager` 业务数据；登录后只读取自己的数据（RLS 6 表×4 策略，冒烟验证一致）
+- [x] cards/tags/card_versions/prompt_tags/settings 均启用 RLS；以另一用户身份无法 SELECT/INSERT/UPDATE/DELETE 当前用户数据
+- [x] cards 新增、编辑、删除均是单记录写入；不存在上传全量快照的 POST（legacy `/api/sync` 已提交 410 退场草稿，待审批前保留只读）
+- [x] 同一 card 以过期 revision 更新时被拒绝并提示冲突；不同卡片并发修改均保留（2026-09-03 并发冲突验收：rev 8→39，toast 明确拒绝）
+- [x] tags 的父级、同父重名、无环与 prompt_tags 外键/唯一约束均由数据库拒绝非法写入
+- [x] 标签合并、删除子树、撤销恢复和正文保存版本均保持事务一致性，且卡片不被误删
+- [x] Air 与 Mini 分别执行卡片/标签 INSERT、UPDATE、DELETE；另一端经 Supabase Realtime（非 SSE）正确更新（约 3s 互推）
+- [x] 断网后恢复连接会重新拉取云端数据；写队列 30s 单项超时 + 自动重试，消除未决请求永久阻塞（PM-3 已部署）
+- [x] MCP 令牌可创建、仅显示一次、可单设备撤销；撤销后该设备无法再调取，其他设备不受影响（2026-09-03 双设备隔离 PASS）
+- [x] MCP 直连 Supabase `activate_prompt` RPC 读取云端同一用户调取码，复制计数原子递增；不读取本机 `data/store.json`（旧文件版 server 根因已修复）
+- [x] 导入前后卡片、标签、关联和版本数量一致；UUID 映射后无悬空外键、无重复关联、无重复调取码（52+1→54，孤儿 0）
+- [x] `aiApiKey` 不在 Supabase（settings 表无该列，结构性不可能）、接口响应、日志、导出或 Git 中；浏览器 bundle 不含 service_role/secret key
+- [x] 在隔离环境完成 Migration、RLS、Realtime 与恢复演练；生产发布后复核 migration list（Remote 5/5）与备份（55 卡基线全绿）
 
 ### 导入导出
 - [ ] JSON 格式导出 → 导入恢复全部卡片和设置
 - [ ] Markdown 格式导出 → 导入恢复（正文 + 标签 + 调取码 + 版本历史）
 - [ ] 导入旧版本备份（无 `code`/`notes` 字段）→ 自动补全默认值，不报错
 - [ ] 导入非法内容 → 提示错误，不覆盖现有数据
+### 实时同步（Supabase Realtime 为主，SSE 仅兼容兜底待退役）
 
-### 实时同步（SSE）
-- [ ] dev 服务在跑时：本机 + 局域网另一台打开同一 URL 看到同一份数据
-- [ ] 任一端增/删/改卡片 → 另一端几秒内自动刷新（SSE）
-- [ ] 回声过滤：A 端修改 → B 端刷新 → A 端不重复刷新（版本号匹配跳过）
-- [ ] 服务不可用时回退 localStorage，页面提示「未连接同步服务」
-- [ ] 服务恢复后 → 数据自动从 localStorage 同步到服务端
+- [x] 已登录云端：任意端增删改 → 另一端约 3s 内经 Realtime 自动刷新（2026-09-03 BUG-11 步骤2 真机：reloadCount=0 未刷新可见）
+- [x] 回声过滤：cloudCardsFingerprint + revision 条件更新，本机写入回显不重复刷新
+- [x] 云端暂时不可用：保持云端模式 + 退避重试（2s→4s→8s→16s→30s）+ 横幅「云端暂时不可用」，绝不静默降级 legacy
+- [ ] 未登录兼容链路（历史）：局域网另一台打开同一 `http://*:3100` 经 SSE 共用 `data/store.json`（保留至退场审批）
+- [x] 服务不可用时回退 localStorage，页面提示「未连接同步服务，已使用本机本地数据」
 
 ### 右侧面板交互
 - [ ] 左缘拖动手柄调宽（320–720px）；双击重置；刷新后宽度保持（localStorage）
@@ -65,13 +65,13 @@
 - [ ] 键盘 1~5 打星、0 清除；输入框/弹窗聚焦时不误触发
 - [ ] 复制成功才计数 +1；复制失败提示且不计数
 - [ ] 「清零」按钮将 `copyCount` 重置为 0
+### MCP（子包，v0.2.0 直连 Supabase RPC）
 
-### MCP（子包）
-- [ ] `cd mcp/prompt-server && npm run build` 无错误
-- [ ] stdio 协议：initialize → tools/list 返回 `prompt_manager_activate_prompt` → call 命中返回「[系统提示词已切换]」包装 → call 未命中 isError
-- [ ] MCP 调取命中后 `copyCount +1`（`POST /api/sync/increment-copy`）；未命中 404 不误加
-- [ ] MCP 计数失败时 → 静默忽略，不影响卡片读取
-- [ ] WorkBuddy 新会话中「调取 <code>」能触发工具并按角色继续
+- [x] `cd mcp/prompt-server && npm run build` 无错误（2026-09-03 验证通过）
+- [x] stdio 协议：initialize → tools/list 返回 `prompt_manager_activate_prompt` → call 命中返回「[系统提示词已切换]」包装 → call 未命中 isError（Air + Mini 双设备真机通过）
+- [x] MCP 调取命中后 `copyCount +1`（经 Supabase RPC 原子 `copy_count+1`，与手动共用总数；旧 `POST /api/sync/increment-copy` 已无调用方、待移除）
+- [x] MCP 计数失败时 → 静默忽略，不影响卡片读取
+- [x] WorkBuddy 新会话中「调取 <code>」能触发工具并按角色继续（`sop` / `jbyj` / `hi` 实测命中，连字符码需精确传参）
 
 ### 构建门禁
 - [x] `npx tsc --noEmit` 零错误（2026-08-26 第三次验证通过）

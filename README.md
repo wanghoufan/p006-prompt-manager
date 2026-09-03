@@ -76,7 +76,8 @@
 ### 先决条件
 
 - **Node.js** ≥ 18（推荐 20+）
-- **DeepSeek API Key**（https://platform.deepseek.com）
+- **AI API Key**（8 选 1：DeepSeek/智谱/腾讯/豆包/Kimi/Google/OpenAI/OpenRouter，当前默认 `opencode-go`：https://opencode.ai/zen/go/v1）
+- **Supabase 账号**（共享项目 `yacgnikzvutbpoqvokth`，publishable key 可公开；登录后云端为主数据源）
 
 ### 安装与运行
 
@@ -86,20 +87,21 @@ npm install
 
 # 2. 配置密钥
 cp .env.local.example .env.local
-#   编辑 .env.local，填入 DEEPSEEK_API_KEY=sk-xxx
+#   编辑 .env.local，填入 AI_API_KEY=sk-xxx（或 AI_PROVIDER/AI_MODEL/AI_BASE_URL 组合）
+#   云端同步需同时填 NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 
 # 3. 启动开发服务
 npm run dev
-#   打开 http://localhost:3100
+#   打开 http://192.168.31.60:3100 并登录云端（勿用 localhost:3100，回跳白名单限制）
 
 # （可选）带 watchdog 自愈地启动，服务挂了 3 秒自动拉起：
-./dev-server.sh start        # 启动
+./dev-server.sh start        # 启动（3100 已被 Docker 占用时禁止）
 ./dev-server.sh status       # 查看状态
 ./dev-server.sh logs         # 查看日志
 ./dev-server.sh stop         # 停止
 ```
 
-> 首次打开时若本机已有旧数据（localStorage），会自动迁移上传到服务端。
+> 已登录后主数据在 Supabase 云端（Realtime 同步，`revision` 冲突提示）；未登录时才走 `localStorage`/`data/store.json` 兼容兜底。
 
 ### 生产部署（Docker / Mac Mini）
 
@@ -107,10 +109,10 @@ npm run dev
 
 ```text
 PC / 其他 Mac 浏览器
-        ↓  http://Mac-mini.local:3100
-Mac Mini Docker：Prompt Manager Web 服务
-        ↓
-Supabase：Auth + prompt_manager 云端主数据
+        ↓  http://192.168.31.60:3100（已核验，勿用 localhost/.local）
+Mac Mini Docker：Prompt Manager Web 服务（0.0.0.0:3100 单容器）
+        ↓  Supabase Realtime（cards/card_versions/tags/prompt_tags/settings）
+Supabase：Auth（Magic Link + Google PKCE）+ prompt_manager 云端主数据（RLS + revision）
 ```
 
 Docker 配置文件位于项目根目录的 `Dockerfile`、`compose.yaml` 与 `.dockerignore`。它们是部署模板，**不是**在开发目录直接运行正式服务的授权：正式代码须先从开发源码区通过 Git 部署流程更新到：
@@ -146,12 +148,13 @@ docker compose ps
 
 > 端口统一为 **3100**（`package.json` 的 dev/start 与 `dev-server.sh` 的 `PORT`）。MCP 已直接使用 Supabase 云端 RPC，不再依赖本机端口或 `data/store.json`。
 
-## 局域网实时同步
+## 云端实时同步
 
-- 服务监听所有网卡（`*:3100`）。同局域网内其他设备访问 `http://<本机IP>:3100` 即可共用同一份数据（数据存在运行 dev 服务的那台机器上，`data/store.json`）。
-- 任意一端增删改，另一端几秒内自动刷新（SSE 推送）。
-- `next.config.ts` 的 `allowedDevOrigins` 已放行 `.local` 主机名与常用 IP；**IP 变化时需同步更新并重启**。
-- 本机也可用 `.local` 地址：`http://<Mac主机名>.local:3100`（不随 DHCP 变化，比 IP 更稳定）。
+- **主数据源为 Supabase `prompt_manager` Schema**（Postgres + RLS + 记录级 `revision` 条件更新，`owner_user_id` 归属），已获 `APPROVED_FOR_EXECUTION`（2026-09-03，Migration 5/5 已发布）。
+- 认证：Supabase Auth（Magic Link + Google OAuth PKCE）；固定访问地址 `http://192.168.31.60:3100`（`localhost`/`.local` 可能因白名单/代理被劫持，统一用裸 IP）。
+- 同步：Supabase Realtime 订阅 `cards/card_versions/tags/prompt_tags/settings` 5 表（`wss://…/realtime/v1/websocket`），任意端增删改约 3 秒内互推；记录级 `revision` 保证并发冲突明确提示而非静默覆盖。
+- 兼容兜底：未登录时走 `data/store.json` + `/api/sync` + `localStorage` + SSE（`http://*:3100` 局域网共享），已提交 `410 Gone` 限期退场草稿（`docs/review/独立变更申请丨legacy-sync退场丨prompt_manager丨2026-09-03.md`，待审批前保留只读）。
+- Docker 自托管：`0.0.0.0:3100` 单容器 `prompt-manager-prompt-manager-1`，`DockerData/prompt-manager/legacy-store` 仅作兼容副本，备份统一在 `/Users/zzymima0000/DockerBackups/prompt-manager/`（不进 Git）。
 
 ## MCP 接入（WorkBuddy / 其他支持 MCP 的 Agent）
 
@@ -209,9 +212,10 @@ docker compose ps
 
 - **Next.js 16**（App Router）+ **React 19** + **TypeScript 5**
 - **Tailwind CSS v4** — 深色主题，响应式布局
-- **DeepSeek API**（`deepseek-v4-flash`）— 服务端代理，自动生成标题 / 标签 / 思维方式总结
-- **服务端共享存储** — `serverStore` 进程内单例 + `data/store.json` 落盘 + SSE 实时推送
-- **MCP** — `@modelcontextprotocol/sdk`（stdio），独立子包 `mcp/prompt-server/`
+- **通用 AI 适配** — `AI_PROVIDER/AI_MODEL/AI_BASE_URL/AI_API_KEY`（8 厂商：DeepSeek/智谱/腾讯/豆包/Kimi/Google/OpenAI/OpenRouter，默认 `opencode-go`），`src/lib/ai/` 适配器 + Route Handler 代理，自动生成标题 / 标签 / 思维方式总结
+- **云端主存储** — Supabase `prompt_manager` Schema（6 表 + RLS 24 策略 + Realtime 5 表，记录级 `revision`，`owner_user_id` 归属），已获放行（Migration 5/5）；`/api/sync` + `data/store.json` + SSE 仅作未登录兼容兜底（限期退场草稿待审批）
+- **认证** — Supabase Auth（Magic Link + Google OAuth PKCE，`http://192.168.31.60:3100` 白名单）
+- **MCP** — `@modelcontextprotocol/sdk`（stdio，v0.2.0 直连 Supabase `prompt_manager.activate_prompt` RPC，能力令牌 SHA-256，`SECURITY DEFINER` 已裁定接受）
 
 ## 项目结构
 
@@ -220,72 +224,73 @@ src/
 ├── app/
 │   ├── api/
 │   │   ├── ai/
-│   │   │   ├── generate-meta/route.ts       # AI 生成标题+标签
-│   │   │   └── summarize-thinking/route.ts  # AI 思维方式总结
+│   │   │   ├── generate-meta/route.ts       # AI 生成标题+标签（通用适配器）
+│   │   │   ├── summarize-thinking/route.ts  # AI 思维方式总结
+│   │   │   └── format-body/route.ts         # AI 正文整理
+│   │   ├── mcp-access-tokens/route.ts       # MCP 令牌服务端生成（Node randomBytes + SHA-256，不用 service_role）
 │   │   └── sync/
-│   │       ├── route.ts                     # 共享存储 GET 快照 / POST 覆盖
-│   │       ├── stream/route.ts              # SSE 实时推送
-│   │       └── increment-copy/route.ts      # MCP 调用计数（copyCount +1）
+│   │       ├── route.ts                     # 兼容兜底：GET 快照 / POST 整库覆盖（待 410 退役）
+│   │       ├── stream/route.ts              # SSE 兼容推送（仅未登录）
+│   │       └── increment-copy/route.ts      # 死路由（待移除，已无调用方）
 │   ├── layout.tsx
-│   └── page.tsx                             # 主页面
+│   └── page.tsx                             # 主页面（cloudMode 分支：Supabase 云端 vs 兼容兜底，写队列 30s 超时自愈）
 ├── components/
-│   ├── CardDetail.tsx                       # 详情弹窗
-│   ├── CardItem.tsx                         # 卡片组件（含 2 行正文预览、@code 徽标）
-│   ├── Composer.tsx                         # 新建输入框
-│   ├── DemoMenu.tsx                         # 示例菜单
-│   ├── PreviewPanel.tsx                     # 右侧预览面板（可拖动宽度、折叠区、调取码输入）
-│   ├── SettingsModal.tsx                    # 设置弹窗
-│   ├── SortBar.tsx                          # 排序栏
-│   ├── TagPanel.tsx                         # 标签面板
-│   ├── TopBar.tsx                           # 顶栏
+│   ├── CardDetail.tsx / PreviewPanel.tsx    # 详情/预览（TagEditor、失焦自动保存、版本 diff）
+│   ├── Composer.tsx                         # 新建输入框（后台 AI 补全）
+│   ├── SupabaseAuthControl.tsx              # Supabase Auth（Magic Link + Google PKCE）
+│   ├── McpCloudAccess.tsx                   # MCP 云端访问（令牌生成/撤销/复制兜底）
+│   ├── TagPanel.tsx / SortBar.tsx / CardItem.tsx / TopBar.tsx / SettingsModal.tsx
 │   └── ...
 └── lib/
-    ├── ai.ts                                # DeepSeek API 封装
-    ├── cards.ts                             # 卡片 CRUD + 版本管理 + 调取码规范化
-    ├── demo.ts                              # 12 张示例数据
-    ├── prompts.ts                           # AI 提示词模板
-    ├── serverStore.ts                       # 服务端共享存储（单例 + 落盘 + 广播）
-    ├── storage.ts                           # localStorage 兜底 + 服务端同步层
-    ├── types.ts                             # 类型定义
-    └── util.ts                              # 工具函数
+    ├── ai/                                  # 通用 AI 适配器（types/adapter/factory + 8 厂商）
+    ├── supabase/
+    │   ├── config.ts / browser.ts           # PROMPT_MANAGER_SCHEMA + 浏览器客户端
+    │   ├── promptRepository.ts              # 云端快照/Realtime/revision 写入/标签关系增量/版本追加
+    │   └── mcpTokens.ts                     # 令牌哈希/列表/撤销（浏览器仅透传 JWT）
+    ├── cards.ts / tags.ts / serverStore.ts  # 卡片/标签纯函数 + 兼容存储（待退役）
+    ├── storage.ts                           # localStorage + 兼容同步层（含 sanitize/conflict 回声过滤）
+    ├── types.ts / prompts.ts / util.ts
+    └── ...
 mcp/prompt-server/
-├── src/index.ts                             # MCP server（prompt_manager_activate_prompt）
+├── src/index.ts                             # MCP server（直连 Supabase prompt_manager.activate_prompt RPC）
 ├── package.json / tsconfig.json
 └── README.md                                # MCP 接入说明
-dev-server.sh                                # dev 服务 watchdog 管理脚本
+supabase/.temp/                              # CLI link 临时文件（.gitignore，不进仓库；真相源在平台仓库）
+Dockerfile / compose.yaml / docker/env.template  # Docker 自托管模板（standalone 输出，legacy-store bind mount）
 ```
 
 ## 环境变量
 
 | 变量 | 必填 | 说明 |
 |---|---|---|
-| `DEEPSEEK_API_KEY` | 是 | DeepSeek 密钥（https://platform.deepseek.com），仅存于服务端 `.env.local` |
-| `DEEPSEEK_MODEL` | 否 | 默认 `deepseek-v4-flash` |
-| `DEEPSEEK_BASE_URL` | 否 | 默认 `https://api.deepseek.com`（兼容 `/v1` 前缀） |
-| `NEXT_PUBLIC_SUPABASE_URL` | 云端同步必填 | Supabase 项目 URL；可公开 |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | 云端同步必填 | Supabase publishable key；可公开，绝不能使用 secret/service role |
-| `NEXT_PUBLIC_APP_URL` | Docker 部署必填 | 统一访问地址，例如 `http://Mac-mini.local:3100` |
-| `PROMPT_MANAGER_DATA_DIR` | Docker 部署必填 | `DockerData/prompt-manager/legacy-store` 的绝对路径，仅保留 JSON/SSE 兼容数据 |
+| `AI_PROVIDER` | 否 | AI 厂商（deepseek/zhipu/tencent/doubao/kimi/google/openai/openrouter/opencode-go，默认 `deepseek`） |
+| `AI_MODEL` | 否 | 模型名（例 `deepseek-v4-flash` / `gpt-4o`），默认随厂商自动选择 |
+| `AI_BASE_URL` | 否 | 自定义 Base URL（留空用厂商默认） |
+| `AI_API_KEY` | 是（UI 或 env 二选一） | 厂商 API Key（`Settings` 中填入即存 localStorage，或填于 `.env.local` 服务端） |
+| `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL` / `DEEPSEEK_BASE_URL` | 兼容 | 旧 DeepSeek 专用变量，`AI_*` 未填时回退 |
+| `NEXT_PUBLIC_SUPABASE_URL` | 云端同步必填 | Supabase 项目 URL（`https://yacgnikzvutbpoqvokth.supabase.co`，可公开） |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | 云端同步必填 | Supabase publishable key（`sb_publishable_…`，可公开，绝不能使用 `sb_secret_…`/service_role） |
+| `NEXT_PUBLIC_APP_URL` | Docker 部署必填 | 统一访问地址 `http://192.168.31.60:3100`（白名单精确地址，勿用 localhost/.local） |
+| `PROMPT_MANAGER_DATA_DIR` | Docker 部署必填 | `DockerData/prompt-manager/legacy-store` 绝对路径，仅保留兼容副本 |
 | `PROMPT_MANAGER_PORT` | 否 | Docker 对外端口，默认 `3100` |
-| `PROMPT_MANAGER_API_URL` | 否 | 旧版 MCP 计数 API 地址，默认 `http://localhost:3100` |
 
 ## 存储与备份
 
-- **同步源**：服务端 `data/store.json`（`serverStore` 落盘，含用户提示词，已被 `.gitignore` 忽略）。
-- **离线兜底**：localStorage（键 `prompt-manager:cards` / `prompt-manager:settings`）。
-- 首次打开时若服务端为空且本机 localStorage 有数据，会自动迁移上传。
-- 请定期「导出」备份。
+- **主同步源**：Supabase `prompt_manager` 云端（6 表 + RLS + Realtime，记录级 `revision`），已获放行并完成 55 卡基线备份 + 隔离恢复演练全绿（`DockerBackups/prompt-manager/`，生产零写入）。
+- **兼容兜底**：未登录时 `data/store.json`（`serverStore` 落盘 + SSE）+ `localStorage`（`prompt-manager:cards/settings`）；该链路已提交限期退场草稿（POST 将 `410 Gone`，GET/SSE 暂保留只读），审核批准前保留。
+- 导入：三份本地来源合并导入云端（52 基线 + 授权补传 → 54 当前，含 1 张保留测试卡），外键孤儿 0，`aiApiKey` 永不入云。
+- 请定期「导出」备份；`DockerBackups/prompt-manager/` 全量结构/数据/角色 dump 不进 Git。
 
 ## 常见问题（FAQ）
 
-**Q：Docker 部署后，PC 应该打开哪个地址？**
-A：打开 `http://Mac-mini.local:3100`，然后在右上角登录同一个 Supabase 账号。不要打开 PC 自己的 `localhost:3100`；那代表 PC 本机，除非它自己运行了服务。
+**Q：Docker 部署后，PC/另一台 Mac 应该打开哪个地址？**
+A：统一打开 `http://192.168.31.60:3100`（当前已核验访问地址），然后登录同一个 Supabase 账号。不要打开本机的 `localhost:3100`（不在白名单，回跳会被静默改送 Site URL 导致“点了没反应”）或 `.local`（易被代理 TUN 劫持 `ERR_EMPTY_RESPONSE`）。详见 `2026-09-02 丨 Mac Mini 本地项目自托管 Docker 规范 丨 V1.0.md`。
 
 **Q：另一台电脑打不开 / 无法同步？**
-A：开发模式下，确认运行 dev 服务的那台电脑 `npm run dev` 仍在运行；Docker 模式下检查 Mac Mini 上 `docker compose ps` 是否为 running。对方必须使用 Mac Mini 的 `.local` 地址，而非自己的 localhost。若是开发服务提示跨域拦截，把该 IP/主机名加入 `next.config.ts` 的 `allowedDevOrigins` 并重启。
+A：① 确认已登录云端（`SupabaseAuthControl` 显示已登录 `wanghoufan13@gmail.com`，aside 底栏为“已开启 Supabase 云端实时同步”）；② 云端模式走 Supabase Realtime，不依赖 dev 服务是否运行（Docker 需 `docker compose ps` 为 Up）；③ 未登录时才走旧局域网链路（`data/store.json` + SSE），该链路已限期退场。跨域拦截由 `next.config.ts` 动态 LAN IP 已处理，IP 漂移重启容器即可。
 
 **Q：IP 变了之后同步失效？**
-A：路由器重分配 IP 后，旧 IP 失效。改用 `.local` 主机名访问，或更新 `allowedDevOrigins` 里的 IP 并重启服务。
+A：云端同步不依赖 LAN IP（走 Supabase 云端）；仅兼容兜底的局域网链路受 IP 影响。当前固定访问地址为 `http://192.168.31.60:3100`，已在 Supabase Dashboard Site URL/Redirect URLs 白名单；若路由器重分配 IP，需更新白名单并重启 Docker。
 
 **Q：MCP 调取没反应 / 工具调不起来？**
 A：① 确认已在 WorkBuddy「连接器」里**信任**该 server；② MCP 中途启用需**新开会话**才会加载工具元数据；③ 用「调取 / 激活 / 加载」+ 短码触发（如 `调取 jbyj`）。
@@ -294,10 +299,10 @@ A：① 确认已在 WorkBuddy「连接器」里**信任**该 server；② MCP �
 A：右侧面板或详情弹窗填写调取码时，若已存在会实时红字提示，换一个即可。
 
 **Q：复制次数不更新？**
-A：手动复制实时生效；MCP 调取计数需要 dev 服务运行且 `PROMPT_MANAGER_API_URL`（默认 `http://localhost:3100`）可达，计数失败不影响取卡片。
+A：手动复制实时 +1；MCP 调取经 Supabase RPC 原子 `copy_count+1`（与手动共用总数），失败不影响取卡片；未登录兼容链路的 `/api/sync/increment-copy` 已无调用方、待移除。
 
 **Q：AI 生成标题/标签失败？**
-A：检查 `.env.local` 中 `DEEPSEEK_API_KEY` 是否正确，以及网络能否访问 DeepSeek。失败时可手动「直接创建」。
+A：检查 `设置 → AI 服务` 中是否已选厂商并填入可用 `API Key`（或 `.env.local` 中 `AI_API_KEY`/`DEEPSEEK_API_KEY`），以及 Base URL/网络是否可达（默认 `opencode-go` 适配器走 `https://opencode.ai/zen/go/v1`）。失败时可手动「直接创建」，后台补全会 toast 提示。
 
 ## 许可证
 
