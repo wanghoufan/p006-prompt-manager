@@ -1477,16 +1477,15 @@ supabase/migrations/20260901163555_fix_prompt_manager_activate_prompt_variable_c
 | P1 写队列停摆修复（PM-3） | ✅ 已部署 | `503cf86` 30s 单项超时+自愈重试；容器已重建、线上 bundle 含 `cloud-write-timeout` 标识；**冲突回归按用户决定永久搁置**（不标通过） |
 | HANDOFF 待办核销 | ✅ | git 分叉整合早已完成（`6144cae`）；`/supabase/` 已入 `.gitignore`（`450b62c`）；P2 平台仓库备份治理侧已销项（远端 `alw-db-governance`） |
 | P2 legacy `/api/sync` 退场独立变更申请 | 📄 草稿待审批 | `docs/review/独立变更申请丨legacy-sync退场丨prompt_manager丨2026-09-03.md`（方案 A 先收写缓退役 + 影响面/回滚/验收）；**管理员批准前不实施**；待用户转送 |
-| **BUG-12 数据丢失事故**（2026-09-03 用户报告） | 🔧 修复已提交，**待部署** | 用户新建/生成卡片保存标题标签后刷新丢失。根因（QA 两轮现场证据 + store.json/localStorage 核验）：云端写静默失败期间编辑仅落 localStorage → 会话掉为未登录 → legacy 快照**无条件覆盖** localStorage，数据三方皆失、**无法恢复**（用户当天数据确认全灭）。修复 `5c2359c`（已推 master）：①`backupLocalSnapshot()` 任何远端快照覆盖前滚动备份四组 localStorage 到 `prompt-manager:preconnect-backup`；②`mergeLocalOnlyIntoRemoteSnapshot()` 仅存本机实体按 id 合并回视图并补推送 + toast。tsc/ESLint/build 三门禁全过。详见 BUGS.md「BUG-12」与 `docs/qa/2026-09-03 丨 保存丢失排查-Mini端QA现场证据 丨 V1.0.md` |
+| **BUG-12 数据丢失事故**（2026-09-03 用户报告） | ✅ **FIXED（已部署 + 运行确认）** | 用户新建/生成卡片保存标题标签后刷新丢失。根因（QA 两轮现场证据 + store.json/localStorage 核验）：云端写静默失败期间编辑仅落 localStorage → 会话掉为未登录 → legacy 快照**无条件覆盖** localStorage，数据三方皆失、**无法恢复**（用户当天数据确认全灭）。修复 `5c2359c`：①`backupLocalSnapshot()` 任何远端快照覆盖前滚动备份四组 localStorage 到 `prompt-manager:preconnect-backup`；②`mergeLocalOnlyIntoRemoteSnapshot()` 仅存本机实体按 id 合并回视图并补推送 + toast。tsc/ESLint/build 三门禁全过。**2026-09-04 部署核验全过**（Services SHA-256 一致、HTTP 200、运行产物含修复标识、legacy store.json 未变）；用户已重新登录并确认底栏为「Supabase 云端实时同步」。legacy 测试卡残留（store.json 内）随退场归档处置，无需单独清理。详见 BUGS.md「BUG-12」 |
 | 云端/容器现状 | ✅ | 云端 54 卡权威；容器 Up、0.0.0.0:3100；legacy store.json 55 张（多 1 张 QA 测试卡）+ localStorage 同步，**均属 legacy 侧，不影响云端** |
 
 ### 2. 下一步任务（按序，需用户启动）
 
-1. **BUG-12 部署**（待用户授权）：同步 `src/app/page.tsx` + `src/lib/storage.ts` 到 `Services/prompt-manager` → `docker compose --env-file .env.local build && up -d` → 验证 HTTP 200 + bundle 含修复（容器内 grep `preconnect-backup` 或 `mergeLocalOnly`）。
-2. **部署后用户操作（顺序不可反）**：①登录前在 Mini UI 删除 legacy 独有测试卡「QA保存测试-0903b」「BUG11 复测占位卡」及「qa测试」标签（否则重新登录时会被合并进云端）；②点「云端登录」重新登录（会话已掉，Google OAuth）；③确认底栏为「已开启 Supabase 云端实时同步」。
-3. **P2 legacy 退场**：等管理员批准申请草稿后按其 §7 流程实施；若管理员先批准，先于用户登录前实施也可一并消除 legacy 测试卡顾虑。
-4. **P3 连字符调取码**：产品二选一（改规则避开 `-` 或 MCP 描述明确精确传参），不急。
-5. **会话掉登录根因监控**：BUG-12 的「为何掉登录」无法事后定位；若再次发生，第一时间抓 Supabase Auth 网络请求（`/auth/v1/token?grant_type=refresh_token` 的状态码），不得凭猜测下结论。
+1. ~~BUG-12 部署~~ ✅ 已完成（2026-09-04，含部署核验与用户重新登录确认）；~~登录前删测试卡~~ 测试卡已随早前登录从视图消失，store.json 残留随退场归档处置。
+2. **P2 legacy 退场**：等管理员批准申请草稿后按其 §7 流程实施（POST /api/sync → 410、删 increment-copy 死路由、store.json 冻结归档到 DockerBackups、验收 6 条）；若管理员先批准，实施时一并清理 store.json 残留测试卡。
+3. **P3 连字符调取码**：产品二选一（改规则避开 `-` 或 MCP 描述明确精确传参），不急。
+4. **会话掉登录根因监控**：BUG-12 的「为何掉登录」无法事后定位；若再次发生，第一时间抓 Supabase Auth 网络请求（`/auth/v1/token?grant_type=refresh_token` 的状态码），不得凭猜测下结论。BUG-12 修复后同类编辑可从 `prompt-manager:preconnect-backup` 找回。
 
 ### 3. 注意事项及相关规矩
 
