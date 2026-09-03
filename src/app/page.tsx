@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Card, Settings, SortMode, Tag, PromptTag, TagFilterMode, TagFilters } from '@/lib/types'
-import { loadCards, loadSettings, loadTags, loadPromptTags, parseImport, saveCards, saveSettings, saveTags, savePromptTags, buildMarkdownExport, isServerAvailable, loadFromServer, pushToServer, subscribeSync, sanitizePromptTags, setConflictRefreshHandler } from '@/lib/storage'
+import { loadCards, loadSettings, loadTags, loadPromptTags, parseImport, saveCards, saveSettings, saveTags, savePromptTags, buildMarkdownExport, isServerAvailable, loadFromServer, pushToServer, subscribeSync, sanitizePromptTags, setConflictRefreshHandler, backupLocalSnapshot } from '@/lib/storage'
 import { deletePromptCard, deletePromptTag, getPromptCloudSessionUser, getPromptCloudUserId, loadPromptCloudSnapshot, replacePromptCardVersions, savePromptCard, savePromptSettings, savePromptTag, subscribeToPromptCloudChanges, syncPromptCardTags, type PromptCloudSnapshot } from '@/lib/supabase/promptRepository'
 import { createCard, normalizeBody, parseTags, rollbackToVersion, saveBodyOnly, saveBodyWithVersion } from '@/lib/cards'
 import { DEMO_CARDS } from '@/lib/demo'
@@ -51,6 +51,36 @@ function compareBySortMode(a: Card, b: Card, mode: SortMode): number {
   if (mode === 'copies') return b.copyCount - a.copyCount || b.updatedAt.localeCompare(a.updatedAt)
   if (mode === 'rating') return b.rating - a.rating || b.updatedAt.localeCompare(a.updatedAt)
   return b.updatedAt.localeCompare(a.updatedAt)
+}
+
+/** BUG-12：把「仅存本机、远端没有」的实体并进远端快照视图。云端/legacy 写失败期间的
+ * 本地编辑，此前会在加载远端快照时被无条件覆盖（2026-09-03 数据丢失事故）。合并只做
+ * 按 id 增补，不改写远端已有实体；合并进视图后由持久化 effect 自动落盘并补推送。 */
+function mergeLocalOnlyIntoRemoteSnapshot(next: Pick<PromptCloudSnapshot, 'cards' | 'tags' | 'promptTags'>): {
+  cards: Card[]
+  tags: Tag[]
+  promptTags: PromptTag[]
+  addedCards: number
+  addedTags: number
+  addedRelations: number
+} {
+  const localCards = loadCards()
+  const localTags = loadTags()
+  const localRelations = loadPromptTags()
+  const remoteCardIds = new Set(next.cards.map((card) => card.id))
+  const remoteTagIds = new Set(next.tags.map((tag) => tag.id))
+  const remotePairs = new Set(next.promptTags.map((relation) => `${relation.prompt_id}\u0000${relation.tag_id}`))
+  const cards = [...next.cards, ...localCards.filter((card) => !remoteCardIds.has(card.id))]
+  const tags = [...next.tags, ...localTags.filter((tag) => !remoteTagIds.has(tag.id))]
+  const promptTags = [...next.promptTags, ...localRelations.filter((relation) => !remotePairs.has(`${relation.prompt_id}\u0000${relation.tag_id}`))]
+  return {
+    cards,
+    tags,
+    promptTags,
+    addedCards: cards.length - next.cards.length,
+    addedTags: tags.length - next.tags.length,
+    addedRelations: promptTags.length - next.promptTags.length,
+  }
 }
 
 /** 仅包含 cards 表的字段；标签关联和历史版本各有独立表，不能导致卡片重复写入。 */
@@ -283,16 +313,27 @@ export default function Home() {
       // 不用旧快照覆盖仍未落云的本机卡片；等待卡片写队列完成后由 Realtime 重新读取。
       // force 仅在云端基线尚未建立时使用（如重连后的首次快照）：此时不存在需要保护的写队列。
       if (!options?.force && hasPendingCardCloudWrite()) return false
-      setCards(next.cards)
+      // BUG-12：仅存本机的实体并入视图（基线仍取远端快照，使其成为待推送增量），
+      // 避免云端写失败期间的本地编辑被快照覆盖。
+      const merged = mergeLocalOnlyIntoRemoteSnapshot(next)
+      setCards(merged.cards)
       setSettings(next.settings ?? loadSettings())
-      setTags(next.tags)
-      setPromptTags(next.promptTags)
+      setTags(merged.tags)
+      setPromptTags(merged.promptTags)
       cloudCardsRef.current = new Map(next.cards.map((card) => [card.id, cardCloudFingerprint(card)]))
       cloudVersionsRef.current = new Map(next.cards.map((card) => [card.id, JSON.stringify(card.versions)]))
       cloudSettingsRef.current = JSON.stringify(next.settings ?? loadSettings())
       cloudTagsRef.current = new Map(next.tags.map((tag) => [tag.id, JSON.stringify(tag)]))
       cloudPromptTagsRef.current = new Map(next.promptTags.map((relation) => [`${relation.prompt_id}\u0000${relation.tag_id}`, JSON.stringify(relation)]))
       cloudCardsSyncedVersionRef.current = cloudCardsDirtyVersionRef.current
+      if (merged.addedCards > 0 || merged.addedTags > 0 || merged.addedRelations > 0) {
+        const parts = [
+          merged.addedCards > 0 ? `卡片 ${merged.addedCards} 张` : null,
+          merged.addedTags > 0 ? `标签 ${merged.addedTags} 个` : null,
+          merged.addedRelations > 0 ? `标签关联 ${merged.addedRelations} 条` : null,
+        ].filter(Boolean)
+        notify(`已找回仅存本机的数据并开始同步：${parts.join('、')}`)
+      }
       return true
     }
 
@@ -313,6 +354,8 @@ export default function Home() {
         // 登录 + 空库（hasCloudData=false）同样保持云端模式：等待用户显式导入，绝不落入 legacy。
         const baselineWasAbsent = cloudCardsRef.current === null
         const hadPendingLocalEdits = hasPendingCardCloudWrite()
+        // BUG-12：云端快照覆盖本机视图前，先滚动备份 localStorage（尽力而为）。
+        backupLocalSnapshot()
         applyCloud(cloud, { force: baselineWasAbsent })
         cloudRetryAttemptRef.current = 0
         setCloudMode(true)
@@ -393,6 +436,8 @@ export default function Home() {
       return
     }
     setServerOnline(true)
+    // BUG-12：应用 legacy 快照覆盖本机视图前，先滚动备份 localStorage（尽力而为）。
+    backupLocalSnapshot()
     // 服务端为空但本机有数据：首次迁移上传，避免两边永远为空
     if (remote.cards.length === 0) {
       const local = loadCards()
@@ -407,10 +452,20 @@ export default function Home() {
         setPromptTags(sanitizePromptTags(localPromptTags, local, localTags))
       }
     } else {
-      setCards(remote.cards)
+      // BUG-12：仅存本机的实体并入视图后再落盘，legacy 写失败期间的本地编辑不再被快照抹掉。
+      const merged = mergeLocalOnlyIntoRemoteSnapshot(remote)
+      setCards(merged.cards)
       setSettings(remote.settings)
-      setTags(remote.tags)
-      setPromptTags(remote.promptTags)
+      setTags(merged.tags)
+      setPromptTags(merged.promptTags)
+      if (merged.addedCards > 0 || merged.addedTags > 0 || merged.addedRelations > 0) {
+        const parts = [
+          merged.addedCards > 0 ? `卡片 ${merged.addedCards} 张` : null,
+          merged.addedTags > 0 ? `标签 ${merged.addedTags} 个` : null,
+          merged.addedRelations > 0 ? `标签关联 ${merged.addedRelations} 条` : null,
+        ].filter(Boolean)
+        notify(`已找回仅存本机的数据：${parts.join('、')}`)
+      }
     }
     // 订阅实时同步：另一台电脑改动时自动拉取最新数据
     syncUnsubRef.current = subscribeSync((rc, rs, rt, rpt) => {

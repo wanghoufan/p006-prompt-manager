@@ -424,6 +424,26 @@ export function parseImport(raw: string): ImportResult {
 const SYNC_URL = '/api/sync'
 const STREAM_URL = '/api/sync/stream'
 
+// BUG-12：connect() 应用任何远端快照（云端或 legacy）覆盖本机视图前，把四组 localStorage
+// 原文滚动备份到单一键。云端写失败期间的本地编辑一旦被旧快照覆盖即无处可寻（2026-09-03
+// 真实数据丢失事故），此备份是最后的找回手段。尽力而为，失败静默（不能因备份阻塞连接）。
+const BACKUP_KEY = 'prompt-manager:preconnect-backup'
+
+export function backupLocalSnapshot(): void {
+  try {
+    const snapshot = {
+      backedUpAt: new Date().toISOString(),
+      cards: localStorage.getItem(CARDS_KEY),
+      tags: localStorage.getItem(TAGS_KEY),
+      promptTags: localStorage.getItem(PROMPT_TAGS_KEY),
+      settings: localStorage.getItem(SETTINGS_KEY),
+    }
+    localStorage.setItem(BACKUP_KEY, JSON.stringify(snapshot))
+  } catch {
+    // 备份失败不阻塞连接流程
+  }
+}
+
 let serverMode = false
 /** P0-A 版本号提交：本次本地快照基于的服务端版本。loadFromServer/pushToServer 成功后同步更新。 */
 let knownVersion: number | null = null

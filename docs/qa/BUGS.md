@@ -67,6 +67,25 @@
 
 **复测进行中记录（2026-09-02 晚，接续会话证据；状态仍为 DEFERRED，未通过）**：
 
+### BUG-12 ｜ 数据丢失事故：云端写失败期间的本机编辑被远端快照无条件覆盖（2026-09-03）
+
+**现象（用户报告）**：Mini 上新建/生成卡片、保存标题和标签后，刷新全部丢失。单设备场景即可触发，与双设备无关。
+
+**证据链（QA 两轮现场报告 + 主会话核验，详见 `docs/qa/2026-09-03 丨 保存丢失排查-Mini端QA现场证据 丨 V1.0.md`）**：
+1. Mini 底栏为 legacy 文案 + 页面顶部有「云端登录」按钮 → **会话已掉为未登录**（何时/为何掉无法事后确定，疑与令牌刷新失败有关）。
+2. 容器内 `store.json` 最后写入 2026-09-02 22:54，当天 0 写入、仍 54 张 → 用户当天编辑未到 legacy 服务端。
+3. localStorage `prompt-manager:cards` 最新卡 `createdAt=2026-09-02T14:50:34Z`，当天 0 张 → **也未落本机**。
+4. QA 在 legacy 模式干净复测：POST /api/sync 全程 200、刷新保留（54→55）→ 保存链路本身无故障。
+
+**根因认定**：用户当天处于登录态但云端写入静默失败（会话过期/刷新失败 → 401/超时，toast 未被注意）。云端模式下编辑已先落 localStorage，但随后会话彻底掉为未登录，`connect()` 未登录分支用 legacy 服务端 54 张快照**无条件覆盖视图与 localStorage**，把仅存本机的编辑抹掉。属于设计缺陷：任何远端快照加载路径都没有「覆盖前备份」与「本机独有数据合并」。用户当天数据三方（云端/legacy store/localStorage）均不存在，**无法恢复**——如实记录，不掩饰。
+
+**修复（2026-09-03，Builder；已过静态门禁，待部署）**：
+1. `backupLocalSnapshot()`（storage.ts）：connect() 应用任何远端快照（云端 force 路径 / legacy 覆盖路径）前，把四组 localStorage 原文滚动备份到 `prompt-manager:preconnect-backup`——同类事故今后必可找回。
+2. `mergeLocalOnlyIntoRemoteSnapshot()`（page.tsx）：加载远端快照时把「仅存本机、远端没有」的卡片/标签/关联按 id 增补合并进视图（云端分支基线仍取远端，使其自动成为待推送增量；legacy 分支合并后由 schedulePush 整库补推），并 toast 明示找回数量。远端已有实体一律以远端为准，不做内容级合并。
+3. 门禁：tsc 0 错、ESLint 0 错、`npm run build -- --webpack` 通过。
+
+**残余风险**：① 会话掉登录的根因（refresh token 为何未续上）无法事后定位，仅能靠备份+合并兜底；若复发需现场抓 Supabase Auth 网络请求。② legacy 独有的历史测试卡（BUG11 复测占位卡、QA保存测试-0903b、qa测试 标签）在用户重新登录时会被合并进云端——登录前应在 UI 删除不想要的测试卡。
+
 - 预备检查（只读）：容器 `prompt-manager-prompt-manager-1` Up；`src/app/page.tsx` 与 `Services/prompt-manager/` 副本 SHA-256 一致（`c3239b81…`），修复代码确认在运行版本中。
 - 第一次尝试：Mini 硬刷新后新建测试卡「BUG11测试任务」（BUG11-测试2），刷新后卡片消失。**关键证据**：DevTools Network 过滤 `supabase` 显示保存动作期间 **0 / 11 requests** —— 保存时根本没有向 Supabase 发出任何请求（写入未发生而非写入失败）；容器日志近 15 分钟无任何报错（写入走浏览器直连 Supabase，不经过容器）。
 - 随后同卡再刷新后卡片重新出现（全部 · 54 张），页面登录态正常（`auth/user` 200），5 表 SELECT 全部 200。**疑似**写队列自动重试补写成功，尚未按「cards Response 内搜索 BUG11」确认云端真值，此为待续第 0 项。
