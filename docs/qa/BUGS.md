@@ -79,10 +79,11 @@
 
 **根因认定**：用户当天处于登录态但云端写入静默失败（会话过期/刷新失败 → 401/超时，toast 未被注意）。云端模式下编辑已先落 localStorage，但随后会话彻底掉为未登录，`connect()` 未登录分支用 legacy 服务端 54 张快照**无条件覆盖视图与 localStorage**，把仅存本机的编辑抹掉。属于设计缺陷：任何远端快照加载路径都没有「覆盖前备份」与「本机独有数据合并」。用户当天数据三方（云端/legacy store/localStorage）均不存在，**无法恢复**——如实记录，不掩饰。
 
-**修复（2026-09-03，Builder；已过静态门禁，待部署）**：
+**修复（2026-09-03，Builder；2026-09-04 经用户授权部署完成）**：
 1. `backupLocalSnapshot()`（storage.ts）：connect() 应用任何远端快照（云端 force 路径 / legacy 覆盖路径）前，把四组 localStorage 原文滚动备份到 `prompt-manager:preconnect-backup`——同类事故今后必可找回。
 2. `mergeLocalOnlyIntoRemoteSnapshot()`（page.tsx）：加载远端快照时把「仅存本机、远端没有」的卡片/标签/关联按 id 增补合并进视图（云端分支基线仍取远端，使其自动成为待推送增量；legacy 分支合并后由 schedulePush 整库补推），并 toast 明示找回数量。远端已有实体一律以远端为准，不做内容级合并。
 3. 门禁：tsc 0 错、ESLint 0 错、`npm run build -- --webpack` 通过。
+4. **部署核验（2026-09-04）**：Services 副本与开发目录 SHA-256 一致；镜像重建、容器 Recreated/Started、HTTP 200；运行产物含修复标识（`preconnect-backup` 命中 storage chunk，toast 文案「已找回仅存本机/并开始同步」命中 page chunk——函数名因压缩不保留，以字符串字面量核验）；legacy store.json（145,653 B）经重建未变，bind mount 生效。状态：**FIXED（已部署）**；「找回合并」路径待真实场景触发验证（正常使用若出现「已找回」toast 即为机制生效）。
 
 **残余风险**：① 会话掉登录的根因（refresh token 为何未续上）无法事后定位，仅能靠备份+合并兜底；若复发需现场抓 Supabase Auth 网络请求。② legacy 独有的历史测试卡（BUG11 复测占位卡、QA保存测试-0903b、qa测试 标签）在用户重新登录时会被合并进云端——登录前应在 UI 删除不想要的测试卡。
 
