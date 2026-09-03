@@ -140,7 +140,7 @@
   - 刷新页面后恢复正常（云端快照应用；本机未上传的评分改动按既有设计弃于界面、保留在 localStorage）；
   - 疑因：supabase-js fetch 无超时 + 冲突风暴中某个请求未决阻塞串行写队列（未定论；本轮含 20s 人工延迟仿真，真实环境触发条件未知）；
   - 建议：开发评估写队列单项超时/自愈与 `retryCloudSync` 链路健壮性；对照规范 §9.2「失败不能静默丢弃」——当前表现是「不再尝试且无提示」，与该条存在张力。
-  - **开发修复（2026-09-03 晚，Builder；静态门禁通过，部署与冲突回归待用户授权）**：根因确认为 `enqueueCloudWrite` 串行链无超时——supabase-js fetch 无默认超时，一个未决请求即永久阻塞队列且无提示。修复：每项写入与 30 秒超时竞速（`Promise.race`），超时/异常均走「toast 提示 + `retryCloudSync` 自动重试」，队列继续流动；迟到原请求若最终落库，由既有 revision 条件更新 / 追加式版本 upsert / 复合主键幂等 upsert 保证不产生静默覆盖或重复数据。改动集中于 `src/app/page.tsx` 的 `enqueueCloudWrite` 单点。门禁：`tsc --noEmit` 0 错、ESLint 0 错、`npm run build -- --webpack` 通过。**回归注意**：单项超时覆盖整个 work 项（一次 revisionedSave 含 2–3 个查询），CDP 延迟仿真请用 ≤8s/请求，否则 30s 超时会在多查询项上先触发（行为仍正确，但会以超时路径而非冲突路径呈现）。
+  - **开发修复（2026-09-03 晚，Builder；已部署，冲突回归待测）**：根因确认为 `enqueueCloudWrite` 串行链无超时——supabase-js fetch 无默认超时，一个未决请求即永久阻塞队列且无提示。修复：每项写入与 30 秒超时竞速（`Promise.race`），超时/异常均走「toast 提示 + `retryCloudSync` 自动重试」，队列继续流动；迟到原请求若最终落库，由既有 revision 条件更新 / 追加式版本 upsert / 复合主键幂等 upsert 保证不产生静默覆盖或重复数据。改动集中于 `src/app/page.tsx` 的 `enqueueCloudWrite` 单点。门禁：`tsc --noEmit` 0 错、ESLint 0 错、`npm run build -- --webpack` 通过。**回归注意**：单项超时覆盖整个 work 项（一次 revisionedSave 含 2–3 个查询），CDP 延迟仿真请用 ≤8s/请求，否则 30s 超时会在多查询项上先触发（行为仍正确，但会以超时路径而非冲突路径呈现）。
 
 **MCP 双设备令牌隔离验收记录（2026-09-03 下午，PASS）**：
 
