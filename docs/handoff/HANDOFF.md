@@ -1399,7 +1399,7 @@ supabase/migrations/20260901163555_fix_prompt_manager_activate_prompt_variable_c
 |---|---|---|---|
 | 1 | P1 | 写队列停摆修复（单项超时+自愈，冲突回归）PM-3 | ⏳ 待开发定级（观察项最高优） |
 | 3 | P2 | legacy `/api/sync` 退场独立变更申请（裁定要求限期） | ⏳ 待申请 |
-| 4 | P2 | 平台仓库 remote/备份（PM-1 单点风险） | ⏳ 待配置（remote 为空） |
+| 4 | P2 | ~~平台仓库 remote/备份~~ **已完成**（2026-09-03 治理侧销项：私有远端 `wanghoufan/alw-db-governance`，本地与远端同步于 `cbbd123`，Migration 5/5 已推） | ✅ 已完成 |
 | 4 | P3 | 连字符调取码规则（PM-4） | ⏳ 产品评估 |
 | — | — | ~~git 分叉整合~~ **已完成**（2026-09-03 核验：本地 master `6144cae` 已合并 origin/master，收尾提交 `73bf618`，双端同点；遗留仅未跟踪 `supabase/`（CLI link 临时文件 + .DS_Store），待用户决定加入 .gitignore 或删除） | ✅ 已完成 |
 
@@ -1407,7 +1407,7 @@ supabase/migrations/20260901163555_fix_prompt_manager_activate_prompt_variable_c
 
 1. **P1 写队列修复（最高优观察项）**：复现定级（参考 BUGS 并发冲突“写队列停摆”：20s 延迟+风暴后重试链死亡）→ 实施单项超时+自愈/`retryCloudSync` 健壮性 → 冲突场景回归；需用户启动，可与 legacy 退场并行。
 2. **P2 legacy 退场申请**：评估 `/api/sync` 收缩为只读或直接退役的独立变更申请（保留 SSE 只读可缓办），提交审核人。
-3. **P2 平台远端备份**：为平台仓库配置私有 remote 并推送或纳入 pbackup 周期备份并验证（PM-1）。
+3. ~~**P2 平台远端备份**~~：已完成（治理侧 2026-09-03 销项 PM-1：私有远端 `alw-db-governance` 已配置并同步）。
 4. **P3 连字符调取码**：产品二选一（改规则避开 `-` 或在 MCP 工具描述明确精确传参）。
 5. ~~**git 分叉整合**~~：已完成（master `6144cae` = origin/master，收尾提交 `73bf618`）；剩小项：`supabase/` 未跟踪目录（CLI link 临时文件）由用户决定 gitignore 或删除。
 6. **小项**：保留无码测试卡按决定清理；关 QA Chrome；scratch 脚本可留。
@@ -1422,7 +1422,7 @@ supabase/migrations/20260901163555_fix_prompt_manager_activate_prompt_variable_c
 5. **数据安全**：不泄露 AI Key/MCP 令牌/数据库密码/Auth token/正文；备份/.env* 不进 Git；Management API 绕过 RLS 不得常规化。
 6. **兼容链路限期**：旧链路不再是“长期保留”，须限期提交退场申请；在此之前仍不删/停用。
 7. **验证口径**：只认三件套；HTTP 200/构建不算云端持久化。
-8. **Git**：先 `git status`；未授权不 commit/push/reset；平台仓库 remote 单点风险待解决。
+8. **Git**：先 `git status`；未授权不 commit/push/reset；平台仓库已有私有远端 `alw-db-governance`（PM-1 已销项）。
 9. **文档归属**：裁定与转送清单在平台审查目录；项目侧 QA→`docs/qa/BUGS.md`、收口材料→`docs/review/…-2026-09-02.md`、交接→`docs/handoff/HANDOFF.md`（§16.18 唯一入口）。
 10. **遗留**：今日改动未 commit、QA Chrome 可关、legacy 测试卡可留 — 均不阻塞收口。
 
@@ -1454,9 +1454,9 @@ supabase/migrations/20260901163555_fix_prompt_manager_activate_prompt_variable_c
 下一步按优先级（需用户启动）：
 1. P1 写队列停摆修复（单项超时+自愈，冲突回归）— 最高优
 2. P2 legacy /api/sync 退场独立变更申请
-3. P2 平台仓库 remote/备份（PM-1 单点风险）
+3. ~~P2 平台仓库 remote/备份~~ 已完成（治理侧销项 PM-1：私有远端 alw-db-governance 已同步）
 4. P3 连字符调取码规则
-5. git 分叉整合（需授权）
+5. ~~git 分叉整合~~ 已完成（master 6144cae = origin/master，be1600d/450b62c 收尾已推）
 6. 管理员将核对线上后归档，无需重复发布。
 
 硬性禁区：
