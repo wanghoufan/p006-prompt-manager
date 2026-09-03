@@ -1,9 +1,9 @@
 # 交接上下文 — Supabase 云端同步、数据库 V1.2 与 Docker V1.0
 
-> 更新日期：2026-09-03（裁定后）
+> 更新日期：2026-09-04
 >
-> 当前阶段：Supabase 接入数据库治理侧 **APPROVED_FOR_EXECUTION（2026-09-03 15:00 裁定放行）**；`20260901163555` 已由唯一发布人补录发布（Local/Remote 4/4）；收口材料最终版 + §9/§10 回填完成。剩余待办按转送清单优先级观察（写队列 P1、legacy 退场 P2、连字符 P3、平台远端备份 PM-1）。Mini 单设备安全运行期。
-> 交接原则：先阅读 `AGENTS.md`、本文件 **§16.18（当前唯一有效入口）**、数据库规范 V1.3 和 Docker 规范 V1.0；不要凭旧文档或浏览器缓存判断现状。
+> 当前阶段：裁定后收尾期。P1 写队列修复已部署；P2 legacy 退场申请草稿待管理员审批；**BUG-12 数据丢失修复已提交（`5c2359c`）待用户授权部署**；Mini 单设备安全运行期。用户长期只用 Mini 单设备，**任何会话不得要求/建议双设备测试**。
+> 交接原则：先阅读 `AGENTS.md`、本文件 **§16.19（当前唯一有效入口）**、数据库规范 V1.3 和 Docker 规范 V1.0；不要凭旧文档或浏览器缓存判断现状。
 
 ## 1. 本轮已完成
 
@@ -1370,7 +1370,7 @@ supabase/migrations/20260901163555_fix_prompt_manager_activate_prompt_variable_c
 - 先 git status，绝不 reset/checkout/覆盖/删除用户改动。
 ```
 
-## 16.18 阶段八次收束（2026-09-03，收口审查裁定 APPROVED_FOR_EXECUTION + Migration 已发布；当前唯一有效入口）
+## 16.18 阶段八次收束（2026-09-03，收口审查裁定 APPROVED_FOR_EXECUTION + Migration 已发布；**已被 §16.19 取代，降级为历史记录**）
 
 > 本节取代 §16.17 成为当前唯一有效入口；更早小节仅作历史记录。管理员 14:46–15:00 独立核验 + 裁定已给出，项目侧已按裁定完成材料回填与唯一发布人登记。
 
@@ -1465,3 +1465,36 @@ supabase/migrations/20260901163555_fix_prompt_manager_activate_prompt_variable_c
 - 不泄露 Key/令牌/正文；备份/.env* 不进 Git。
 ```
 
+
+## 16.19 阶段九次收束（2026-09-04，用户指示「开发先到这里暂时结束」；**当前唯一有效入口**）
+
+> 本节取代 §16.18 成为当前唯一有效入口；更早小节仅作历史记录。上轮会话完成 P1 部署收尾、P2 退场申请草稿、BUG-12 排查与修复。
+
+### 1. 当前工作进展
+
+| 事项 | 状态 | 说明 |
+|---|---|---|
+| P1 写队列停摆修复（PM-3） | ✅ 已部署 | `503cf86` 30s 单项超时+自愈重试；容器已重建、线上 bundle 含 `cloud-write-timeout` 标识；**冲突回归按用户决定永久搁置**（不标通过） |
+| HANDOFF 待办核销 | ✅ | git 分叉整合早已完成（`6144cae`）；`/supabase/` 已入 `.gitignore`（`450b62c`）；P2 平台仓库备份治理侧已销项（远端 `alw-db-governance`） |
+| P2 legacy `/api/sync` 退场独立变更申请 | 📄 草稿待审批 | `docs/review/独立变更申请丨legacy-sync退场丨prompt_manager丨2026-09-03.md`（方案 A 先收写缓退役 + 影响面/回滚/验收）；**管理员批准前不实施**；待用户转送 |
+| **BUG-12 数据丢失事故**（2026-09-03 用户报告） | 🔧 修复已提交，**待部署** | 用户新建/生成卡片保存标题标签后刷新丢失。根因（QA 两轮现场证据 + store.json/localStorage 核验）：云端写静默失败期间编辑仅落 localStorage → 会话掉为未登录 → legacy 快照**无条件覆盖** localStorage，数据三方皆失、**无法恢复**（用户当天数据确认全灭）。修复 `5c2359c`（已推 master）：①`backupLocalSnapshot()` 任何远端快照覆盖前滚动备份四组 localStorage 到 `prompt-manager:preconnect-backup`；②`mergeLocalOnlyIntoRemoteSnapshot()` 仅存本机实体按 id 合并回视图并补推送 + toast。tsc/ESLint/build 三门禁全过。详见 BUGS.md「BUG-12」与 `docs/qa/2026-09-03 丨 保存丢失排查-Mini端QA现场证据 丨 V1.0.md` |
+| 云端/容器现状 | ✅ | 云端 54 卡权威；容器 Up、0.0.0.0:3100；legacy store.json 55 张（多 1 张 QA 测试卡）+ localStorage 同步，**均属 legacy 侧，不影响云端** |
+
+### 2. 下一步任务（按序，需用户启动）
+
+1. **BUG-12 部署**（待用户授权）：同步 `src/app/page.tsx` + `src/lib/storage.ts` 到 `Services/prompt-manager` → `docker compose --env-file .env.local build && up -d` → 验证 HTTP 200 + bundle 含修复（容器内 grep `preconnect-backup` 或 `mergeLocalOnly`）。
+2. **部署后用户操作（顺序不可反）**：①登录前在 Mini UI 删除 legacy 独有测试卡「QA保存测试-0903b」「BUG11 复测占位卡」及「qa测试」标签（否则重新登录时会被合并进云端）；②点「云端登录」重新登录（会话已掉，Google OAuth）；③确认底栏为「已开启 Supabase 云端实时同步」。
+3. **P2 legacy 退场**：等管理员批准申请草稿后按其 §7 流程实施；若管理员先批准，先于用户登录前实施也可一并消除 legacy 测试卡顾虑。
+4. **P3 连字符调取码**：产品二选一（改规则避开 `-` 或 MCP 描述明确精确传参），不急。
+5. **会话掉登录根因监控**：BUG-12 的「为何掉登录」无法事后定位；若再次发生，第一时间抓 Supabase Auth 网络请求（`/auth/v1/token?grant_type=refresh_token` 的状态码），不得凭猜测下结论。
+
+### 3. 注意事项及相关规矩
+
+- **用户长期只用 Mini 单设备，不做、也不再被建议做双设备冲突回归**；任何会话不得以验收理由要求第二台设备。
+- Mini 使用铁律：重要新增保存后看一眼；**每次打开页面先看底栏**——不是「已开启 Supabase 云端实时同步」文案就不要做重要编辑。
+- 数据找回兜底：localStorage 出现意外覆盖时查 `prompt-manager:preconnect-backup` 键。
+- 未经用户明确授权：不 commit/push、不改 Services、不重建容器、不动 DockerData/DockerBackups/Named Volume。
+- 数据库红线不变：不 `db push`、不改 Dashboard/SECURITY DEFINER、不查改生产数据；legacy `/api/sync`、`data/store.json`、SSE 在退场批准前保留不删。
+- 不泄露任何 Key/令牌/数据库密码/Auth token/真实提示词正文；QA 报告只允许标题与 id。
+- 收口材料正文只在 `docs/review/共享Supabase数据库接入收口材料-2026-09-02.md`；BUG 记录只在 `docs/qa/BUGS.md`；不新建重复文档。
+- 动手前先 `git status`；绝不 reset/checkout/覆盖/删除用户改动。
