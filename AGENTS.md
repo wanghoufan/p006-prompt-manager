@@ -17,22 +17,25 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 ## 一、项目档案
 
 - 项目名称：提示词管理工具（Prompt Manager）
-- 项目类型：Next.js 应用 + 服务端轻量共享存储 + MCP 子包
-- 当前阶段：功能开发期（实时同步 / UI 优化 / 调取码 / MCP 集成已完成主体）
+- 项目类型：Next.js 应用 + 共享 Supabase 云端存储 + Docker 自托管 + MCP 子包
+- 当前阶段：Supabase 云端多端同步已完成、收口材料最终版已修订（2026-09-03），待审核人裁定；Mini 单设备安全运行期
 - 主要目标：管理、编辑与测试提示词
 - 主要用户：使用 GPT 等大模型、需要集中管理 Prompt 的个人 / 团队
 
 ### 技术栈
 
 - 前端：Next.js 16（App Router）+ React 19 + TypeScript 5
-- 服务端：Next.js Route Handler（AI 代理、`/api/sync` 共享存储、`/api/sync/increment-copy` 计数）
-- 共享存储：服务端 `data/store.json`（进程内单例 serverStore 落盘，同步源）+ localStorage（离线兜底）
-- 实时同步：SSE（`/api/sync/stream`）跨设备推送；`next.config.ts` `allowedDevOrigins` 放行局域网来源
-- MCP：`mcp/prompt-server/`（`@modelcontextprotocol/sdk` + zod，stdio），工具 `prompt_manager_activate_prompt`（按调取码激活系统提示词并计入复制次数）
+- 服务端：Next.js Route Handler（AI 代理、`/api/mcp-access-tokens` MCP 令牌服务端生成）
+- 共享存储：Supabase `prompt_manager` Schema（Postgres + RLS + Realtime，记录级 `revision` 条件更新，`owner_user_id` 归属）为主；`/api/sync` + `data/store.json` + localStorage 为未登录/离线兼容兜底（审核放行前保留）
+- 实时同步：Supabase Realtime（cards/card_versions/tags/prompt_tags/settings 5 表，`wss://…/realtime/v1/websocket`）；旧 SSE 链路仅作兼容保留
+- 认证：Supabase Auth（Magic Link + Google OAuth PKCE），`http://192.168.31.60:3100` 为已核验访问地址（`localhost`/`.local` 不在白名单/被代理劫持）
+- MCP：`mcp/prompt-server/`（`@modelcontextprotocol/sdk` + zod，stdio，v0.2.0 直连 Supabase RPC），工具 `prompt_manager_activate_prompt`（`prompt_manager.activate_prompt` RPC，能力令牌 SHA-256 哈希，`SECURITY DEFINER` 待审核裁定）
+- 部署：Docker 自托管（`prompt-manager-prompt-manager-1` 绑定 `0.0.0.0:3100`，`DockerData/prompt-manager/legacy-store` bind mount，`DockerBackups/prompt-manager/` 备份不进 Git）
+- AI 调用：通用 `AI_PROVIDER/AI_MODEL/AI_BASE_URL/AI_API_KEY`（支持 opencode-go 等 8 厂商），`docker/env.template` 为模板，`Services/prompt-manager/.env.local`（600 权限）不提交
 - 样式方案：Tailwind CSS v4
 - 代码检查：ESLint 9（eslint-config-next）
-- 测试方案：暂无（待建立）
-- 部署平台：待定
+- 测试方案：暂无（以真机双设备验收 + 隔离恢复演练为准）
+- 部署平台：Mac Mini Docker 自托管（规范 `2026-09-02 丨 Mac Mini 本地项目自托管 Docker 规范 丨 V1.0.md`）
 
 ### 常用命令
 
@@ -47,17 +50,21 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ### 当前进展与产物索引
 
-- 当前状态：实时同步、UI 优化、调取码、MCP 集成、调用计数、失焦自动保存、P0/P1 8 项修复、全局搜索（P2-2）+ 健壮性批次（RISK-3/OPT-NEW-2/P3-1/P3-3）、P2-8/P2-9/P3-6 三项打包、P0-1~P0-7（含 11合1 总验收 + 2合1）、P0 标签系统核心 22项、Fix chip 双写+重命名回滚+父校验（`ad5b64e`）、P0-9 标签添加交互重构（`c16f6f2`，QA 第十五次/产品 2026-08-28 PASS）、P1-1~P1-4 四项打包（文案/草稿/导入/冲突，QA 第十六次/产品 2026-08-28 PASS）、P2-10/P2-11 网格直删+批量管理（QA/产品 2026-08-28 12项 PASS）、P0-A 安全闭环（影响数+10s 撤销+服务端5项校验+带版本号提交，QA/产品 2026-08-28 4项 PASS）、P0-B 标签合并与批量移除（合并功能+同名重命名合并+批量移除+10标签上限，2026-08-28 terra worker 完成）、P0-C 可组合标签筛选（OR/AND/NOT 组合+包含子标签开关，2026-08-28 sol worker 完成）、P0-8 标签体系完善（重命名自动修正关联卡片标签，2026-08-28 已实现）均已完成；PRODUCT_BACKLOG 已清理 CLOSED 项；下轮待排期：剩余 P2 优化项
+- 当前状态：P0/P1/P2 全部 CLOSED（2026-08-28）；**2026-09-01~09-03 Supabase 云端多端同步已完成并获 APPROVED_FOR_EXECUTION（2026-09-03 15:00 裁定放行）**：独立 `prompt_manager` Schema（6 表 + RLS + Realtime，`20260901163555` 已补录发布 4/4）、Auth（Magic Link + Google OAuth PKCE）、记录级 `revision`、MCP RPC、Docker 自托管、双设备验收（BUG-11/并发/MCP 隔离）、55 卡备份 + 隔离重放全绿；**收口材料已回填 §9/§10 并登记发布**，剩余 P1/P2/P3 观察项按转送清单优先级待办；Mini 单设备安全运行期（`http://192.168.31.60:3100`）
 - 需求文档：`docs/pm/提示词管理工具-需求文档.md`
 - 产品报告：`docs/pm/产品报告.md`
-- 实施计划：`docs/pm/PLAN.md`
-- 代码审查：`docs/review/CODE_REVIEW.md`
+- 实施计划：`docs/pm/PLAN.md`（Supabase 迁移已完成并放行，§16.18）
+- 代码审查：`docs/review/CODE_REVIEW.md`（2026-08-26 基线，待 Supabase 增补）
 - 产品优化候选：`docs/review/PRODUCT_BACKLOG.md`
-- 交接上下文：`docs/handoff/HANDOFF.md`
+- 交接上下文：`docs/handoff/HANDOFF.md`（§16.18 为当前唯一有效入口，2026-09-03 八次收束，裁定后+已发布）
+- 质量记录：`docs/qa/BUGS.md`（BUG-9/10/11 FIXED，并发/MCP 隔离/备份全绿；待办 P1/P2/P3 见转送清单）、`docs/qa/QA_CHECKLIST.md`
+- 规范：数据库 `2026-09-03 丨 共享 Supabase 项目与独立 Schema 数据库规范 丨 V1.3.md`（存于 `1.Active/alw丨数据库管理专家/`）+ Docker `2026-09-02 丨 Mac Mini 本地项目自托管 Docker 规范 丨 V1.0.md`
+- 平台仓库：`/Users/zzymima0000/Developer/coding/1.Active/alw丨数据库管理专家/平台丨共享 Supabase 数据库`（HEAD `efddca5`，4/4 Migration 已发布，含 `20260901163555`）
+- 远程仓库：https://github.com/wanghoufan/prompt-manager.git（`master` + `origin/mcp-delivery` 分叉待整合）
+- 审查裁定：`/Users/zzymima0000/Developer/coding/1.Active/alw丨数据库管理专家/项目审查丨prompt_manager/收口审查裁定丨prompt_manager丨2026-09-03.md`（APPROVED_FOR_EXECUTION）
 - MCP 接入说明：`mcp/prompt-server/README.md`
 - 用户级模型执行指南（Stage Manager 只读引用）：`/Users/zzymima0000/.workbuddy/AI_MODEL_GUIDE.md`
 - 治理文档（工作流 / 角色 / 门控 / 阶段 / 经验）：见 `AGENTS.md` §四
-- 远程仓库：https://github.com/wanghoufan/prompt-manager.git（master）
 
 ---
 

@@ -26,12 +26,17 @@ export function SupabaseAuthControl() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return
       setUser(session?.user ?? null)
-      // 页面中的数据连接器据此重新选择 Supabase 或本地兜底，避免用户登录后
-      // 还必须手动刷新页面才能看到云端内容。
-      window.dispatchEvent(new Event('prompt-manager-auth-changed'))
+      // TOKEN_REFRESHED 只是 supabase-js 自动续期令牌，数据连接无需重建；
+      // 其余事件携带 session user id，由页面按用户变化去抖后重建连接，
+      // 避免登录后必须手动刷新才能看到云端内容，也避免同一用户的连发事件并发重跑 connect()。
+      if (event !== 'TOKEN_REFRESHED') {
+        window.dispatchEvent(
+          new CustomEvent('prompt-manager-auth-changed', { detail: { userId: session?.user?.id ?? null } }),
+        )
+      }
       if (session?.user) {
         setOpen(false)
         setState('idle')

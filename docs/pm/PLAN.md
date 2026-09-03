@@ -1,20 +1,20 @@
 # 实施计划（PLAN）
 
 > 当前需求的验收标准与实施方案。由技术规划师（Planner）维护；完成 `PLAN.md` 后须检查并按需建立 / 补充 `docs/qa/QA_CHECKLIST.md` 核心回归基线。
-> P0级用户反馈问题整改（P0-D/P0-E/P0-F/P0-G/P0-H）（2026-08-28，QA验收通过）已交付。上上轮：P0-A 安全闭环（QA/产品 PASS）。下一轮待排期：**剩余 P2 优化项**择机排期。
+> P0级用户反馈问题整改（P0-D/P0-E/P0-F/P0-G/P0-H）（2026-08-28，QA验收通过）已交付；P0-A 安全闭环已交付。**Supabase 云端多端同步迁移已完成（2026-09-01~09-03），收口材料最终版（2026-09-03 修订版）待审通过后发布已获批**；当前为 Mini 单设备安全运行期，剩余 P1/P2/P3 观察项见下方「2026-09-03 收口审查裁定后状态」。
 
 ## 当前目标
 
-### Supabase 云端多端同步迁移（2026-09-01，实施中）
+### Supabase 云端多端同步迁移（2026-09-01，已完成 ✅；2026-09-03 审核 APPROVED_FOR_EXECUTION）
 
 **目标**：把提示词管理器迁移到共享 Supabase 项目的独立 `prompt_manager` Schema；以记录级读写、Supabase Auth、RLS、Realtime 和记录级 `revision` 替代当前 `data/store.json` 整快照覆盖与进程内 SSE。
 
-**当前事实**：
+**当前事实（2026-09-03 已验证）**：
 
-- 当前同步源为 `serverStore` + `data/store.json`，浏览器以 `/api/sync` 整体提交 `cards/settings/tags/promptTags`；SSE 只能通知同一个 Next.js 进程中的客户端。
-- `localStorage` 是每台设备独立的离线缓存；MCP 直接读取本机 `data/store.json`。
-- 当前数据包含旧格式 ID；正式导入必须先生成 UUID 映射并更新卡片、版本、标签和关联，不能直接把本机快照覆盖云端。
-- 共享数据库平台仓库位于 `/Users/zzymima0000/Developer/coding/1.Active/平台丨共享 Supabase 数据库`；`prompt_manager` Schema 和外键索引 Migration 已发布并完成 RLS/策略/安全检查验收，待 Dashboard 暴露 Data API 后才可由应用读写。
+- 同步源已切换为 **Supabase `prompt_manager` Schema**（记录级 `revision` 写入，Realtime 订阅 cards/card_versions/tags/prompt_tags/settings 5 表）；旧 `serverStore` + `data/store.json` + `/api/sync` + SSE 仅作未登录/离线兼容兜底（审核放行前保留，裁定要求限期退场）。
+- `localStorage` 为本机离线缓存；MCP 已直连 Supabase RPC `activate_prompt`（不再读 `data/store.json`，不使用 `service_role`）。
+- 数据已完成 UUID 映射与去重导入（52 基线 + 1 授权补传 → 53；当前 54 含 1 张保留测试卡），外键孤儿 0。
+- 共享数据库平台仓库位于 `/Users/zzymima0000/Developer/coding/1.Active/alw丨数据库管理专家/平台丨共享 Supabase 数据库`（HEAD `efddca5`，2026-09-03 14:48 commit，含 `20260901152616`/`20260901152750`/`20260901163555` 3 份 + habit_tracker `20260903141849`；已 `supabase link`，管理员隔离重放零错误）；Data API 自定义 Schema 已暴露，RLS 6 表×4 策略已启用。
 
 **实施边界**：
 
@@ -42,17 +42,18 @@
 5. 用 Realtime 订阅 `prompt_manager` 目标表，处理 INSERT/UPDATE/DELETE、断线重连与本机回声；不以 Realtime 代替初始查询。
 6. 导入前冻结旧写入，导出各设备候选数据；校验并生成 UUID 映射后一次导入，保留本地备份且不提交 Git。
 7. MCP 改为受限云端读取与原子复制计数；不得再直接读取 `data/store.json`，不得配置 Supabase service_role。
-8. 完成 Mac/PC 双向 CRUD、版本冲突、标签关系、Auth/RLS 越权、MCP、断线重连、恢复演练验收后，才停用 JSON 同步。
+8. ✅ 完成双向 CRUD、版本冲突、标签关系、Auth/RLS 越权、MCP、断线重连、恢复演练验收；⏳ 旧 JSON 同步停用按裁定限期提交独立变更申请（不长期维持）。
 
-**当前实施记录（2026-09-02）**：已增加浏览器 Supabase 客户端、Magic Link UI、Google OAuth 入口和登录状态切换后的自动重连。浏览器端使用 PKCE 登录流程；默认邮件模板无需自定义 SMTP。共享平台仓库中的 `prompt_manager` Schema、RLS、Realtime 与外键索引已发布，且 Data API 的自定义 Schema 暴露已由用户完成。三份本地来源（33 + 47 + 47 条）已在不连接云端的导入脚本中合并：按标题去重并保留最完整正文，不同正文写入历史版本；冲突调取码 `sop` 已按用户确认保留给最新、最完整卡片。事务导入后、以及本轮代码调整后的远端复核均为 52 cards / 18 card_versions / 24 tags / 91 prompt_tags / 1 settings，外键孤儿为 0；`settings.aiApiKey` 未进入导入包或数据库。应用现已接入 Supabase 初始读取、Realtime 全量重读、卡片/历史版本/标签/标签关系/设置的记录级写入；卡片和标签带 `revision` 条件更新，所有 mutation 串行，标签关系使用“先新增、再删除”的增量策略，失败保留未同步基线并自动重试。MCP 已改为调用同一 Schema 的受限 `activate_prompt` RPC：每台设备有独立、可撤销令牌，数据库仅保存令牌哈希，MCP 不再读取 `data/store.json` 或使用 service_role；设置页可生成和撤销令牌。已在真实 MCP 进程中成功调取云端 `sop`（正文未输出），复制计数按规则递增。已在远端即时修复 `activate_prompt` 的 `code` 名称歧义；共享数据库仓库的正式 Migration 文件已创建但尚待写入同一修复，系统当前拒绝该仓库写权限，恢复权限后必须先补齐再进行后续数据库发布。旧 JSON/SSE 链路仍作为未登录或云端不可用时的兼容兜底；真实双设备 CRUD/MCP 验收尚未完成。
+**当前实施记录（2026-09-02～09-03，已闭环）**：已增加浏览器 Supabase 客户端、Magic Link UI、Google OAuth PKCE 与登录态切换后的自动重连；应用已接入 Supabase 初始读取、Realtime 5 表订阅、卡片/标签/关系/设置的记录级 `revision` 写入（串行、先增后删、追加式版本）。三份本地来源（33+47+47）合并导入 52 基线 + 1 授权补传（`1fdc91aa-…`）→ 当前 54（含 1 保留测试卡）；外键孤儿 0，`aiApiKey` 未入云。MCP 已直连受限 RPC `activate_prompt`（每设备独立令牌、库内仅哈希），设置页可生成/撤销。BUG-11 四项修复（connect 代次序列化/登录态锁定云端+重试态/null-throw区分/auth 去抖）已部署并经 Air↔Mini 真机复测 0–4 闭环；并发冲突、MCP 双设备隔离、BUG-9/10 Mini 复测均通过；55 卡基线备份 + 隔离恢复演练全绿（`DockerBackups/prompt-manager/`，生产零写入）。收口材料 `docs/review/共享Supabase数据库接入收口材料-2026-09-02.md` 已于 2026-09-03 修订为最终版（L0–L5 全部 ✅ / L5 裁定待给出）。
 
-**2026-09-02 复核补记**：共享平台仓库的文件系统写权限现已确认恢复；`20260901163555_fix_prompt_manager_activate_prompt_variable_conflict.sql` 已包含与线上函数语义一致的修复内容，并已通过线上函数定义比对。该文件尚未作为生产 Migration 发布：远端登记仍只有 `20260901152616` 与 `20260901152750`。本轮未执行 `supabase db push`、Dashboard SQL 或其他生产数据库写入；在双设备验收、备份恢复演练和共享 Supabase 数据库审核人审查前，不得自行发布或宣布收口。`activate_prompt` 的 `SECURITY DEFINER` + anon/authenticated EXECUTE 仍有两条 Security Advisor WARN，作为能力令牌例外待审核人决定。
+**2026-09-03 审查裁定后状态（APPROVED_FOR_EXECUTION）**：共享 Supabase 数据库管理员 14:46–15:00 独立核验——待审 Migration `20260901163555`（1,732 B，`83dc8b36…`）与线上语义一致、平台仓库已出现基线 commit `efddca5` + 已 `supabase link` + habit_tracker `20260903141849` SHA 一致 + 全新 PG16 隔离重放 3 份 Migration 零错误 + RPC/RLS 冒烟一致（演练脚本 `scratch/restore-drill/` 在档）。裁定：① SECURITY DEFINER 接受（2 WARN 预期存档）；② `20260901163555` 批准发布（由唯一发布人执行）；③ 数据库接入收口放行；④ 旧链路要求限期退场；⑤ 授权补传追认合规。详见 `/Users/zzymima0000/Developer/coding/1.Active/alw丨数据库管理专家/项目审查丨prompt_manager/收口审查裁定丨prompt_manager丨2026-09-03.md` 与转送清单。发布前仍需完成「材料回填 15:00 后状态更新」（PM-2）与唯一发布人登记。
 
-**风险与决策**：
+**风险与决策（2026-09-03 更新）**：
 
-- 未确认哪台设备拥有完整数据前，禁止导入或切换；否则可能丢失另一端的本地记录。
-- 若保留离线编辑，必须实现按记录保存的离线操作队列及重放冲突处理；第一阶段可先提供只读缓存/导出，不能继续“恢复后整快照推送”。
-- MCP 需要独立、可撤销的用户级访问方式；此项与浏览器 Supabase 登录会话不同，必须在实施前确认。
+- 未确认哪台设备拥有完整数据前，禁止导入或切换；否则可能丢失另一端的本地记录。（已解决：52+1 已导入，当前 54）
+- 若保留离线编辑，必须实现按记录保存的离线操作队列及重放冲突处理；第一阶段可先提供只读缓存/导出，不能继续“恢复后整快照推送”。（已实现：`revision` 条件更新 + 串行写队列；观察项：写队列停摆 PM-3 待 P1 修复）
+- MCP 需要独立、可撤销的用户级访问方式；此项与浏览器 Supabase 登录会话不同，必须在实施前确认。（已解决：`api/mcp-access-tokens` 服务端生成 + SHA-256 + RLS）
+- 旧链路退场：裁定要求限期提交独立变更申请，不得长期维持整库覆盖的 `/api/sync`（PM-2）。
 - 自定义 Schema 需要在 Supabase Data API 设置中显式 Expose，且 grants 和 RLS 同时配置；这是一项用户 Dashboard 操作。
 
 **验收标准**：

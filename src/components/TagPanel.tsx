@@ -741,7 +741,9 @@ export function TagPanel({
       })()}
       <div className="border-t border-line px-4 py-3 text-[11px] leading-relaxed text-muted">
         {offline
-          ? '未连接同步服务，已使用本机本地数据'
+          ? syncMode === 'cloud'
+            ? '云端暂时不可用，正在自动重试；本机保留离线缓存'
+            : '未连接同步服务，已使用本机本地数据'
           : syncMode === 'cloud'
             ? '已开启 Supabase 云端实时同步；本机保留离线缓存'
             : '已开启局域网实时同步（服务端共享存储），离线时回退本机缓存'}

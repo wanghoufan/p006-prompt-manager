@@ -29,14 +29,14 @@ function toInfo(row: McpAccessTokenRow): McpAccessTokenInfo {
   }
 }
 
-async function sha256Hex(value: string): Promise<string> {
-  const bytes = new TextEncoder().encode(value)
-  const digest = await crypto.subtle.digest('SHA-256', bytes)
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
-}
-
-function newAccessToken(): string {
-  return `pmat_${crypto.randomUUID().replaceAll('-', '')}${crypto.randomUUID().replaceAll('-', '')}`
+function isMcpAccessTokenInfo(value: unknown): value is McpAccessTokenInfo {
+  if (!value || typeof value !== 'object') return false
+  const info = value as Partial<McpAccessTokenInfo>
+  return typeof info.id === 'string'
+    && typeof info.label === 'string'
+    && typeof info.createdAt === 'string'
+    && (typeof info.lastUsedAt === 'string' || info.lastUsedAt === null)
+    && (typeof info.revokedAt === 'string' || info.revokedAt === null)
 }
 
 export function buildMcpEnvText(accessToken: string): string | null {
@@ -67,17 +67,27 @@ export async function createMcpAccessToken(label: string): Promise<{ token: stri
   if (!normalizedLabel) throw new Error('请填写这台设备的名称')
   const supabase = getSupabaseBrowserClient()
   if (!supabase) throw new Error('Supabase 尚未配置')
-  const { data: auth, error: authError } = await supabase.auth.getUser()
-  if (authError || !auth.user) throw new Error('请先登录云端')
-  const token = newAccessToken()
-  const { data, error } = await supabase
-    .schema(PROMPT_MANAGER_SCHEMA)
-    .from('mcp_access_tokens')
-    .insert({ label: normalizedLabel, token_hash: await sha256Hex(token) })
-    .select('id,label,created_at,last_used_at,revoked_at')
-    .single()
-  if (error || !data) throw new Error(error?.message ?? '创建 MCP 访问令牌失败')
-  return { token, info: toInfo(data as McpAccessTokenRow) }
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+  const accessToken = sessionData.session?.access_token
+  if (sessionError || !accessToken) throw new Error('请先登录云端')
+
+  const response = await fetch('/api/mcp-access-tokens', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ label: normalizedLabel }),
+  })
+  const payload: unknown = await response.json().catch(() => null)
+  const result = payload as { error?: unknown; token?: unknown; info?: unknown }
+  if (!response.ok) {
+    throw new Error(typeof result?.error === 'string' ? result.error : '创建 MCP 访问令牌失败')
+  }
+  if (typeof result?.token !== 'string' || !isMcpAccessTokenInfo(result.info)) {
+    throw new Error('创建 MCP 访问令牌失败')
+  }
+  return { token: result.token, info: result.info }
 }
 
 export async function revokeMcpAccessToken(id: string): Promise<void> {

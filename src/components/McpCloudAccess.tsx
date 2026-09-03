@@ -9,6 +9,32 @@ function formatDate(value: string | null): string {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString('zh-CN', { hour12: false })
 }
 
+async function copyTextWithFallback(value: string): Promise<void> {
+  // Clipboard API 仅在安全上下文（HTTPS / localhost）中可用；局域网 HTTP 用选区复制兜底。
+  if (window.isSecureContext && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(value)
+      return
+    } catch {
+      // 某些浏览器即使处于安全上下文也可能拒绝权限，继续尝试用户点击触发的兼容路径。
+    }
+  }
+
+  const textarea = document.createElement('textarea')
+  textarea.value = value
+  textarea.setAttribute('readonly', '')
+  textarea.setAttribute('aria-hidden', 'true')
+  textarea.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0'
+  document.body.append(textarea)
+  textarea.select()
+  textarea.setSelectionRange(0, textarea.value.length)
+  try {
+    if (!document.execCommand('copy')) throw new Error('复制命令被浏览器拒绝')
+  } finally {
+    textarea.remove()
+  }
+}
+
 export function McpCloudAccess() {
   const [tokens, setTokens] = useState<McpAccessTokenInfo[]>([])
   const [label, setLabel] = useState('这台电脑')
@@ -68,7 +94,7 @@ export function McpCloudAccess() {
   async function copyEnv() {
     if (!oneTimeEnv) return
     try {
-      await navigator.clipboard.writeText(oneTimeEnv)
+      await copyTextWithFallback(oneTimeEnv)
       setStatus('已复制。请粘贴到该电脑 mcp/prompt-server/.env.local 文件中。')
     } catch {
       setStatus('复制失败，请检查浏览器剪贴板权限。')

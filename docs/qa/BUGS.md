@@ -4,6 +4,163 @@
 
 ## 最近一次 QA 执行记录
 
+### Air ↔ Mini Supabase 云端双设备验收（2026-09-02）
+
+- **角色/方式**：协助式 QA；由用户在 MacBook Air 与 Mac Mini 实际操作并口头反馈。未提交截图；未记录真实提示词正文、MCP 原始令牌、AI API Key 或数据库密码。
+- **统一地址/范围**：两端使用 `http://192.168.31.60:3100`；本轮范围仅 Air ↔ Mini，PC 不纳入验收。
+- **时间记录**：2026-09-02；用户未提供具体验收分钟，以下不虚构具体时刻。
+
+| 项目 | 发起设备 | 另一端结果 | 结果 | 证据/复现步骤 |
+|---|---|---|---|---|
+| 1. 双向新建 | Air、Mini | 两方向均约 3 秒内出现，无需刷新 | ✅ 通过 | 分别新建 `测试-Air-新建`、`测试-Mini-新建`；用户确认两端均实时可见 |
+| 2. 双向编辑与版本 | Air、Mini | 两方向均约 3 秒内看到编辑结果；版本历史均增加 | ✅ 通过 | 分别编辑两张测试卡并保存；用户确认无需刷新、版本历史增加 |
+| 3. 双向删除与撤销 | Air | Mini 约 1 秒看到恢复及最终删除消失 | ✅ 通过 | 删除出现影响数提示，10 秒内撤销，再次真正删除；用户确认全流程约 1 秒级同步 |
+| 4. 标签关系与复制计数 | Mini | Air 看到同一标签关系及复制次数 +1 | ✅ 通过 | 使用 `测试-云端标签` 关联测试卡并复制一次；用户确认准确 +1、无需刷新 |
+| 5. 并发冲突 | Air 先保存、Mini 后保存 | 未形成旧版本提交条件 | ⏳ 待验证 | Air 自动保存后，Mini 页面立即出现更新；未完成“另一端保存旧版本”及冲突提示验证 |
+| 6. 断网、重连与云端重读 | Air | Mini 作为对照未报告异常 | ✅ 通过 | 用户确认断网、恢复、刷新后验收通过；未提交截图或具体提示文案 |
+| 7. MCP 令牌隔离 | Air 生成令牌 | 无法进入双令牌隔离验证 | ❌ 失败 | Air → 设置 → MCP 云端访问 → 生成令牌，出现 `crypto.randomUUID is not a function`；现有 Mini 令牌未撤销 |
+| 8. 清理 | Air/Mini | 两端刷新后均无测试数据 | ✅ 通过 | 用户确认测试卡、测试标签已清理，真实云端数据未受影响 |
+
+#### BUG-9：HTTP IP 访问下 MCP 令牌无法生成
+
+- **状态**：FIXED（Air 真机已验证；Mini 复测已于 2026-09-03 通过，见 BUG-11「复测第二轮完成记录」）
+- **严重程度**：P0（阻塞 MCP 双设备隔离验收）
+- **涉及功能**：MCP 云端访问 / 独立令牌生成
+- **前置条件**：Air 以 `http://192.168.31.60:3100` 登录云端，打开「设置 → MCP 云端访问」
+- **复现步骤**：点击「生成令牌」；页面显示 `crypto.randomUUID is not a function`。
+- **预期结果**：生成一枚仅显示一次、可供该设备配置的 MCP 令牌。
+- **实际结果**：Air 无法生成新令牌；无法完成 Air/Mini 各自独立令牌及单独撤销验证。
+- **复现概率**：本轮 1/1（Air）；Mini 未重复尝试，避免扩大操作。
+- **影响范围**：使用当前固定 HTTP IP 地址的设备可能无法新建 MCP 令牌；现有 Mini 令牌未做撤销验证。
+- **建议优先级**：P0；请开发确认安全上下文兼容的 UUID 生成方案，并在 Air/Mini 实际浏览器重新验收。
+
+**开发修复与部署记录（2026-09-02）**：
+
+- 新增同源动态接口 `src/app/api/mcp-access-tokens/route.ts`：在 Node 服务端用 `randomBytes(32)` 生成令牌、用 SHA-256 保存哈希；接口先用 `auth.getUser(jwt)` 向 Supabase Auth 校验来访会话，再以该用户 JWT 受现有 RLS 写入，不使用 `service_role`。
+- 浏览器端 `src/lib/supabase/mcpTokens.ts` 不再调用 `crypto.randomUUID()` / `crypto.subtle`，仅将当前会话 JWT 发送到同源接口并接收一次性令牌。
+- 开发验证：`npx tsc --noEmit`、修复文件 ESLint、`npm run build -- --webpack`、`mcp/prompt-server npm run build` 均通过；默认 Turbopack 构建曾因 `.next/server` 被占用报 `ENOTEMPTY`，不作为代码失败结论。
+- 正式部署：用户授权后仅同步本次修复的两个源码文件至既有 `Services/prompt-manager`，重建并重启现有容器；容器运行中且绑定 `0.0.0.0:3100`。无登录请求 `POST /api/mcp-access-tokens` 返回预期 401，首页返回 200；没有 Supabase 数据库写入。
+- 真实验证：Air 已于本轮成功创建新令牌并完成复制/粘贴确认；Mini 的创建、双令牌隔离与单独撤销后的真实结果仍必须由 QA 复测。
+
+#### BUG-10：HTTP IP 访问下 MCP 令牌自动复制被浏览器拒绝
+
+- **状态**：FIXED（Air 真机已验证；Mini 复测已于 2026-09-03 通过——真实点击复制成功且剪贴板哈希比对一致，见 BUG-11「复测第二轮完成记录」）
+- **严重程度**：P1（令牌已生成，但阻断一键复制到 MCP 配置）
+- **复现结果**：Air 成功创建令牌后，点击「复制到剪贴板」显示「复制失败，请检查当前浏览器剪贴板权限」。
+- **根因**：`navigator.clipboard.writeText()` 只在安全上下文可用；固定 LAN HTTP 地址不满足该条件。
+- **修复**：`McpCloudAccess.tsx` 优先使用 Clipboard API；失败或非安全上下文时，退回用户点击触发的临时只读 textarea 选区复制，失败才保留原错误提示。不会额外保存或记录令牌。
+- **部署与验证**：组件已同步到既有正式 Docker 服务；Docker 隔离生产构建通过，容器运行中，首页 200。Air 已于本轮真实完成“刷新页面 → 创建新令牌 → 点击复制 → 粘贴到本机文本编辑器”并确认复制成功；未记录令牌原文。Mini 将在令牌隔离验收中复测。
+
+#### BUG-11：Mini 本地 MCP 握手成功，但无法实际调取已保存的云端卡片
+
+- **状态**：FIXED（2026-09-03 复测第二轮步骤 0–4 全部通过，Mini + Air 双设备云端链路闭环；测试卡保留待用户清理）
+- **严重程度**：P0（阻塞本阶段收口前的真实验收）
+- **真实证据（2026-09-02）**：Mini 已完成 Codex MCP 配置写入，stdio 握手和工具注册通过；用户新开 Codex 会话后调用 `mcp-mini`。提示词管理器已搜索命中唯一卡片，卡片显示调取码 `mcp-mini`，但 MCP 返回“未找到调取码为「mcp-mini」的卡片，或 MCP 访问令牌已被撤销”。
+- **已排除**：不是输入调取码时未保存；页面搜索已命中该卡片。Mini `.env.local` 的 URL、publishable key、访问令牌三项字段均存在（未读取或记录令牌值）。
+- **对照证据**：Air 已可正常通过其本机 MCP 调取云端卡片。因此共享 Supabase 数据、RPC、调取码机制和服务端部署不是本问题的共同故障面。Mini 的 Codex 配置已只读核对为当前项目 `mcp/prompt-server/dist/index.js`，且本机 `.env.local` 修改时间早于失败调用，已排除“改错项目副本”。
+- **令牌验证（2026-09-02）**：设置页显示 Mini 令牌的“上次使用”为失败调用后的 `16:09:17`。因此 Mini MCP 已读到当前令牌且云端认可该令牌；不再要求生成、替换或撤销 Mini 令牌。
+- **当前待验证根因**：Mini 页面中可见的测试卡可能仅存在于本机编辑状态，尚未成为该令牌归属用户可由 RPC 查到的云端 `cards` 行；也可能存在该用户卡片写入后与 RPC 查询条件不一致的问题。下一步必须先以刷新后的页面状态确认卡片是否真正持久化，不能再以页面输入框或网格即时显示判断云端已保存。
+- **开发修复（2026-09-02）**：`src/app/page.tsx` 增加卡片本地变更代次与已同步代次。新建、编辑、删除、撤销、导入、批量评分等卡片操作先标记为待同步；Realtime 回读发现待同步卡片或写队列运行中时持续等待，不再以旧快照整体覆盖本机 state。当前写批次成功后才确认对应代次并允许后续云端回读；写入失败时继续保留待同步状态并走既有重试，不再静默丢弃卡片。
+- **部署与开发验证**：用户授权后仅同步 `src/app/page.tsx` 到既有 `Services/prompt-manager`；源文件 SHA-256 一致。Docker 隔离生产构建通过并已重建 `prompt-manager-prompt-manager-1`，容器绑定 `0.0.0.0:3100`、首页 HTTP 200。开发目录的 `npx tsc --noEmit`、`npx eslint src/app/page.tsx`、`npm run build -- --webpack` 均通过。以上均不等同真实双设备验收。
+- **验收尝试（2026-09-02）**：用户报告 Mini 与 Air 各新建一张测试卡后，两张均不在列表中。该尝试发生在容器重建后、但未确认两端浏览器已硬刷新并加载新 JavaScript，因此结果为 **失败且客户端版本未确认**；不得据此标记修复通过，也不得据此直接否定新修复。
+- **暂缓决定（2026-09-02）**：用户确认本轮先记录、不继续排障。保留上述修复代码与全部证据；恢复时先确认两端客户端版本并按上述验收步骤复现，若仍失败再抓取浏览器实际的 Supabase 保存错误。不得把令牌粘贴到聊天、Git 或其他设备。
+
+**复测进行中记录（2026-09-02 晚，接续会话证据；状态仍为 DEFERRED，未通过）**：
+
+- 预备检查（只读）：容器 `prompt-manager-prompt-manager-1` Up；`src/app/page.tsx` 与 `Services/prompt-manager/` 副本 SHA-256 一致（`c3239b81…`），修复代码确认在运行版本中。
+- 第一次尝试：Mini 硬刷新后新建测试卡「BUG11测试任务」（BUG11-测试2），刷新后卡片消失。**关键证据**：DevTools Network 过滤 `supabase` 显示保存动作期间 **0 / 11 requests** —— 保存时根本没有向 Supabase 发出任何请求（写入未发生而非写入失败）；容器日志近 15 分钟无任何报错（写入走浏览器直连 Supabase，不经过容器）。
+- 随后同卡再刷新后卡片重新出现（全部 · 54 张），页面登录态正常（`auth/user` 200），5 表 SELECT 全部 200。**疑似**写队列自动重试补写成功，尚未按「cards Response 内搜索 BUG11」确认云端真值，此为待续第 0 项。
+- 缓存因素已排除：JS chunk `max-age=31536000 immutable` 但文件名带内容哈希，HTML 无浏览器缓存（ETag 回源），正常刷新即得新代码；「卡片消失」与 HTTP 缓存无关。
+- 待续步骤（按序）：0) cards Response 搜「BUG11」确认云端真值与总数；1) 完成 L2 持久化（新建 → 刷新仍在）；2) Air 编辑该卡，Mini 未刷新约 3 秒自动可见；3) Mini 硬刷新确认 Air 修改仍在（旧快照覆盖核心判据）；4) Mini MCP 用 `mcp-mini` 调取 `bug11-test2` 并看复制计数 +1。任何一步失败即停，抓报错原文。
+- 已发给用户的 Mini 端 QA 执行提示词与 Air 端配合动作见当轮会话；Mini 端可由独立 QA 智能体按提示词执行，Air 端由用户操作。
+- 原始修复内容与此前证据见上方「开发修复」「部署与开发验证」「验收尝试」「暂缓决定」各条，本条不重复。
+
+**复测完成记录（2026-09-02 21:16–22:00，Mini 端独立 QA agent 实测 4 步全执行；Air 端由用户配合；仅浏览器操作 + 只读源码/配置，未改代码/容器/数据。状态维持 DEFERRED——复测未通过，且暴露新根因线索，是否继续修复由主会话决定）**：
+
+- **环境事实（先决）**：:3100 实为 Docker 容器 `prompt-manager-prompt-manager-1`（当天 16:23 重建 = 含 page.tsx 修复代码，SHA 已核对一致），bind mount `/Users/zzymima0000/DockerData/prompt-manager/legacy-store` → `/app/data`；host `./data/store.json`（52 张、mtime 今早 10:27）是本地旧 next dev 实例的陈旧文件，与线上无关，勿据此判断。
+- **页面模式（关键新证据）**：全程落「已开启局域网实时同步（legacy）」模式——aside 底栏文案为 legacy 文案（cloud 模式文案应为「已开启 Supabase 云端实时同步」）。Supabase 账号已登录（wanghoufan13@gmail.com），硬刷新窗口快照 5 表 GET 全 200、Realtime WS 曾连上，但 `SupabaseAuthControl` 每次 auth 变化 dispatch `prompt-manager-auth-changed` → page 每次重跑 connect()（云端/局域网二选一，先试云后落 LAN），存在**模式摇摆**；本次最终落 legacy ⇒ **云写链路（仅 cloudMode=true 时触发）从未运行**。
+- **步骤1 L2 持久化**：新建「BUG11-Mini-复测」/调取码 bug11-test2/占位正文 → 保存窗口 15 秒+ **零 Supabase 写请求**（无 POST/PATCH，连写方向 OPTIONS 都无）；唯一写 `POST :3100/api/sync` **200**（局域网 serverStore）。硬刷新后卡片在（全部·**54 张**），数据来源 = 容器 legacy store（21:48 写入已含该卡）+ localStorage，**非 Supabase**。刷新窗口 supabase `GET /rest/v1/cards` 响应体捕获 3 份，搜 BUG11-Mini-复测/bug11-test2 **0 命中**。全程 Console **0 报错**。
+- **步骤2 Air 变更**：Air 端编辑标题 →「BUG11-Mini-复测2」（容器 store `updated`=13:52:35Z = 北京 21:52:35）；Mini **未刷新**约数秒内自动可见（21:52:55 检出，期间 Mini 零网络请求事件 = 经容器 SSE 长连接推送，非 Realtime WS）。
+- **步骤3 旧快照覆盖**：Mini 硬刷新（21:53:23）后卡片在（54 张）、Air 修改在；容器 store 21:53:42 写入（刷新后数据回流容器）；云端 cards 响应体仍 0 命中。
+- **步骤4 MCP**：MCP server 0.2.0（dist 当天 14:21 构建）已改为**直连 Supabase RPC `activate_prompt(p_token,p_code)`**，不再读任何本地 store；凭据在 `mcp/prompt-server/.env.local`（16:03 更新，URL/publishableKey/ACCESS_TOKEN 三要素齐全）。同配置协议级真调（spawn 同 dist 同 .env.local）：`bug11-test2` → **isError「未找到调取码为「bug11-test2」的卡片，或 MCP 访问令牌已被撤销」**；UI 复制计数 **0 次**、容器 store `copyCount=0`（RPC 未命中无从计数）。**对照验证**：同链路真调真实在用码 `jbyj` → **activated 命中**（title/正文/计数均正常返回）⇒ RPC、令牌、返回结构全部正常，`bug11-test2` 调不到的唯一原因 = **该卡不在 Supabase 云端**。
+- **结论（仅事实）**：按唯一判定标准（Supabase 写成功 + 刷新仍在 + 另一端可见），本次 1/3 成立（刷新仍在、Air 可见）但**全部发生在容器 legacy 局域网体系内**；**Supabase 写请求全程为零、云端自始至终无此卡** ⇒ 新修复（写队列防旧快照覆盖）在当前 legacy 模式下**未进入云写链路，其云端效果无法判定**。三证据闭环：保存零云写 → cards 响应体 0 命中 → MCP RPC 未命中（同链路 jbyj 正常命中）。
+- **待 Builder 排查的新根因线索**：cloudMode 为何最终落 legacy（connect 的 cloud 分支要求 `loadPromptCloudSnapshot` 成功且 `hasCloudData`，任一表读 throw/return null 即落 legacy；auth 变化触发 connect 重跑的摇摆机制）。
+- **遗留**：测试卡「BUG11-Mini-复测2」（@bug11-test2）由用户决定**保留**在容器 legacy store（bind mount 持久，容器重建不丢）；tags=[测试, qa验收] 疑 Composer 自动生成，非手动添加（观察项）。QA 临时进程（CDP 网络监听 + 独立 Chrome）已于 22:03 全部收尾。
+
+**开发修复二：connect() 模式选择（2026-09-02 深夜，Builder；静态门禁通过，部署与复测待用户授权；BUG-11 状态仍为 DEFERRED）**：
+
+- 根因逐项修复（对应「复测完成记录」三项根因线索）：
+  1. **connect() 序列化**（`src/app/page.tsx`）：新增代次守卫，后发起者胜出，旧运行在 await 恢复后检测代次不一致即自行作废；消除 auth 事件并发触发时「云端分支与 legacy 分支交错、后完成的 legacy 覆盖云端」的模式摇摆。
+  2. **登录态绝不静默降级 legacy**：新增 `getPromptCloudSessionUser()`（`promptRepository.ts`）——本地 getSession 有会话即判定已登录，getUser 瞬时失败不再被误判为未登录；登录态下快照读取失败 → 云端重试态（2s→4s→8s→16s→30s 退避自动重连 + 顶部持久横幅「云端暂时不可用」+ aside 底栏 cloud 离线文案），绝不 setCloudMode(false)、绝不写 `/api/sync`。
+  3. **null/throw 语义区分**（`promptRepository.ts`）：`loadPromptCloudSnapshot` 登录态校验失败改为 throw（原来返回 null 与空库不可区分）；返回 null 仅表示未配置客户端；登录 + 空库（hasCloudData=false）保持云端模式等待显式导入，不落 legacy。
+  4. **auth 事件去抖**（`SupabaseAuthControl.tsx` + `page.tsx`）：改派带 session user id 的 CustomEvent；`TOKEN_REFRESHED` 不再触发 connect()（令牌续期由 supabase-js 自动处理）；页面按 user id 变化去抖，同一用户连发事件只跑一次 connect。
+- 附带健壮性（同块内）：云端重试期间基线为 null 时不上传设置（防本机缓存覆盖云端）；显式退出登录时清空云端基线与待同步代次（防复用上一账号指纹）；Realtime 单次回读失败不再产生未处理的 promise 拒绝；重连成功时若存在离线期本地修改，toast 明示「未上传云端，仅保留在本机缓存」（不静默丢弃、不自动回灌）。
+- 未动范围：未登录 legacy 链路（`data/store.json`、`/api/sync`、SSE）全部保留；未改 Services、未重建容器、无任何数据库变更、未 commit/push。
+- 静态门禁：`npx tsc --noEmit` ✅；`npx eslint`（4 个改动文件）✅ 0 error；`npm run lint` ✅ 0 error（仅 scratch/ 既有 warning）；`npm run build -- --webpack` ✅。
+- 待办：① 用户授权后同步 4 个改动文件至 `Services/prompt-manager` 并重建既有容器；② 按 `scratch/BUG11-复测-Mini端QA提示词-2026-09-02.md` 重测步骤 0–4（动手前先确认 aside 底栏为「已开启 Supabase 云端实时同步」而非 legacy 文案），真实结果另行记录。
+
+**复测第二轮记录（2026-09-02 深夜，修复部署后；步骤 0–1 通过，2–4 待用户配合后继续；状态仍 DEFERRED）**：
+
+- **部署（用户授权）**：4 个修复文件同步至 `Services/prompt-manager`，SHA 一致（page.tsx `c8b5d745…` / SupabaseAuthControl `15fe70cf…` / TagPanel `2121be1a…` / promptRepository `973b81c8…`）；容器 `prompt-manager-prompt-manager-1` 重建后 Up、绑定 `0.0.0.0:3100`，首页与 `/api/sync` 均 200（仅为运行时检查，不算云端验收）。
+- **先决检查 ✅**：Mini 专用 Chrome（CDP 9223）打开 `http://192.168.31.60:3100`，已登录 `wanghoufan13@gmail.com`；**aside 底栏 =「已开启 Supabase 云端实时同步；本机保留离线缓存」**（云端模式文案，不再是 legacy）；无「云端暂时不可用」横幅。
+- **步骤 0 云端真值 ✅**：刷新后页面 53 张 = 云端基线；容器 legacy 里的测试卡（BUG11-Mini-复测2）未混入；5 表 SELECT 全 200、`auth/v1/user` 200；Supabase Realtime WebSocket（`wss://…supabase.co/realtime/v1/websocket`）建连握手成功。加载期 mount + INITIAL_SESSION 各触发一次 connect，由代次守卫串行化，符合设计。
+- **步骤 1 L2 持久化 ✅**：
+  - UI 新建测试卡（占位正文，无敏感信息）→ **`POST /rest/v1/cards → 201`**；AI 标题回写 **`PATCH → 200`**；AI 自动标签 **`POST /rest/v1/prompt_tags → 201`** —— 云写链路真实运行（修复前此类请求为零）；
+  - 手动设置标题「BUG11-Mini-复测3」+ 调取码 `bug11-test2`，保存 **`PATCH → 200`**；全程零 `/api/sync` 写、Console 无报错；
+  - 硬刷新后卡片仍在（总数 54 = 云端 53 基线 + 1），aside 底栏仍为云端文案；
+  - **云端直查**（页面会话 REST，`Accept-Profile: prompt_manager`）：`code=eq.bug11-test2` **命中 1 行**（id `2516da58-e90b-434c-aed1-66482b97a24e`，title「BUG11-Mini-复测3」，copy_count 0），cards 总数 54。
+- **待续（用户暂停点，下一步从步骤 2 开始）**：步骤 2 请用户在 Air 编辑该卡（改标题「BUG11-Mini-复测-Air改」）→ Mini 未刷新约 3 秒自动可见；步骤 3 Mini 硬刷新确认 Air 修改仍在（旧快照覆盖核心判据）；步骤 4 Mini MCP 调取 `bug11-test2` 命中 + 复制计数 +1（并顺带复测 BUG-9/10 的 Mini 端）。
+- **QA 现场遗留**：专用 Chrome（profile `/tmp/qa-bug11-chrome`，CDP 9223）与网络监听（`scratch/bug11-netmon.mjs` → `/tmp/bug11_net.jsonl`）暂停时仍在运行；`/tmp` 重启即清空，若 profile 丢失需用户本人在该 Chrome 重新登录（QA 不得自行登录）。
+- **自动化备注（下一棒省时）**：PreviewPanel 的标题/调取码用合成 input 事件 + blur 无法触发保存（草稿未真正进 React 状态）；可靠做法是真实键盘输入或最后点面板「保存」按钮提交草稿。
+
+**复测第二轮完成记录（2026-09-03 上午，步骤 2–4 全部通过；BUG-11 闭环）**：
+
+- **环境确认**：QA 现场完整保留（专用 Chrome + CDP 9223 + netmon；容器 Up 12h+）；页面已登录、底栏云端文案、总数 54。
+- **步骤 2 Realtime 同步 ✅**：用户在 Air 编辑 `bug11-test2` 卡（标题改「BUG11-Mini-复测-Air改」）保存后，Mini 页面**未刷新**即自动显示新标题（首次轮询 T+2s 已命中，实际耗时 ≤3s）；页面已连续运行 43421 秒（≈12h）未重载（`performance` 证据，reloadCount=0）；Realtime 事件触发完整 5 表回读（cards/tags/prompt_tags/card_versions/settings 全 200）。
+- **步骤 3 旧快照覆盖核心判据 ✅**：Mini 硬刷新后 54 张、Air 修改仍在、底栏仍为云端文案——旧快照覆盖未发生；云端直查 `code=eq.bug11-test2` 返回 `title=BUG11-Mini-复测-Air改`。
+- **步骤 4 MCP 调取 ✅**：`scratch/bug11-mcp-call.mjs` 协议级真调（与 Codex `mcp-mini` 同 dist 同配置）`bug11-test2` → `activation.ok=true`、`status: activated`，返回 **Air 改后的最新标题** + 正文 41 字符 + 标签 [测试]；调取后云端 `copy_count` **0 → 1**。
+- **BUG-9 Mini 复测 ✅**：设置 → MCP 云端访问 → 生成令牌 → `POST /api/mcp-access-tokens → 200`，成功提示 + 复制按钮出现，无 `crypto.randomUUID` 错误。
+- **BUG-10 Mini 复测 ✅**：CDP 派发**受信任真实点击**「复制到剪贴板」→ 状态「已复制」；系统剪贴板与页面一次性内容**长度+FNV 哈希完全一致**（253 / `564a7184`，未泄露原文）。注意：自动化用 `.click()`（无 user activation）会得到「复制失败」——系自动化无真实手势所致，非产品缺陷；真人点击正常。
+- **复测令牌收尾**：生成的复测令牌（label「这台电脑」，创建 2026/9/3 11:00:59）已撤销（`PATCH mcp_access_tokens → 204`，UI 显示「已撤销」）；Mini 在用令牌「Mac Mini」（上次使用 10:59:39 = 本次 MCP 调取）完好保留，供 MCP 双设备隔离验收使用；撤销后的负向 RPC 验证并入隔离验收（届时撤销 Air 令牌后同链路验证）。一次性令牌原文未在任何文档/对话中出现。
+- **结论**：BUG-11 判定三件套（云端写入成功回执 + 刷新仍在 + 另一端可见）全部成立，MCP 调取命中且计数递增——登录态稳定保持在 Supabase 云端模式，连接/降级修复验证闭环。BUG-11 关闭；后续按收口顺序进行并发冲突与 MCP 双设备隔离验收。
+
+**并发冲突验收记录（2026-09-03 上午，Air + Mini 双设备实测；验收通过 + 1 项新观察待开发定级）**：
+
+- **方法**：Air 与 Mini 同时操作同一张测试卡 `bug11-test2`；为消除人为时序不确定性，Mini 页面用 CDP 网络延迟仿真（20s/请求）拉宽写入窗口，Air 在窗口内连续保存；全程逐秒记录云端 revision/title（shell 直连 REST）与 Mini toast（CDP 轮询）。
+- **时间线证据**：
+  - 基线 rev=8 title「BUG11-Mini-复测-Air改并发」（Air 预编辑已保存）；
+  - 11:39:43 Mini 触发写入（评分 0→4，被 20s 延迟挂起）；11:39:45–47 Air 首次保存落库（rev 8→9），落入 Mini 的 revision 读取窗口；
+  - **11:40:01 Mini toast：「云端卡片保存失败：这条内容已在另一台设备更新，请刷新后再修改」——明确冲突提示出现** ✅；
+  - Mini 的挂起写入被服务端 revision 条件更新拒绝（0 行），**未静默生效** ✅；整个风暴期间（Air 连续保存把 rev 推至 39）云端 title 始终为 Air 内容，**未被覆盖** ✅；
+  - 收敛终态：rev=39、title=Air 内容、rating=0、updated_at=Air 最后保存时刻；无数据丢失。持续并发下按「最后写入者胜」收敛（Air 后续保存携带其界面视图完整载荷），符合记录级 revision 写入的预期语义。
+- **判定：✅ 并发冲突验收通过**（明确冲突提示 + 被拒写入不静默生效 + 另一端内容完好；对照规范 §3.3/§11.1 L4）。
+- **新观察（写队列停摆，待开发定级，不阻塞上述验收结论）**：
+  - 11:40:40（Air 最后一次保存）后 Mini 停止一切 Supabase 请求：重试链死亡；此后本地两次评分编辑（4星→5星）入队但**不产生任何网络请求**；标签页前台化 + 等待 90 秒均无恢复（排除后台定时器节流）；
+  - 本地 rating=5 与云端 rating=0 持续分歧（`performance` resource 证据：最后完成请求 11:41:26，之后再无）；
+  - 刷新页面后恢复正常（云端快照应用；本机未上传的评分改动按既有设计弃于界面、保留在 localStorage）；
+  - 疑因：supabase-js fetch 无超时 + 冲突风暴中某个请求未决阻塞串行写队列（未定论；本轮含 20s 人工延迟仿真，真实环境触发条件未知）；
+  - 建议：开发评估写队列单项超时/自愈与 `retryCloudSync` 链路健壮性；对照规范 §9.2「失败不能静默丢弃」——当前表现是「不再尝试且无提示」，与该条存在张力。
+
+**MCP 双设备令牌隔离验收记录（2026-09-03 下午，PASS）**：
+
+- **前置根因修复（本轮新发现并解决）**：Air 端 MCP server 实为 8/29 构建的**旧版本地文件版**（读 Air 本地 data/store.json，与云端无关；dist 中无 activate_prompt 真代码、无 .env.local 加载逻辑）——这是「Air 端大面积未找到、令牌云端从未使用」的真正根因（新版 RPC 代码此前从未推送至 Air 克隆）。修复：Mac mini 将 bb32e42 推送为交付分支 `origin/mcp-delivery`（远端 master 存在另一工作线的 7 个提交，为避免覆盖未直接推 master，master 分叉整合待后续单独处理）；Air 切分支 → npm run build（0.2.0）→ 注入新令牌 → **清理 10 个长驻旧 MCP 进程**（「改了 dist 也不生效」的隐藏坑）→ 重启 Codex/WorkBuddy。
+- **验收步骤与证据（双端真实操作 + 云端记录）**：
+  1. Air 新令牌「MacBook Air」（11:59:42 生成）真实调取：云端「上次使用」从「从未使用」→ **13:47:19 / 13:56:09** ✅；被调卡片 copy_count 递增（bug11-test2→10、hi→4）✅；
+  2. Mini「Mac Mini」令牌协议级调取 `bug11-test2` + `hi` 均 ✅；
+  3. 撤销「MacBook Air」令牌（14:04:55，Mini 端设置页操作）：UI「已撤销」+ 云端 revoked_at 双确认 ✅；
+  4. **撤销后 Air 协议级真调 `hi` → isError=true**，文案「未找到调取码为「hi」的卡片，或 MCP 访问令牌已被撤销。」——与预期完全一致，isError 由 false 翻转为 true，证明是云端实时校验令牌状态 ✅（负向）；
+  5. **撤销后 Mini 调取 `hi` 仍成功** ✅（隔离性：仅撤销一枚不影响另一枚）。
+- **判定：✅ MCP 双设备令牌隔离验收通过（含撤销负向验证）**；Air 端修复后 hi / bug11-test2 / hi9 均 via 新版 RPC 成功（Air 智能体四层验证：协议级 / 云端记录 / Web 端 / Codex 端到端）。
+- **附加发现（记录待产品评估）**：自然语言调用（Codex/WorkBuddy）下，含连字符的调取码（bug11-test2）实测被改写导致「未找到」，无杠简单码（hi / hi9 / hi1–hi7）稳定成功；Mini 协议级精确传参不受影响。建议：调取码规则避开连字符或在 MCP 工具描述中明确（列入收口材料观察项）。
+
+**基线备份与隔离恢复演练记录（2026-09-03 14:22–14:35，当前 55 张卡基线；生产零写入）**：
+
+- **备份（对生产只读，supabase CLI dump）**：`DockerBackups/prompt-manager/` 下三件（timestamp 20260903-142203）：roles 370 B / structure 22,004 B / data 173,345 B。结构尺寸与 9/2 基线完全一致 = 结构未变；数据增大 = 今天验收新增内容，合理。备份不进 Git。
+- **隔离恢复演练**：postgres:17-alpine 容器（不发布端口、仅 docker exec），按序恢复：补建平台角色/extensions schema/supabase_realtime publication → 角色转储 → auth stub（6 表，仅列名无数据值）→ 结构（滤 supabase_vault 1 行）→ 数据，`ON_ERROR_STOP=1` 全程**零错误**。过程中修正 2 个演练脚本问题并已记入 scratch/restore-drill/ 流程：PG17 不支持 `CREATE PUBLICATION IF NOT EXISTS`；roles 转储需预建 supabase_realtime_admin / supabase_admin 角色。
+- **恢复后验证全绿**：cards 55 / card_versions 18 / tags 24 / prompt_tags 91 / settings 1 / mcp_access_tokens 10；外键孤儿 5 项全 0；调取码 6/6 唯一；RLS 6 表全启用 ×各 4 策略；函数 activate_prompt + set_row_metadata 在位；publication 覆盖 5 表；settings 表**不存在 ai_api_key 列**（密钥结构性不可能落库）；RPC 随机令牌冒烟返回 0 行（拒绝正确）。
+- **收尾**：演练容器已删除（零残留）；本机临时会话令牌文件已清除。对比 9/2 演练（52 卡）：本轮回填了 BUG-11 修复后真实使用中的 55 卡基线证据。
+- **测试卡清理终态（用户决策）**：12 张带码测试卡已经界面批量删除（云端 REST 验证 0 残留）；**1 张无码「未命名提示词」（今天 12:29:56 创建）经用户决定保留在云端**，当前云端总数 **54**（53 张真实卡 + 该保留卡）；容器 legacy store「BUG11-Mini-复测2」亦保留。后续备份/对账以 54 为准。
+
 ### 通用 AI 接口实现验证（2026-08-29）
 
 - **模式**：QA 静态代码核对 + TypeScript / ESLint 门禁

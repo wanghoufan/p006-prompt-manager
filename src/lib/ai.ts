@@ -24,33 +24,42 @@ const AI_PROVIDERS = [
 ] as const
 
 /** Phase 3：从服务端共享设置解析 AI 配置，缺省回退环境变量（.env.local）。
+ *  通用环境变量 AI_PROVIDER / AI_MODEL / AI_BASE_URL / AI_API_KEY 可指向任意厂商；
+ *  DEEPSEEK_* 作为旧部署兼容保留，优先级低于通用变量。
  *  model/baseUrl 留空时由具体 Adapter 构造器填充厂商默认值（见 DeepSeekAdapter）。
  *  P1-AI1：可传入本次请求的覆盖项（API Key 由客户端经请求头传递，不落共享存储）。 */
 export async function resolveAIConfig(override?: Partial<AIConfig>): Promise<AIConfig> {
   const s = await getState()
   const st = (s.settings && typeof s.settings === 'object' ? s.settings : {}) as Partial<Settings>
-  const provider = (AI_PROVIDERS as readonly string[]).includes(override?.provider ?? st.aiProvider ?? '')
-    ? ((override?.provider ?? st.aiProvider) as AIProvider)
-    : 'deepseek'
+  const providerNames = AI_PROVIDERS as readonly string[]
+  const chosen = override?.provider ?? st.aiProvider ?? ''
+  const envProvider = (process.env.AI_PROVIDER ?? '').trim()
+  const provider = providerNames.includes(chosen)
+    ? (chosen as AIProvider)
+    : providerNames.includes(envProvider)
+      ? (envProvider as AIProvider)
+      : 'deepseek'
   const storedKey = typeof st.aiApiKey === 'string' && st.aiApiKey.trim() ? st.aiApiKey.trim() : ''
   return {
     provider,
     model:
       typeof override?.model === 'string' && override.model.trim()
         ? override.model.trim()
-        : typeof st.aiModel === 'string'
+        : typeof st.aiModel === 'string' && st.aiModel.trim()
           ? st.aiModel.trim()
-          : '',
+          : (process.env.AI_MODEL ?? '').trim(),
     apiKey:
       typeof override?.apiKey === 'string' && override.apiKey.trim()
         ? override.apiKey.trim()
-        : storedKey || (process.env.DEEPSEEK_API_KEY ?? ''),
+        : storedKey ||
+          (process.env.AI_API_KEY ?? '').trim() ||
+          (process.env.DEEPSEEK_API_KEY ?? ''),
     baseUrl:
       typeof override?.baseUrl === 'string' && override.baseUrl.trim()
         ? override.baseUrl.trim()
-        : typeof st.aiBaseUrl === 'string'
+        : typeof st.aiBaseUrl === 'string' && st.aiBaseUrl.trim()
           ? st.aiBaseUrl.trim()
-          : '',
+          : (process.env.AI_BASE_URL ?? '').trim(),
   }
 }
 

@@ -79,6 +79,23 @@ export async function getPromptCloudUserId(): Promise<string | null> {
   return error || !data.user ? null : data.user.id
 }
 
+export type PromptCloudSessionUser = { signedIn: boolean; userId: string | null }
+
+/**
+ * 连接前的登录态探测：本地已有会话即视为已登录。
+ * `getUser` 需要访问网络，令牌刷新遇到瞬时故障时只说明「云端暂不可用」，
+ * 不代表用户已退出；只有本地完全没有会话时才用 `getUser` 再确认一次。
+ */
+export async function getPromptCloudSessionUser(): Promise<PromptCloudSessionUser> {
+  const supabase = getSupabaseBrowserClient()
+  if (!supabase) return { signedIn: false, userId: null }
+  const { data: sessionData } = await supabase.auth.getSession()
+  const sessionUser = sessionData.session?.user ?? null
+  if (sessionUser) return { signedIn: true, userId: sessionUser.id }
+  const { data, error } = await supabase.auth.getUser()
+  return { signedIn: !error && !!data.user, userId: data.user?.id ?? null }
+}
+
 function throwQueryError(scope: string, error: { message: string } | null) {
   if (error) throw new Error(`${scope}：${error.message}`)
 }
@@ -150,14 +167,20 @@ function toCards(rows: CardRow[], versions: CardVersionRow[], promptTags: Prompt
 
 /**
  * 读取当前登录用户在 `prompt_manager` schema 中的完整提示词快照。
- * 空库返回 `hasCloudData: false`，由调用者保留本地数据并等待用户显式确认导入。
+ * 返回 null 仅表示浏览器未配置 Supabase 客户端；登录态校验失败或查询失败一律抛出，
+ * 由调用者保持在云端模式重试。空库返回 `hasCloudData: false`，
+ * 由调用者保留本地数据并等待用户显式确认导入。
  */
 export async function loadPromptCloudSnapshot(localAiApiKey: string): Promise<PromptCloudSnapshot | null> {
   const supabase = getSupabaseBrowserClient()
   if (!supabase) return null
 
   const { data: auth, error: authError } = await supabase.auth.getUser()
-  if (authError || !auth.user) return null
+  if (authError || !auth.user) {
+    // 与「空库」严格区分：登录态校验失败属于读取失败，必须让调用方保持在云端模式重试，
+    // 绝不能被当作未登录 / 空库而静默降级到其他数据源。
+    throw new Error(authError?.message ?? '云端登录状态校验失败')
+  }
 
   const database = supabase.schema(PROMPT_MANAGER_SCHEMA)
   const [cardsResult, versionsResult, tagsResult, promptTagsResult, settingsResult] = await Promise.all([
