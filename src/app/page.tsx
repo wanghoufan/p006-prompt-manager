@@ -167,20 +167,37 @@ export default function Home() {
     }, delay)
   }, [])
 
-  /** 所有云端 mutation 串行执行，卡片、标签和关系不会发生竞态。 */
+  // supabase-js fetch 无默认超时：冲突风暴中一个未决请求会永久阻塞串行队列，
+  // 后续写入（含重试补写）全部滞留且无提示（BUGS.md「写队列停摆」）。每项写入与
+  // 超时竞速，超时按失败处理（提示 + 自动重试），队列继续流动；迟到的原请求若
+  // 最终落库，由 revision 条件更新 / 追加式版本 / 复合主键幂等 upsert 保证安全。
+  const CLOUD_WRITE_TIMEOUT_MS = 30_000
+
+  /** 所有云端 mutation 串行执行，卡片、标签和关系不会发生竞态；单项超时防止队列停摆。 */
   const enqueueCloudWrite = useCallback((work: () => Promise<void>) => {
     const run = async () => {
       cloudWritesInFlightRef.current += 1
+      let timerId: number | null = null
       try {
-        await work()
+        await Promise.race([
+          work(),
+          new Promise<never>((_, reject) => {
+            timerId = window.setTimeout(() => reject(new Error('cloud-write-timeout')), CLOUD_WRITE_TIMEOUT_MS)
+          }),
+        ])
+      } catch (error) {
+        const timedOut = error instanceof Error && error.message === 'cloud-write-timeout'
+        notify(timedOut ? '云端写入超时，将自动重试' : '云端写入异常，将自动重试')
+        retryCloudSync()
       } finally {
+        if (timerId !== null) window.clearTimeout(timerId)
         cloudWritesInFlightRef.current -= 1
       }
     }
     const queued = cloudWriteQueueRef.current.then(run, run)
     cloudWriteQueueRef.current = queued.catch(() => undefined)
     return queued
-  }, [])
+  }, [notify, retryCloudSync])
 
   const markCardsCloudDirty = useCallback(() => {
     cloudCardsDirtyVersionRef.current += 1
