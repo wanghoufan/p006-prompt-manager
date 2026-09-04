@@ -1038,3 +1038,13 @@ P0-H 当前实现 **PASS**，无新增 Bug；建议进入后续客户端真实 M
 - 已确认：Settings 开关、三种对齐方式、PreviewPanel 按钮存在性与最右布局均 PASS。
 - 未确认：AI 返回后的正文变更、Toast、手动建版本、自动不建版本、粘贴竞态保护。
 - **阻断项**：需要用户明确授权使用当前卡片正文发送至配置的 AI 服务，或提供无敏感测试文本后，才能继续完成手动/自动整理真机验收。
+
+### BUG-13 ｜ 云端标签保存全部失败：column tags.revision does not exist（2026-09-04）
+
+**现象（用户报告）**：`http://192.168.31.60:3100` 已登录云端（底栏「已开启 Supabase 云端实时同步」），输入标签保存后刷新掉落，toast「云端标签保存失败： column tags.revision does not exist」。链接与登录态均正常，非用户操作问题。
+
+**根因**：建表 Migration `20260901152616` 给 `cards`（L24）/`settings`（L99）建了 `revision` 列，**`tags` 表漏建**；应用层 `promptRepository.ts` `revisionedSave('tags', ...)` 保存前先 `select revision` → 读取即报错。影响 `tags` 实体全部写路径（新建/重命名/置顶/排序）；卡片、设置、标签关系、MCP、Realtime 读不受影响。**上线以来即存在**：云端 24 标签为离线 SQL 导入，未经 UI 编辑路径，属验收盲区。
+
+**修复路径（数据库侧欠账，应用层零改动零部署）**：管理员已出 Migration 草案 `20260904102000_add_prompt_manager_tags_revision.sql`（`alter table prompt_manager.tags add column revision bigint not null default 1 check (revision > 0)`，纯增量、元数据级瞬时完成、现有 24 行回填 1），隔离 Docker PG16 复现验证全绿（迁移前精确复现线上报错，迁移后 V1–V4 全过）。材料：平台仓库 `docs/reviews/MIGRATION_20260904102000_审查记录.md`（APPROVED_FOR_EXECUTION 草案）+ `docs/reviews/20260904102000_验证/`；登记于平台转送清单第 2 项。
+
+- **状态**：✅ **FIXED（2026-09-04 11:03 上线，修复单号 MIG-20260904102000）**。管理员经用户批准后 `supabase db push` 发布；线上验收达标：列定义正确（bigint / NOT NULL / default 1）、全部行 revision=1、check 约束在位、`supabase migration list` Local=Remote=7 对齐；此前保存失败的 5 条标签在修复上线后同步入库成功（端到端实证）；2026-09-04 11:18 用户 UI 确认「标签确实不会掉了」。发布前备份与完整发布记录见平台仓库 `docs/reviews/MIGRATION_20260904102000_审查记录.md` §7。应用侧零代码改动、零重新部署。监控条款：若 UI 再现标签保存报错，第一时间把完整报错原文回报管理员。

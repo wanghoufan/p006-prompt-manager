@@ -94,7 +94,20 @@ stop() {
   rm -f "$WATCHDOG_PID_FILE" "$NEXT_PID_FILE"
   # 只匹配 "run" 子命令，避免 pkill 误杀正在执行 stop 的自身进程
   pkill -f "dev-server\.sh run" 2>/dev/null
-  lsof -tiTCP:"$PORT" -sTCP:LISTEN 2>/dev/null | xargs kill 2>/dev/null
+  # 2026-09-04 事故修复：此前无条件杀掉监听 $PORT 的进程，曾把占用 3100 的
+  # Docker Desktop 端口转发进程杀掉导致生产下线。现只杀 node/next 系进程；
+  # 其他占用者（如 com.docker）只提示不动手。
+  for pid in $(lsof -tiTCP:"$PORT" -sTCP:LISTEN 2>/dev/null); do
+    cmd=$(ps -p "$pid" -o comm= 2>/dev/null)
+    case "$cmd" in
+      node*|next*|Next*)
+        kill "$pid" 2>/dev/null && echo "已停止端口 $PORT 上的进程 $pid ($cmd)"
+        ;;
+      *)
+        echo "跳过端口 $PORT 上的非本服务进程 $pid ($cmd)——不是 dev server，不动它"
+        ;;
+    esac
+  done
   echo "服务已停止"
 }
 
@@ -106,9 +119,15 @@ status() {
   fi
   # 用端口探测判断服务，而不是 pid 文件：next dev 会 spawn 子进程，
   # pid 文件里记的常常是已经退出的启动器进程，导致这里误报「未运行」。
+  # 2026-09-04 修正：核对进程身份——com.docker 等非 node 进程占用端口时
+  # 如实报告，不再误报成「next dev 运行中」。
   NPID=$(lsof -tiTCP:"$PORT" -sTCP:LISTEN 2>/dev/null | head -1)
   if [ -n "$NPID" ]; then
-    echo "next dev: 运行中 (pid=$NPID, 端口 $PORT)"
+    CMD=$(ps -p "$NPID" -o comm= 2>/dev/null)
+    case "$CMD" in
+      node*|next*|Next*) echo "next dev: 运行中 (pid=$NPID, 端口 $PORT)" ;;
+      *) echo "端口 $PORT 被其他程序占用：$CMD (pid=$NPID)——dev server 未运行" ;;
+    esac
   else
     echo "next dev: 未运行"
   fi

@@ -1563,3 +1563,11 @@ supabase/migrations/20260901163555_fix_prompt_manager_activate_prompt_variable_c
 - Mini 单设备铁律：不做、不再被建议做双设备冲突回归。
 - 不泄露 Key/令牌/数据库密码/真实提示词正文；契约卡与 V1.1 规范冲突时以规范全文为准。
 ```
+
+### 16.20.1 收束后增量（2026-09-04 上午；接续者先读本节再读 §16.20）
+
+| 事项 | 状态 | 说明 |
+|---|---|---|
+| 4 个文档改动 commit + push | ✅ | `3976c56`（契约卡 + V1.0 作废横幅 + deploy.sh 入口声明 + HANDOFF §16.20），用户授权 commit 并 push；纯文档，未触发部署 |
+| **BUG-13：云端标签保存 100% 失败**（`column tags.revision does not exist`） | ✅ **FIXED（已上线闭环）** | 根因：建表 Migration 给 cards/settings 建了 `revision` 列、tags 漏建；`revisionedSave('tags')` 读取即报错。上线以来即存在（24 标签离线导入未经 UI），属验收盲区。修复走数据库侧（应用层零改动零部署）：项目侧出草案 + Docker PG16 隔离复现 V1–V4 全绿 + 审批申请单转送 → 管理员 **2026-09-04 11:03 经用户批准发布 `20260904102000_add_prompt_manager_tags_revision.sql`**，线上验收达标（Local=Remote=**7** 对齐）、此前失败的 5 条标签入库成功、11:18 用户 UI 确认。记录：`docs/qa/BUGS.md` BUG-13；平台仓库 `docs/reviews/MIGRATION_20260904102000_审查记录.md` §7 |
+| 待办顺序不变 | — | §16.20 §2 的 2–5 项继续有效（P2 legacy 退场等管理员批准、P3 连字符调取码、掉登录监控、契约卡推广）；BUG-13 监控条款：UI 再现标签报错先抓完整原文回报管理员 |
