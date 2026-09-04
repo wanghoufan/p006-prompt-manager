@@ -14,6 +14,25 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 > 各 Agent 动手前先读本文件，按归属目录读写，避免产物散落或重复生成。
 > 协作方法论基线参考 `AI编程项目模板-手动协同-v2.1`。
 
+## 〇、部署契约卡（Deploy Contract：涉及部署 / 容器 / 数据目录前必读）
+
+> 本卡是 Docker 规范 V1.1 的浓缩速查，如有冲突以 V1.1 全文为准。
+
+| 项 | 值 |
+|---|---|
+| project_slug | `prompt-manager` |
+| 开发目录（唯一改源码处） | `~/Developer/coding/1.Active/ing丨0813提示词管理器 mac gpt桌面 v1.0/` |
+| 部署副本（GitHub 克隆，禁止手改源码热修） | `~/Developer/coding/docker/prompt-manager/` |
+| 数据目录 | `~/DockerData/prompt-manager/`（含 `legacy-store/` bind mount） |
+| 备份目录 | `~/DockerBackups/prompt-manager/` |
+| 容器 / 端口 / 访问 | `prompt-manager-prompt-manager-1` ｜ `0.0.0.0:3100` ｜ `http://192.168.31.60:3100` |
+| 唯一部署方式 | 改动 push 到 GitHub master 后，在**部署副本**内执行 `bash scripts/deploy.sh`（记录回滚点 → `git pull --ff-only` → compose build → up -d → HTTP 验证） |
+| 部署前提 | 用户明确授权；部署副本已有 `.env.local`（600 权限，不进 Git） |
+
+- 脚本分工：本项目日常部署**只用**上表的 `scripts/deploy.sh`；`~/Developer/coding/docker/deploy.sh` 是跨项目通用引导脚本（把新的 GitHub 仓库首次克隆成部署目录用），不用于本项目，避免产生第三份代码副本。
+- 红线：未经用户明确授权，不创建 / 删除 / 迁移 / 覆盖 部署副本、DockerData、DockerBackups、Named Volume，不 commit/push，不新建生产容器或公开新端口；`dev-server.sh` 仅限开发，禁占 3100 端口。
+- 完整规范：`~/Developer/coding/docker/2026-09-02 丨 Mac Mini 本地项目自托管 Docker 规范 丨 V1.1.md`（与通用引导脚本同放 `docker/` 根目录；项目内同名 V1.0 文件已作废，仅作历史）。
+
 ## 一、项目档案
 
 - 项目名称：提示词管理工具（Prompt Manager）
@@ -35,7 +54,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - 样式方案：Tailwind CSS v4
 - 代码检查：ESLint 9（eslint-config-next）
 - 测试方案：暂无（以真机双设备验收 + 隔离恢复演练为准）
-- 部署平台：Mac Mini Docker 自托管（规范 `2026-09-02 丨 Mac Mini 本地项目自托管 Docker 规范 丨 V1.1.md`，存于 `Developer/coding/docker/`）
+- 部署平台：Mac Mini Docker 自托管（规范全文 `2026-09-02 丨 Mac Mini 本地项目自托管 Docker 规范 丨 V1.1.md`，存于 `~/Developer/coding/docker/`；项目内同名 V1.0 已作废，见 §〇 部署契约卡）
 
 ### 常用命令
 
@@ -59,7 +78,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - 产品优化候选：`docs/review/PRODUCT_BACKLOG.md`
 - 交接上下文：`docs/handoff/HANDOFF.md`（§16.19 为当前唯一有效入口，2026-09-04 九次收束）
 - 质量记录：`docs/qa/BUGS.md`（BUG-9/10/11/12 FIXED；BUG-12=数据丢失事故，备份+合并修复已部署；待办 P2/P3 见 HANDOFF §16.19）、`docs/qa/QA_CHECKLIST.md`
-- 规范：数据库 `2026-09-03 丨 共享 Supabase 项目与独立 Schema 数据库规范 丨 V1.3.md`（存于 `1.Active/alw丨数据库管理专家/`）+ Docker `2026-09-02 丨 Mac Mini 本地项目自托管 Docker 规范 丨 V1.1.md`（存于 `Developer/coding/docker/`，V1.0 已被 V1.1 取代）
+- 规范：数据库 `2026-09-03 丨 共享 Supabase 项目与独立 Schema 数据库规范 丨 V1.3.md`（存于 `1.Active/alw丨数据库管理专家/`）+ Docker `2026-09-02 丨 Mac Mini 本地项目自托管 Docker 规范 丨 V1.1.md`（存于 `Developer/coding/docker/`；项目内 V1.0 已作废）
 - 平台仓库：`/Users/zzymima0000/Developer/coding/1.Active/alw丨数据库管理专家/平台丨共享 Supabase 数据库`（HEAD `2e92f08`，Remote 5/5 已发布，含 `20260901163555` + `20260903160500` 统一治理）
 - 远程仓库：https://github.com/wanghoufan/prompt-manager.git（master 已整合 mcp-delivery；部署副本即从该仓库克隆）
 - 审查裁定：`/Users/zzymima0000/Developer/coding/1.Active/alw丨数据库管理专家/项目审查丨prompt_manager/收口审查裁定丨prompt_manager丨2026-09-03.md`（APPROVED_FOR_EXECUTION）

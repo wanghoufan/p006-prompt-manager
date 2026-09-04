@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Prompt Manager one-command deploy (Docker spec V1.1).
+# This is the ONLY deploy entry for this project. Do NOT use the generic
+# deploy.sh in ~/Developer/coding/docker/ for this repo: that one is a
+# cross-project bootstrap (clones repos into its own .runtime/repo) and
+# would create a third copy of the code tree.
 #
 # Usage: run inside the docker deployment copy
 # (Developer/coding/docker/prompt-manager):

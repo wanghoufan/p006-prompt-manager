@@ -1466,7 +1466,7 @@ supabase/migrations/20260901163555_fix_prompt_manager_activate_prompt_variable_c
 ```
 
 
-## 16.19 阶段九次收束（2026-09-04，用户指示「开发先到这里暂时结束」；**当前唯一有效入口**）
+## 16.19 阶段九次收束（2026-09-04，用户指示「开发先到这里暂时结束」；**已被 §16.20 取代，降级为历史记录**）
 
 > 本节取代 §16.18 成为当前唯一有效入口；更早小节仅作历史记录。上轮会话完成 P1 部署收尾、P2 退场申请草稿、BUG-12 排查与修复。
 
@@ -1498,3 +1498,68 @@ supabase/migrations/20260901163555_fix_prompt_manager_activate_prompt_variable_c
 - 不泄露任何 Key/令牌/数据库密码/Auth token/真实提示词正文；QA 报告只允许标题与 id。
 - 收口材料正文只在 `docs/review/共享Supabase数据库接入收口材料-2026-09-02.md`；BUG 记录只在 `docs/qa/BUGS.md`；不新建重复文档。
 - 动手前先 `git status`；绝不 reset/checkout/覆盖/删除用户改动。
+
+## 16.20 阶段十次收束（2026-09-04，用户指示「开发先到这里暂时结束」；**当前唯一有效入口**）
+
+> 本节取代 §16.19 成为当前唯一有效入口；更早小节仅作历史记录。本轮为 Docker 部署契约治理专项：把 V1.1 规范的关键信息前置到 AGENTS.md，消除双 docker 目录分叉。
+
+### 1. 当前工作进展
+
+| 事项 | 状态 | 说明 |
+|---|---|---|
+| AGENTS.md 新增「§〇 部署契约卡」 | ✅ | 置于全部章节之前（Next.js 规则块后），浓缩 V1.1 规范：project_slug、开发/部署/数据/备份四类位置、容器端口与访问 URL、唯一部署方式（部署副本内 `bash scripts/deploy.sh`）与前提、双脚本分工、红线；冲突时以 V1.1 全文为准 |
+| 项目内 Docker 规范 V1.0 作废 | ✅ | `2026-09-02 丨 ... 丨 V1.0.md` 头部加 ⛔ DEPRECATED 横幅 + 相对链接跳转 V1.1，状态行改「已作废」，仅作历史留档 |
+| `scripts/deploy.sh` 头部声明唯一部署入口 | ✅ | 纯 ASCII 注释（沿用 `f03dc82` 编码教训）：本项目日常部署只用它，不使用跨项目通用引导脚本，避免克隆出第三份代码副本 |
+| 双 docker 目录分叉合并（用户授权） | ✅ | 事实澄清：带空格 `docker /` 为 8月31 原始共享目录（规范+通用脚本），无空格 `docker/` 为 9月4 建部署副本时按规范路径新建。已将 V1.1 规范、通用 `deploy.sh`、`README.md`、`.gitignore` 移入 `docker/`（`mv -n` 无冲突），删除残留 `.DS_Store` 后 `rmdir` 移除带空格目录；**现仅存 `~/Developer/coding/docker/`**（含两个部署副本 prompt-manager / personal-checkin + 规范 + 通用脚本） |
+| 6 处带空格路径引用更新 | ✅ | AGENTS.md ×4、V1.0 横幅链接、`scripts/deploy.sh` 注释全部改为无空格路径；rg 复核项目内零残留，V1.1 跳转链接实测有效，`bash -n` 语法通过，personal-checkin 项目无旧路径引用 |
+| 统一「契约卡写入提示词」 | ✅ 已在对话交付 | 供其他项目复用：发给目标项目智能体后自动探明实况、填模板、写入该项目 AGENTS.md；不拷贝规范副本，规范全文仅 `docker/` 一份 |
+| Git 状态 | ⚠️ 未提交 | 本轮改动 4 文件待 commit：`AGENTS.md`、`2026-09-02 丨 ... V1.0.md`、`scripts/deploy.sh`、`docs/handoff/HANDOFF.md`（本节）；最新提交 `5417813` |
+
+### 2. 下一步任务（按序，需用户启动）
+
+1. **提交本轮文档改动**：4 个待提交文件一次性 commit（文案建议：`docs: AGENTS.md 部署契约卡 + V1.0 规范作废横幅 + deploy.sh 入口声明 + HANDOFF §16.20`）；是否 push 由用户决定。
+2. **P2 legacy `/api/sync` 退场**（承接 §16.19）：等管理员批准 `docs/review/独立变更申请丨legacy-sync退场丨prompt_manager丨2026-09-03.md` 后按其 §7 流程实施；批准前不实施。
+3. **P3 连字符调取码**（承接 §16.19）：产品二选一，不急。
+4. **会话掉登录根因监控**（承接 §16.19）：若再发生，第一时间抓 Supabase Auth 刷新请求状态码。
+5. **规范推广（可选）**：向其他自托管项目（如 personal-checkin）的智能体发送统一「契约卡写入提示词」，使 Docker 规范 V1.1 全项目落地；每个项目只加卡片、不拷贝规范。
+
+### 3. 注意事项及相关规矩
+
+- **继承 §16.19 全部条款**：Mini 单设备铁律（不做双设备回归）、打开页面先看底栏、数据找回查 `prompt-manager:preconnect-backup`、未经授权不 commit/push/不动 Services/容器/DockerData/DockerBackups/Named Volume、数据库红线（不 db push / 不改 Dashboard / legacy 链路批准前保留）、不泄露 Key 与提示词正文、不新建重复文档、动手前 `git status`。
+- **本轮新增——路径铁律**：一切文档与命令引用 `~/Developer/coding/docker/`（无空格）；带空格旧目录 `docker /` 已删除，**禁止再引用或重建**；若见到带空格路径字样即为过期信息，须修正。
+- **契约卡层级**：AGENTS.md §〇 是 V1.1 规范的浓缩速查，冲突时以 `docker/` 规范全文为准；改部署相关规则先改规范，再同步契约卡。
+- **部署唯一入口**：改动 push master → 部署副本 `~/Developer/coding/docker/prompt-manager/` 内 `bash scripts/deploy.sh`；通用引导脚本 `docker/deploy.sh` 仅用于把新项目首次克隆成部署目录。
+
+### 4. 下一个智能体接续恢复提示词（一键复制）
+
+```text
+【恢复 Prompt Manager｜Docker 部署契约治理已完成，待提交 + 既有待办】
+
+项目目录：
+/Users/zzymima0000/Developer/coding/1.Active/ing丨0813提示词管理器 mac gpt桌面 v1.0
+
+开始前按顺序阅读：
+1. AGENTS.md —— §〇 部署契约卡 + 一、项目档案（本轮已新增契约卡，规范唯一权威在 ~/Developer/coding/docker/2026-09-02 丨 Mac Mini 本地项目自托管 Docker 规范 丨 V1.1.md）
+2. docs/handoff/HANDOFF.md —— §16.20 是当前唯一有效入口
+3. docs/qa/BUGS.md（BUG-9/10/11/12 均 FIXED）
+
+当前事实（已验证）：
+- Docker 规范 V1.1 关键信息已前置到 AGENTS.md §〇 契约卡；项目内 V1.0 规范已作废（横幅+跳转链接），仅历史留档。
+- 双 docker 目录分叉已合并：带空格 `docker /` 已删除，唯一共享目录为 ~/Developer/coding/docker/（规范全文 + 通用引导脚本 + prompt-manager / personal-checkin 两个部署副本）；项目内 6 处引用已更新、零残留，脚本语法与链接均已验证。
+- 生产运行正常：容器 prompt-manager-prompt-manager-1、0.0.0.0:3100、http://192.168.31.60:3100、云端 54 卡权威；部署唯一入口为部署副本内 `bash scripts/deploy.sh`。
+- Git：本轮 4 个文档文件未提交（AGENTS.md、V1.0 规范、scripts/deploy.sh、HANDOFF.md）；最新提交 5417813。
+
+下一步按序（需用户启动）：
+1. 提交本轮 4 个文档改动（需用户授权 commit；push 与否由用户决定）
+2. P2 legacy /api/sync 退场——申请草稿 docs/review/独立变更申请丨legacy-sync退场丨prompt_manager丨2026-09-03.md 待管理员批准，批准前不实施
+3. P3 连字符调取码——产品二选一，不急
+4. 会话掉登录根因监控（再发生先抓 /auth/v1/token?grant_type=refresh_token 状态码）
+5. 可选：向其他自托管项目发送统一「契约卡写入提示词」，只加卡片不拷贝规范
+
+硬性禁区：
+- 路径铁律：一律使用无空格 ~/Developer/coding/docker/；带空格 `docker /` 已删除，禁止引用或重建。
+- 未经授权不 commit/push、不动部署副本/容器/DockerData/DockerBackups/Named Volume；dev-server.sh 仅开发用，禁占 3100。
+- 数据库红线不变：不 db push、不改 Dashboard/SECURITY DEFINER、不查改生产数据；legacy 链路批准前保留。
+- Mini 单设备铁律：不做、不再被建议做双设备冲突回归。
+- 不泄露 Key/令牌/数据库密码/真实提示词正文；契约卡与 V1.1 规范冲突时以规范全文为准。
+```
