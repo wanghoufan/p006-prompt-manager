@@ -37,7 +37,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 - 项目名称：提示词管理工具（Prompt Manager）
 - 项目类型：Next.js 应用 + 共享 Supabase 云端存储 + Docker 自托管 + MCP 子包
-- 当前阶段：Supabase 云端多端同步已完成并获 APPROVED_FOR_EXECUTION（2026-09-03 15:00 裁定放行），Migration 5/5 已发布；legacy 退场草稿待审批；Mini 单设备安全运行期
+- 当前阶段：Supabase 云端多端同步已完成并获 APPROVED_FOR_EXECUTION（2026-09-03 15:00 裁定放行），Migration 7/7 已发布（含 2026-09-04 BUG-13 `tags.revision` 修复）；剩余待办已于 2026-09-04 经用户最终裁定全部取消；项目进入现状运行期（Mini 单设备，日常使用与被动故障响应）
 - 主要目标：管理、编辑与测试提示词
 - 主要用户：使用 GPT 等大模型、需要集中管理 Prompt 的个人 / 团队
 
@@ -45,7 +45,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 - 前端：Next.js 16（App Router）+ React 19 + TypeScript 5
 - 服务端：Next.js Route Handler（AI 代理、`/api/mcp-access-tokens` MCP 令牌服务端生成）
-- 共享存储：Supabase `prompt_manager` Schema（Postgres + RLS + Realtime，记录级 `revision` 条件更新，`owner_user_id` 归属）为主；`/api/sync` + `data/store.json` + localStorage 为未登录/离线兼容兜底（已获 APPROVED_FOR_EXECUTION，限期退场草稿已提交待审批，批准前保留）
+- 共享存储：Supabase `prompt_manager` Schema（Postgres + RLS + Realtime，记录级 `revision` 条件更新，`owner_user_id` 归属）为主；`/api/sync` + `data/store.json` + localStorage 为未登录/离线兼容兜底（已获 APPROVED_FOR_EXECUTION；限期退场草稿已于 2026-09-04 经用户最终裁定取消、长期保留）
 - 实时同步：Supabase Realtime（cards/card_versions/tags/prompt_tags/settings 5 表，`wss://…/realtime/v1/websocket`）；旧 SSE 链路仅作兼容保留
 - 认证：Supabase Auth（Magic Link + Google OAuth PKCE），`http://192.168.31.60:3100` 为已核验访问地址（`localhost`/`.local` 不在白名单/被代理劫持）
 - MCP：`mcp/prompt-server/`（`@modelcontextprotocol/sdk` + zod，stdio，v0.2.0 直连 Supabase RPC），工具 `prompt_manager_activate_prompt`（`prompt_manager.activate_prompt` RPC，能力令牌 SHA-256 哈希，`SECURITY DEFINER` 已裁定接受，2 WARN 存档）
@@ -70,16 +70,16 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ### 当前进展与产物索引
 
-- 当前状态：P0/P1/P2 全部 CLOSED（2026-08-28）；**2026-09-01~09-03 Supabase 云端多端同步已完成并获 APPROVED_FOR_EXECUTION（2026-09-03 15:00 裁定放行）**：独立 `prompt_manager` Schema（6 表 + RLS + Realtime，`20260901163555` 已发布，Remote 5/5 含 habit_tracker 统一）、Auth（Magic Link + Google OAuth PKCE）、记录级 `revision`、MCP RPC、Docker 自托管、双设备验收（BUG-11/并发/MCP 隔离）、55 卡备份 + 隔离重放全绿；**收口材料已回填 §9/§10 并登记发布**，剩余 P1 已闭环（写队列 30s 超时已部署，冲突回归按用户决定搁置），P2/P3 观察项按转送清单待办；Mini 单设备安全运行期（`http://192.168.31.60:3100`）
+- 当前状态：P0/P1/P2 全部 CLOSED（2026-08-28）；**2026-09-01~09-04 Supabase 云端多端同步已完成并获 APPROVED_FOR_EXECUTION（2026-09-03 15:00 裁定放行）**：独立 `prompt_manager` Schema（6 表 + RLS + Realtime，`20260901163555` + `20260904102000` BUG-13 已发布，Remote 7/7）、Auth（Magic Link + Google OAuth PKCE）、记录级 `revision`（含 `tags.revision` 修复）、MCP RPC、Docker 自托管、双设备验收（BUG-11/并发/MCP 隔离）、55 卡备份 + 隔离重放全绿；**收口材料已回填 §9/§10 并登记发布**，写队列 30s 超时 + BUG-12/13 已闭环，剩余待办已于 2026-09-04 经用户最终裁定全部取消；项目进入现状运行期（Mini 单设备，`http://192.168.31.60:3100`）
 - 需求文档：`docs/pm/提示词管理工具-需求文档.md`
 - 产品报告：`docs/pm/产品报告.md`
 - 实施计划：`docs/pm/PLAN.md`（Supabase 迁移已完成并放行，§16.18）
 - 代码审查：`docs/review/CODE_REVIEW.md`（2026-08-26 基线，待 Supabase 增补）
 - 产品优化候选：`docs/review/PRODUCT_BACKLOG.md`
-- 交接上下文：`docs/handoff/HANDOFF.md`（§16.19 为当前唯一有效入口，2026-09-04 九次收束）
-- 质量记录：`docs/qa/BUGS.md`（BUG-9/10/11/12 FIXED；BUG-12=数据丢失事故，备份+合并修复已部署；待办 P2/P3 见 HANDOFF §16.19）、`docs/qa/QA_CHECKLIST.md`
+- 交接上下文：`docs/handoff/HANDOFF.md`（§16.20 为当前唯一有效入口，2026-09-04 十次收束，§16.20.1 增量含 BUG-13）
+- 质量记录：`docs/qa/BUGS.md`（BUG-9/10/11/12/13 FIXED；BUG-12=数据丢失事故，BUG-13=`tags.revision` 漏建已发布；待办已全部取消）、`docs/qa/QA_CHECKLIST.md`
 - 规范：数据库 `2026-09-03 丨 共享 Supabase 项目与独立 Schema 数据库规范 丨 V1.3.md`（存于 `1.Active/alw丨数据库管理专家/`）+ Docker `2026-09-02 丨 Mac Mini 本地项目自托管 Docker 规范 丨 V1.1.md`（存于 `Developer/coding/docker/`；项目内 V1.0 已作废）
-- 平台仓库：`/Users/zzymima0000/Developer/coding/1.Active/alw丨数据库管理专家/平台丨共享 Supabase 数据库`（HEAD `2e92f08`，Remote 5/5 已发布，含 `20260901163555` + `20260903160500` 统一治理）
+- 平台仓库：`/Users/zzymima0000/Developer/coding/1.Active/alw丨数据库管理专家/平台丨共享 Supabase 数据库`（HEAD `2e92f08`，Remote 7/7 已发布，含 `20260901163555` + `20260904102000` BUG-13 修复 + habit_tracker 统一）
 - 远程仓库：https://github.com/wanghoufan/prompt-manager.git（master 已整合 mcp-delivery；部署副本即从该仓库克隆）
 - 审查裁定：`/Users/zzymima0000/Developer/coding/1.Active/alw丨数据库管理专家/项目审查丨prompt_manager/收口审查裁定丨prompt_manager丨2026-09-03.md`（APPROVED_FOR_EXECUTION）
 - MCP 接入说明：`mcp/prompt-server/README.md`

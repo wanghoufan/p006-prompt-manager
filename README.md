@@ -153,7 +153,7 @@ docker compose ps
 - **主数据源为 Supabase `prompt_manager` Schema**（Postgres + RLS + 记录级 `revision` 条件更新，`owner_user_id` 归属），已获 `APPROVED_FOR_EXECUTION`（2026-09-03，Migration 5/5 已发布）。
 - 认证：Supabase Auth（Magic Link + Google OAuth PKCE）；固定访问地址 `http://192.168.31.60:3100`（`localhost`/`.local` 可能因白名单/代理被劫持，统一用裸 IP）。
 - 同步：Supabase Realtime 订阅 `cards/card_versions/tags/prompt_tags/settings` 5 表（`wss://…/realtime/v1/websocket`），任意端增删改约 3 秒内互推；记录级 `revision` 保证并发冲突明确提示而非静默覆盖。
-- 兼容兜底：未登录时走 `data/store.json` + `/api/sync` + `localStorage` + SSE（`http://*:3100` 局域网共享），已提交 `410 Gone` 限期退场草稿（`docs/review/独立变更申请丨legacy-sync退场丨prompt_manager丨2026-09-03.md`，待审批前保留只读）。
+- 兼容兜底：未登录时走 `data/store.json` + `/api/sync` + `localStorage` + SSE（`http://*:3100` 局域网共享），曾提交 `410 Gone` 限期退场草稿（`docs/review/独立变更申请丨legacy-sync退场丨prompt_manager丨2026-09-03.md`），**已于 2026-09-04 经用户最终裁定取消、长期保留只读**。
 - Docker 自托管：`0.0.0.0:3100` 单容器 `prompt-manager-prompt-manager-1`，`DockerData/prompt-manager/legacy-store` 仅作兼容副本，备份统一在 `/Users/zzymima0000/DockerBackups/prompt-manager/`（不进 Git）。
 
 ## MCP 接入（WorkBuddy / 其他支持 MCP 的 Agent）
@@ -213,7 +213,7 @@ docker compose ps
 - **Next.js 16**（App Router）+ **React 19** + **TypeScript 5**
 - **Tailwind CSS v4** — 深色主题，响应式布局
 - **通用 AI 适配** — `AI_PROVIDER/AI_MODEL/AI_BASE_URL/AI_API_KEY`（8 厂商：DeepSeek/智谱/腾讯/豆包/Kimi/Google/OpenAI/OpenRouter，默认 `opencode-go`），`src/lib/ai/` 适配器 + Route Handler 代理，自动生成标题 / 标签 / 思维方式总结
-- **云端主存储** — Supabase `prompt_manager` Schema（6 表 + RLS 24 策略 + Realtime 5 表，记录级 `revision`，`owner_user_id` 归属），已获放行（Migration 5/5）；`/api/sync` + `data/store.json` + SSE 仅作未登录兼容兜底（限期退场草稿待审批）
+- **云端主存储** — Supabase `prompt_manager` Schema（6 表 + RLS 24 策略 + Realtime 5 表，记录级 `revision` 含 `tags.revision` 修复，`owner_user_id` 归属），已获放行（Migration 7/7）；`/api/sync` + `data/store.json` + SSE 仅作未登录兼容兜底（退场草稿已于 2026-09-04 取消、长期保留）
 - **认证** — Supabase Auth（Magic Link + Google OAuth PKCE，`http://192.168.31.60:3100` 白名单）
 - **MCP** — `@modelcontextprotocol/sdk`（stdio，v0.2.0 直连 Supabase `prompt_manager.activate_prompt` RPC，能力令牌 SHA-256，`SECURITY DEFINER` 已裁定接受）
 
@@ -277,7 +277,7 @@ Dockerfile / compose.yaml / docker/env.template  # Docker 自托管模板（stan
 ## 存储与备份
 
 - **主同步源**：Supabase `prompt_manager` 云端（6 表 + RLS + Realtime，记录级 `revision`），已获放行并完成 55 卡基线备份 + 隔离恢复演练全绿（`DockerBackups/prompt-manager/`，生产零写入）。
-- **兼容兜底**：未登录时 `data/store.json`（`serverStore` 落盘 + SSE）+ `localStorage`（`prompt-manager:cards/settings`）；该链路已提交限期退场草稿（POST 将 `410 Gone`，GET/SSE 暂保留只读），审核批准前保留。
+- **兼容兜底**：未登录时 `data/store.json`（`serverStore` 落盘 + SSE）+ `localStorage`（`prompt-manager:cards/settings`）；该链路曾提交限期退场草稿（POST 将 `410 Gone`），**已于 2026-09-04 经用户最终裁定取消、长期保留只读**。
 - 导入：三份本地来源合并导入云端（52 基线 + 授权补传 → 54 当前，含 1 张保留测试卡），外键孤儿 0，`aiApiKey` 永不入云。
 - 请定期「导出」备份；`DockerBackups/prompt-manager/` 全量结构/数据/角色 dump 不进 Git。
 
@@ -287,7 +287,7 @@ Dockerfile / compose.yaml / docker/env.template  # Docker 自托管模板（stan
 A：统一打开 `http://192.168.31.60:3100`（当前已核验访问地址），然后登录同一个 Supabase 账号。不要打开本机的 `localhost:3100`（不在白名单，回跳会被静默改送 Site URL 导致“点了没反应”）或 `.local`（易被代理 TUN 劫持 `ERR_EMPTY_RESPONSE`）。详见 `2026-09-02 丨 Mac Mini 本地项目自托管 Docker 规范 丨 V1.0.md`。
 
 **Q：另一台电脑打不开 / 无法同步？**
-A：① 确认已登录云端（`SupabaseAuthControl` 显示已登录 `wanghoufan13@gmail.com`，aside 底栏为“已开启 Supabase 云端实时同步”）；② 云端模式走 Supabase Realtime，不依赖 dev 服务是否运行（Docker 需 `docker compose ps` 为 Up）；③ 未登录时才走旧局域网链路（`data/store.json` + SSE），该链路已限期退场。跨域拦截由 `next.config.ts` 动态 LAN IP 已处理，IP 漂移重启容器即可。
+A：① 确认已登录云端（`SupabaseAuthControl` 显示已登录 `wanghoufan13@gmail.com`，aside 底栏为“已开启 Supabase 云端实时同步”）；② 云端模式走 Supabase Realtime，不依赖 dev 服务是否运行（Docker 需 `docker compose ps` 为 Up）；③ 未登录时才走旧局域网链路（`data/store.json` + SSE），该链路已于 2026-09-04 最终裁定长期保留（BUG-12 备份+合并兜底继续有效）。跨域拦截由 `next.config.ts` 动态 LAN IP 已处理，IP 漂移重启容器即可。
 
 **Q：IP 变了之后同步失效？**
 A：云端同步不依赖 LAN IP（走 Supabase 云端）；仅兼容兜底的局域网链路受 IP 影响。当前固定访问地址为 `http://192.168.31.60:3100`，已在 Supabase Dashboard Site URL/Redirect URLs 白名单；若路由器重分配 IP，需更新白名单并重启 Docker。

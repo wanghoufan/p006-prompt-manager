@@ -31,7 +31,7 @@
 - [x] 已登录后无需手动刷新：页面自动重连并显示云端卡片；退出后回退到本地兼容模式（2026-09-03 Air↔Mini 真机 PASS + BUG-11 复测 0–4 全过）
 - [x] 未登录状态不能读取或写入 `prompt_manager` 业务数据；登录后只读取自己的数据（RLS 6 表×4 策略，冒烟验证一致）
 - [x] cards/tags/card_versions/prompt_tags/settings 均启用 RLS；以另一用户身份无法 SELECT/INSERT/UPDATE/DELETE 当前用户数据
-- [x] cards 新增、编辑、删除均是单记录写入；不存在上传全量快照的 POST（legacy `/api/sync` 已提交 410 退场草稿，待审批前保留只读）
+- [x] cards 新增、编辑、删除均是单记录写入；不存在上传全量快照的 POST（legacy `/api/sync` 曾提交 410 退场草稿，已于 2026-09-04 最终裁定取消、长期保留只读）
 - [x] 同一 card 以过期 revision 更新时被拒绝并提示冲突；不同卡片并发修改均保留（2026-09-03 并发冲突验收：rev 8→39，toast 明确拒绝）
 - [x] tags 的父级、同父重名、无环与 prompt_tags 外键/唯一约束均由数据库拒绝非法写入
 - [x] 标签合并、删除子树、撤销恢复和正文保存版本均保持事务一致性，且卡片不被误删
@@ -41,7 +41,7 @@
 - [x] MCP 直连 Supabase `activate_prompt` RPC 读取云端同一用户调取码，复制计数原子递增；不读取本机 `data/store.json`（旧文件版 server 根因已修复）
 - [x] 导入前后卡片、标签、关联和版本数量一致；UUID 映射后无悬空外键、无重复关联、无重复调取码（52+1→54，孤儿 0）
 - [x] `aiApiKey` 不在 Supabase（settings 表无该列，结构性不可能）、接口响应、日志、导出或 Git 中；浏览器 bundle 不含 service_role/secret key
-- [x] 在隔离环境完成 Migration、RLS、Realtime 与恢复演练；生产发布后复核 migration list（Remote 5/5）与备份（55 卡基线全绿）
+- [x] 在隔离环境完成 Migration、RLS、Realtime 与恢复演练；生产发布后复核 migration list（Remote 7/7 含 BUG-13）与备份（55 卡基线全绿）
 
 ### 导入导出
 - [ ] JSON 格式导出 → 导入恢复全部卡片和设置
@@ -53,7 +53,7 @@
 - [x] 已登录云端：任意端增删改 → 另一端约 3s 内经 Realtime 自动刷新（2026-09-03 BUG-11 步骤2 真机：reloadCount=0 未刷新可见）
 - [x] 回声过滤：cloudCardsFingerprint + revision 条件更新，本机写入回显不重复刷新
 - [x] 云端暂时不可用：保持云端模式 + 退避重试（2s→4s→8s→16s→30s）+ 横幅「云端暂时不可用」，绝不静默降级 legacy
-- [ ] 未登录兼容链路（历史）：局域网另一台打开同一 `http://*:3100` 经 SSE 共用 `data/store.json`（保留至退场审批）
+- [x] 未登录兼容链路（历史，长期保留）：局域网另一台打开同一 `http://*:3100` 经 SSE 共用 `data/store.json`（2026-09-04 最终裁定取消退场，长期保留，BUG-12 兜底有效）
 - [x] 服务不可用时回退 localStorage，页面提示「未连接同步服务，已使用本机本地数据」
 
 ### 右侧面板交互

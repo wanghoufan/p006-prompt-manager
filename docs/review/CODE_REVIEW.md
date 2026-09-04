@@ -1,10 +1,10 @@
 # 代码审查报告 · 提示词管理工具
 
-- **审查时间**：2026-08-26（基线）｜ **2026-09-03 增补**：Supabase 云端迁移 + MCP RPC + Realtime + 写队列 30s 超时已另行经 `docs/handoff/HANDOFF.md` §16.18、`docs/qa/BUGS.md` 真机验收与收口材料 `L0` 门禁覆盖；本报告所列 P0/P1/P2 均为 08-26 前旧基线，已全部闭环或被新链路替代，保留作历史基线。
-- **审查范围**：`src/` 全部源码（lib / app / components）+ `mcp/prompt-server/`（08-26 时点：`serverStore` + `data/store.json` + SSE 链路；09-03 后主链路为 Supabase `prompt_manager` + Realtime）
-- **审查性质**：第三轮审查（备注字段 + 自动保存 + 治理规整后）+ **09-03 洁癖收尾标注**（不重做全量审查，仅明确基线时效）
-- **静态检查**：2026-08-26 时 `tsc --noEmit` 通过；`npm run lint` **失败**（2 处 React Hooks 违规，08-27 已修复）｜ 2026-09-03 复核 `tsc --noEmit` 0 error、`npm run lint` 0 error（仅 scratch 3 warnings）
-- **结论**：08-26 发现 **1 个 P0 阻断性 Lint 错误**、**3 个 P1**、**5 个 P2**、**3 个 P3**（均已闭环）；**09-03 后** Supabase/ Realtime/ MCP RPC 链路以 `BUGS.md` BUG-11/并发/隔离真机验收 + `migration list` 5/5 + 隔离恢复演练全绿为准，本报告待 Supabase 增补版。
+- **审查时间**：2026-08-26（基线）｜ **2026-09-04 增补**：Supabase 云端迁移 + MCP RPC + Realtime + 写队列 30s 超时 + BUG-13 `tags.revision` 已另行经 `docs/handoff/HANDOFF.md` §16.20.1、`docs/qa/BUGS.md` 真机验收与收口材料 `L0` 门禁覆盖；本报告所列 P0/P1/P2 均为 08-26 前旧基线，已全部闭环或被新链路替代，保留作历史基线。
+- **审查范围**：`src/` 全部源码（lib / app / components）+ `mcp/prompt-server/`（08-26 时点：`serverStore` + `data/store.json` + SSE 链路；09-04 后主链路为 Supabase `prompt_manager` + Realtime 7/7）
+- **审查性质**：第三轮审查（备注字段 + 自动保存 + 治理规整后）+ **09-04 洁癖收尾标注**（不重做全量审查，仅明确基线时效）
+- **静态检查**：2026-08-26 时 `tsc --noEmit` 通过；`npm run lint` **失败**（2 处 React Hooks 违规，08-27 已修复）｜ 2026-09-04 复核 `tsc --noEmit` 0 error、`npm run lint` 0 error（仅 scratch 2 warnings）
+- **结论**：08-26 发现 **1 个 P0 阻断性 Lint 错误**、**3 个 P1**、**5 个 P2**、**3 个 P3**（均已闭环）；**09-04 后** Supabase/Realtime/MCP RPC/BUG-13 链路以 `BUGS.md` BUG-11/12/13 真机验收 + `migration list` 7/7 + 隔离恢复演练全绿为准，本报告待 Supabase 增补版。
 
 ---
 
