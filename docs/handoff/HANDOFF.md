@@ -1479,6 +1479,7 @@ supabase/migrations/20260901163555_fix_prompt_manager_activate_prompt_variable_c
 | P2 legacy `/api/sync` 退场独立变更申请 | 📄 草稿待审批 | `docs/review/独立变更申请丨legacy-sync退场丨prompt_manager丨2026-09-03.md`（方案 A 先收写缓退役 + 影响面/回滚/验收）；**管理员批准前不实施**；待用户转送 |
 | **BUG-12 数据丢失事故**（2026-09-03 用户报告） | ✅ **FIXED（已部署 + 运行确认）** | 用户新建/生成卡片保存标题标签后刷新丢失。根因（QA 两轮现场证据 + store.json/localStorage 核验）：云端写静默失败期间编辑仅落 localStorage → 会话掉为未登录 → legacy 快照**无条件覆盖** localStorage，数据三方皆失、**无法恢复**（用户当天数据确认全灭）。修复 `5c2359c`：①`backupLocalSnapshot()` 任何远端快照覆盖前滚动备份四组 localStorage 到 `prompt-manager:preconnect-backup`；②`mergeLocalOnlyIntoRemoteSnapshot()` 仅存本机实体按 id 合并回视图并补推送 + toast。tsc/ESLint/build 三门禁全过。**2026-09-04 部署核验全过**（Services SHA-256 一致、HTTP 200、运行产物含修复标识、legacy store.json 未变）；用户已重新登录并确认底栏为「Supabase 云端实时同步」。legacy 测试卡残留（store.json 内）随退场归档处置，无需单独清理。详见 BUGS.md「BUG-12」 |
 | 云端/容器现状 | ✅ | 云端 54 卡权威；容器 Up、0.0.0.0:3100；legacy store.json 55 张（多 1 张 QA 测试卡）+ localStorage 同步，**均属 legacy 侧，不影响云端** |
+| **部署副本迁移到 V1.1 规范**（2026-09-04，用户授权） | ✅ | 旧 `Services/prompt-manager/`（V1.0 路径）停用不删；正式部署副本现为 **`~/Developer/coding/docker/prompt-manager/`**（GitHub 克隆 + 迁移来的 `.env.local`，600 权限）。新增一键部署脚本 `scripts/deploy.sh`（`73e6652`，`f03dc82` 修复编码损坏）：pull --ff-only → build → up -d → 验证，端到端跑通（`DEPLOY OK`）。核验全过：容器 working_dir=新副本、legacy-store 挂载不变（`DockerData/prompt-manager/legacy-store`）、BUG-12/P1 修复标识在 bundle、HTTP 200。回滚点：镜像 `83ded5b89e3d`。**今后部署流程：改动 push master → 部署副本内 `bash scripts/deploy.sh`，不再用 Services 路径** |
 
 ### 2. 下一步任务（按序，需用户启动）
 

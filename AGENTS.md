@@ -30,12 +30,12 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - 实时同步：Supabase Realtime（cards/card_versions/tags/prompt_tags/settings 5 表，`wss://…/realtime/v1/websocket`）；旧 SSE 链路仅作兼容保留
 - 认证：Supabase Auth（Magic Link + Google OAuth PKCE），`http://192.168.31.60:3100` 为已核验访问地址（`localhost`/`.local` 不在白名单/被代理劫持）
 - MCP：`mcp/prompt-server/`（`@modelcontextprotocol/sdk` + zod，stdio，v0.2.0 直连 Supabase RPC），工具 `prompt_manager_activate_prompt`（`prompt_manager.activate_prompt` RPC，能力令牌 SHA-256 哈希，`SECURITY DEFINER` 已裁定接受，2 WARN 存档）
-- 部署：Docker 自托管（`prompt-manager-prompt-manager-1` 绑定 `0.0.0.0:3100`，`DockerData/prompt-manager/legacy-store` bind mount，`DockerBackups/prompt-manager/` 备份不进 Git）
-- AI 调用：通用 `AI_PROVIDER/AI_MODEL/AI_BASE_URL/AI_API_KEY`（支持 opencode-go 等 8 厂商），`docker/env.template` 为模板，`Services/prompt-manager/.env.local`（600 权限）不提交
+- 部署：Docker 自托管（`prompt-manager-prompt-manager-1` 绑定 `0.0.0.0:3100`；正式部署副本 `Developer/coding/docker/prompt-manager/`（GitHub 克隆，规范 V1.1），一键部署 `bash scripts/deploy.sh`（前提：已 push master）；`DockerData/prompt-manager/legacy-store` bind mount，`DockerBackups/prompt-manager/` 备份不进 Git）
+- AI 调用：通用 `AI_PROVIDER/AI_MODEL/AI_BASE_URL/AI_API_KEY`（支持 opencode-go 等 8 厂商），`docker/env.template` 为模板，部署副本 `.env.local`（600 权限，不进 Git）
 - 样式方案：Tailwind CSS v4
 - 代码检查：ESLint 9（eslint-config-next）
 - 测试方案：暂无（以真机双设备验收 + 隔离恢复演练为准）
-- 部署平台：Mac Mini Docker 自托管（规范 `2026-09-02 丨 Mac Mini 本地项目自托管 Docker 规范 丨 V1.0.md`）
+- 部署平台：Mac Mini Docker 自托管（规范 `2026-09-02 丨 Mac Mini 本地项目自托管 Docker 规范 丨 V1.1.md`，存于 `Developer/coding/docker/`）
 
 ### 常用命令
 
@@ -45,7 +45,8 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - Lint：`npm run lint`
 - 构建：`npm run build`；MCP 子包：`cd mcp/prompt-server && npm run build`
 - 预览 / 生产启动：`npm run start`
-- 服务管理：`./dev-server.sh {start|stop|restart|status|logs}`（watchdog 自愈）
+- 服务管理：`./dev-server.sh {start|stop|restart|status|logs}`（watchdog 自愈，**仅开发用，禁止占生产端口**）
+- 生产部署：改动 push 到 GitHub master 后，在部署副本执行 `bash scripts/deploy.sh`（`~/Developer/coding/docker/prompt-manager/`，一键拉取+重建+验证）
 - 测试：暂无脚本（待建立）
 
 ### 当前进展与产物索引
@@ -56,11 +57,11 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - 实施计划：`docs/pm/PLAN.md`（Supabase 迁移已完成并放行，§16.18）
 - 代码审查：`docs/review/CODE_REVIEW.md`（2026-08-26 基线，待 Supabase 增补）
 - 产品优化候选：`docs/review/PRODUCT_BACKLOG.md`
-- 交接上下文：`docs/handoff/HANDOFF.md`（§16.18 为当前唯一有效入口，2026-09-03 八次收束，裁定后+已发布）
-- 质量记录：`docs/qa/BUGS.md`（BUG-9/10/11 FIXED，并发/MCP 隔离/备份全绿；待办 P1/P2/P3 见转送清单）、`docs/qa/QA_CHECKLIST.md`
-- 规范：数据库 `2026-09-03 丨 共享 Supabase 项目与独立 Schema 数据库规范 丨 V1.3.md`（存于 `1.Active/alw丨数据库管理专家/`）+ Docker `2026-09-02 丨 Mac Mini 本地项目自托管 Docker 规范 丨 V1.0.md`
+- 交接上下文：`docs/handoff/HANDOFF.md`（§16.19 为当前唯一有效入口，2026-09-04 九次收束）
+- 质量记录：`docs/qa/BUGS.md`（BUG-9/10/11/12 FIXED；BUG-12=数据丢失事故，备份+合并修复已部署；待办 P2/P3 见 HANDOFF §16.19）、`docs/qa/QA_CHECKLIST.md`
+- 规范：数据库 `2026-09-03 丨 共享 Supabase 项目与独立 Schema 数据库规范 丨 V1.3.md`（存于 `1.Active/alw丨数据库管理专家/`）+ Docker `2026-09-02 丨 Mac Mini 本地项目自托管 Docker 规范 丨 V1.1.md`（存于 `Developer/coding/docker/`，V1.0 已被 V1.1 取代）
 - 平台仓库：`/Users/zzymima0000/Developer/coding/1.Active/alw丨数据库管理专家/平台丨共享 Supabase 数据库`（HEAD `2e92f08`，Remote 5/5 已发布，含 `20260901163555` + `20260903160500` 统一治理）
-- 远程仓库：https://github.com/wanghoufan/prompt-manager.git（`master` 已整合，`origin/mcp-delivery` 已合入；本地 `061d807` 含 legacy 退场草稿待推送）
+- 远程仓库：https://github.com/wanghoufan/prompt-manager.git（master 已整合 mcp-delivery；部署副本即从该仓库克隆）
 - 审查裁定：`/Users/zzymima0000/Developer/coding/1.Active/alw丨数据库管理专家/项目审查丨prompt_manager/收口审查裁定丨prompt_manager丨2026-09-03.md`（APPROVED_FOR_EXECUTION）
 - MCP 接入说明：`mcp/prompt-server/README.md`
 - 用户级模型执行指南（Stage Manager 只读引用）：`/Users/zzymima0000/.workbuddy/AI_MODEL_GUIDE.md`
