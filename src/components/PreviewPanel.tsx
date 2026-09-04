@@ -670,6 +670,8 @@ export function PreviewPanel({
                   {draft.title.length}/20
                 </span>
               </div>
+            </div>
+            <div className="mt-1 flex items-center justify-between gap-2">
               <div className="flex w-28 shrink-0 items-center gap-1">
                 <span className="font-mono text-xs text-gold-bright">@</span>
                 <input
