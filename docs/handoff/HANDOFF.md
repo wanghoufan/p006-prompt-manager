@@ -1573,3 +1573,41 @@ supabase/migrations/20260901163555_fix_prompt_manager_activate_prompt_variable_c
 | 4 个文档改动 commit + push | ✅ | `3976c56`（契约卡 + V1.0 作废横幅 + deploy.sh 入口声明 + HANDOFF §16.20），用户授权 commit 并 push；纯文档，未触发部署 |
 | **BUG-13：云端标签保存 100% 失败**（`column tags.revision does not exist`） | ✅ **FIXED（已上线闭环）** | 根因：建表 Migration 给 cards/settings 建了 `revision` 列、tags 漏建；`revisionedSave('tags')` 读取即报错。上线以来即存在（24 标签离线导入未经 UI），属验收盲区。修复走数据库侧（应用层零改动零部署）：项目侧出草案 + Docker PG16 隔离复现 V1–V4 全绿 + 审批申请单转送 → 管理员 **2026-09-04 11:03 经用户批准发布 `20260904102000_add_prompt_manager_tags_revision.sql`**，线上验收达标（Local=Remote=**7** 对齐）、此前失败的 5 条标签入库成功、11:18 用户 UI 确认。记录：`docs/qa/BUGS.md` BUG-13；平台仓库 `docs/reviews/MIGRATION_20260904102000_审查记录.md` §7 |
 | 待办顺序 | ❌ **2026-09-04 11:38 用户最终裁定：剩余待办（P2 legacy 退场 / P3 连字符调取码 / 掉登录监控 / 契约卡推广）全部取消，不做**；项目进入现状运行期，仅日常使用与故障响应（BUG-13 监控条款同样降级为被动响应：再现标签报错先抓完整原文回报管理员） |
+
+## 16.21 阶段十一次收束（2026-09-04 11:52，用户指示「开发先到这里暂时结束」；**当前唯一有效入口**）
+
+> 本节取代 §16.20 / §16.20.1 成为当前唯一有效入口；更早小节仅作历史记录。本轮 = BUG-13 修复闭环 + 标题布局上线 + Docker 误杀事故根治 + **待办清零**。项目进入「现状运行期」。
+
+### 1. 当前工作进展
+
+| 事项 | 状态 | 说明 |
+|---|---|---|
+| **BUG-13：云端标签保存 100% 失败** | ✅ **FIXED（已上线闭环）** | `column tags.revision does not exist`——建表 Migration 给 cards/settings 建了 revision 列、tags 漏建。管理员 **2026-09-04 11:03 经用户批准发布 `20260904102000_add_prompt_manager_tags_revision.sql`**；线上验收达标（列定义正确 / 全部行 revision=1 / check 在位 / Local=Remote=**7** 对齐）；此前失败的 5 条标签入库成功；11:18 用户 UI 确认「标签确实不会掉了」。零代码改动、零容器部署。记录：`docs/qa/BUGS.md` BUG-13；平台仓库 `docs/reviews/MIGRATION_20260904102000_审查记录.md` §7 |
+| 编辑器标题布局调整 | ✅ 已上线 | 用户截图反馈标题被挤到 1–2 字宽。`PreviewPanel.tsx` 头部拆两行：标题独占顶行（flex-1 全宽），调取码 + 重新生成按钮下移一行（justify-between），正文自动让出高度。commit `917b439` 已 push 并经部署副本 `deploy.sh` 上线（镜像 `820381ab920a`），用户验收通过 |
+| **Docker 误杀事故（本轮唯一事故）** | ✅ 已恢复 + 根治 | 停 3101 预览实例时 `dev-server.sh stop` 忘带 `PORT=3101`，脚本按默认 3100 盲杀监听进程 → 杀死 com.docker.backend → Docker Desktop 退出、生产下线约 3 分钟。恢复：`open -a Docker` → 容器自动拉起 → HTTP 200。根治（`bc06c55`）：`stop()` 只杀 node/next 系进程，其他占用者跳过并提示；`status()` 核对进程身份，不再把 Docker 误报成「next dev 运行中」。均已实测 |
+| Git 收口 | ✅ | 项目仓库：`3976c56`（契约卡等 4 文档，已 push）→ `917b439`（布局，已 push）→ `bc06c55`（dev-server.sh 修复 + BUG-13 回填，**未 push**）→ `66061bc`（待办清零裁定，**未 push**）。alw 治理仓库 `d57ae77` 已 push（BUG-13 全套材料 + 取消裁定登记） |
+| **待办清零（用户最终裁定）** | ✅ | **2026-09-04 11:38 用户明确指示：P2 legacy 退场、P3 连字符调取码、掉登录监控、契约卡推广全部取消，不做**。已登记 HANDOFF §16.20 §2 与 alw 转送清单（§二 #3/#4 标用户取消、§三 遗留段清零）。legacy 链路长期保留；退场申请草稿仅作历史留档 |
+
+### 2. 下一步任务
+
+**无排期待办**——项目处于现状运行期，只有两类动作：
+
+1. **日常使用**：Mini 单设备 `http://192.168.31.60:3100`，云端 Supabase 为主数据源；重要新增保存后看一眼，先看底栏再编辑。
+2. **故障被动响应**（用户不喊不动手）：
+   - 会话再掉登录 → 现场抓 `/auth/v1/token?grant_type=refresh_token` 状态码，不凭猜测下结论；
+   - 标签/保存再报错 → 抓完整报错原文回报管理员（alw）；
+   - 数据意外丢失/覆盖 → 先查 localStorage `prompt-manager:preconnect-backup` 键（BUG-12 修复的找回机制）。
+
+### 3. 注意事项及相关规矩（继承 + 新增）
+
+- **继承 §16.19/§16.20 全部条款**：Mini 单设备铁律（不做、不再被建议做双设备冲突回归）；未经授权不 commit/push、不动部署副本/容器/DockerData/DockerBackups/Named Volume；数据库红线（不 db push、不改 Dashboard/SECURITY DEFINER、不查改生产数据）；不泄露 Key/令牌/数据库密码/Auth token/真实提示词正文；动手前先 `git status`。
+- **路径铁律**：部署相关一律用无空格 `~/Developer/coding/docker/`；带空格 `docker /` 已删除，禁止引用或重建；契约卡与 V1.1 规范冲突时以规范全文为准。
+- **部署唯一入口**：改动 push master → 部署副本 `~/Developer/coding/docker/prompt-manager/` 内 `bash scripts/deploy.sh`（前提：用户明确授权）。
+- **🆕 dev-server.sh 新规矩（2026-09-04 事故教训）**：start/stop/restart/status **必须成对携带同一个 `PORT`**（预览用 3101 时四个子命令都要 `PORT=3101`）；脚本已加身份校验防护（只杀 node/next），但不得依赖防护裸奔；3100 为生产 Docker 专用，`dev-server.sh status` 现在会如实报告「端口被其他程序占用」。
+- **🆕 DB 侧现状**：Migration Remote 7/7（含 `20260904102000`）；`prompt_manager.tags` 现有 `revision` 列，三表 revision 机制完整；后续任何建表/改表 Migration 必须与应用层 `revisionedSave` 引用的列逐表核对（BUG-13 教训）。
+- **文档权威**：BUG 只记 `docs/qa/BUGS.md`；交接只记本文件；alw 侧材料只进 alw 仓库（单仓库，改动即 commit/push 到 `alw-db-governance`）。
+- **用户偏好**：编程小白沟通口径——讲人话、给结论；每次代码改动附预览链接；commit/push 逐次授权。
+
+### 4. 下一个智能体接续恢复提示词（一键复制）
+
+见下方 §16.21.1，或直接使用当次会话转发的文本。
