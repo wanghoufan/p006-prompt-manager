@@ -43,6 +43,12 @@ next-env.d.ts
 # ===== 多 Agent 协作：临时资料隔离（不进仓库） =====
 scratch/
 *.notes.md
+# Orca 运行态控制面快照（Run/Terminal 临时 ID、逐回合进度，非沉淀文档）
+coordination/
+
+# ===== 本机便利脚本（含用户环境路径，按规矩不进仓库） =====
+# 2026-09-10 起移除跟踪（历史已推送，不重写历史）；双击备份脚本改用 pbackup 直接跑
+备份本文件夹.command
 
 # ===== WorkBuddy 项目数据（记忆/会话，不进仓库） =====
 .workbuddy/
