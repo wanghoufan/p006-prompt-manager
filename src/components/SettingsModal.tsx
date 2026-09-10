@@ -26,7 +26,7 @@ const SETUP_AGENT_INSTRUCTION = `请执行 ${SETUP_COMMAND} 完成提示词管�
  */
 const SETUP_CLIENTS = 'WorkBuddy · Codex · Cursor · Claude Desktop · Cline · Windsurf · Gemini CLI'
 
-const CONNECTION_TEST_TIMEOUT_MS = 35_000
+const CONNECTION_TEST_TIMEOUT_MS = 100_000
 
 /**
  * 通用AI接口的服务商注册表（Phase 2）。
@@ -120,8 +120,8 @@ const AI_SERVICES: {
     label: 'OpenCode（免费）',
     available: true,
     models: [
-      'big-pickle', 'mimo-v2.5-free', 'hy3-free', 'ling-3.0-flash-fin-free',
-      'nemotron-3-ultra-free', 'nemotron-3.5-lightning-free', 'muse-spark-1.2-contributor-free',
+      'muse-spark-1.3-contributor-free', 'muse-spark-1.2-contributor-free',
+      'deepseek-v4-flash-free', 'ling-3.0-flash-fin-free', 'nemotron-3.5-lightning-free',
     ],
     defaultBaseUrl: 'https://opencode.ai/zen/v1',
     docsUrl: 'https://opencode.ai/docs/zh-cn/zen',
@@ -131,12 +131,16 @@ const AI_SERVICES: {
     label: 'OpenCode Go（$10/月）',
     available: true,
     models: [
-      'grok-4.6', 'gpt-5.6-luna', 'muse-spark-1.2-contributor', 'minimax-m3', 'minimax-m2.7',
-      'minimax-m2.5', 'qwen3.8-max', 'qwen3.8-flash', 'qwen3.7-max', 'qwen3.7-plus',
-      'qwen3.6-plus', 'glm-5.3-flash', 'glm-5.3', 'glm-5.2', 'glm-5.1', 'kimi-k3',
-      'glm-5', 'kimi-k2.7-code', 'kimi-k2.6', 'kimi-k2.5', 'longcat-2.0', 'deepseek-v4-pro',
-      'deepseek-v4-flash', 'deepseek-v4-flash-vision-exp', 'mimo-v2.5', 'mimo-v2.5-pro',
-      'hy4-preview', 'hy3',
+      'glm-5.3-flash', 'glm-5.3', 'glm-5.2', 'glm-5.1', 'glm-5',
+      'grok-4.6', 'grok-4.5', 'gpt-5.6-luna',
+      'qwen3.8-max', 'qwen3.8-flash', 'qwen3.7-max', 'qwen3.7-plus', 'qwen3.6-plus', 'qwen3.5-plus',
+      'minimax-m3', 'minimax-m2.7', 'minimax-m2.5',
+      'kimi-k3', 'kimi-k2.7-code', 'kimi-k2.6', 'kimi-k2.5',
+      'deepseek-v4-pro', 'deepseek-v4-flash', 'deepseek-v4-flash-vision-exp', 'deepseek-flash',
+      'mimo-v2.5', 'mimo-v2.5-pro', 'mimo-v2-pro', 'mimo-v2-omni',
+      'muse-spark-1.3-contributor', 'muse-spark-1.2-contributor',
+      'hy4-preview', 'hy3', 'hy3-preview',
+      'longcat-2.0', 'omen-alpha',
     ],
     defaultBaseUrl: 'https://opencode.ai/zen/go/v1',
     docsUrl: 'https://opencode.ai/docs/zh-cn/go',
@@ -227,7 +231,7 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
       setConnectionTest({ success: true, message: '连接成功' })
     } catch (e) {
       const reason = controller.signal.aborted
-        ? '连接测试超时（35 秒），请稍后重试或更换模型'
+        ? '连接测试超时（100 秒），请稍后重试或更换模型'
         : e instanceof Error
           ? e.message
           : '未知错误'

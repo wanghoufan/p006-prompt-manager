@@ -161,7 +161,11 @@ export async function summarizeThinking(
     template = `${template}\n\n提示词正文：\n{body}`
   }
   const prompt = template.replace('{body}', body)
-  const content = await chat([{ role: 'user', content: prompt }], { maxTokens: 600 }, override)
+  // 8000 而非 600：现在的可选模型大量是推理模型，思考 token 也算进输出上限。
+  // 实测（2026-09-10）：muse-spark-1.2/1.3 单次思考约 1.8k–3.3k tokens，给 2000 会
+  // 被思考吃满 → content 为空 → 报「返回内容为空」或回退成英文思考过程。
+  // 这是上限而非目标，非推理模型仍会提前停止，不会因此多花钱。
+  const content = await chat([{ role: 'user', content: prompt }], { maxTokens: 8000 }, override)
   return content.trim()
 }
 
