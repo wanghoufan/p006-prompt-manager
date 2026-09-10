@@ -37,7 +37,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 - 项目名称：提示词管理工具（Prompt Manager）
 - 项目类型：Next.js 应用 + 共享 Supabase 云端存储 + Docker 自托管 + MCP 子包
-- 当前阶段：Supabase 云端多端同步已完成并获 APPROVED_FOR_EXECUTION（2026-09-03 15:00 裁定放行），Migration 7/7 已发布（含 2026-09-04 BUG-13 `tags.revision` 修复）；剩余待办已于 2026-09-04 经用户最终裁定全部取消；项目进入现状运行期（Mini 单设备，日常使用与被动故障响应）
+- 当前阶段：Supabase 云端多端同步已完成并获 APPROVED_FOR_EXECUTION（2026-09-03 15:00 裁定放行），Migration 7/7 已发布（含 2026-09-04 BUG-13 `tags.revision` 修复）；剩余待办已于 2026-09-04 经用户最终裁定全部取消；**2026-09-10 完成 AI 服务商从 8 厂商收敛为 3 家（4 选项）并已上线生产（`1b569a5`）**；项目处于现状运行期（Mini 单设备，日常使用与被动故障响应）
 - 主要目标：管理、编辑与测试提示词
 - 主要用户：使用 GPT 等大模型、需要集中管理 Prompt 的个人 / 团队
 
@@ -50,7 +50,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - 认证：Supabase Auth（Magic Link + Google OAuth PKCE），`http://192.168.31.60:3100` 为已核验访问地址（`localhost`/`.local` 不在白名单/被代理劫持）
 - MCP：`mcp/prompt-server/`（`@modelcontextprotocol/sdk` + zod，stdio，v0.2.0 直连 Supabase RPC），工具 `prompt_manager_activate_prompt`（`prompt_manager.activate_prompt` RPC，能力令牌 SHA-256 哈希，`SECURITY DEFINER` 已裁定接受，2 WARN 存档）
 - 部署：Docker 自托管（`prompt-manager-prompt-manager-1` 绑定 `0.0.0.0:3100`；正式部署副本 `Developer/coding/docker/prompt-manager/`（GitHub 克隆，规范 V1.1），一键部署 `bash scripts/deploy.sh`（前提：已 push master）；`DockerData/prompt-manager/legacy-store` bind mount，`DockerBackups/prompt-manager/` 备份不进 Git）
-- AI 调用：通用 `AI_PROVIDER/AI_MODEL/AI_BASE_URL/AI_API_KEY`（3 家：`deepseek` / `openrouter` / `opencode` / `opencode-go`；2026-09-10 从 8 厂商收敛），`docker/env.template` 为模板，部署副本 `.env.local`（600 权限，不进 Git）
+- AI 调用：通用 `AI_PROVIDER/AI_MODEL/AI_BASE_URL/AI_API_KEY`；**2026-09-10 从 8 厂商收敛为 3 家服务商 / 4 个选项 / 5 个模型**：`deepseek`（官方，`deepseek-v4-flash`）、`openrouter`（模型用户自填）、`opencode`（Zen，`glm-5.3-flash`）、`opencode-go`（`deepseek-v4-flash` + `glm-5.3-flash`）。**清单唯一来源 = `src/lib/ai/types.ts` 的 `AI_PROVIDERS`，须与 `SettingsModal.tsx` 的 `AI_SERVICES`、`factory.ts` 的 switch 分支三处同源**；历史配置指向已移除厂商时由 `normalizeSettings` 回退 `deepseek`。`docker/env.template` 为模板（env 回退仅在同厂商同源时生效），部署副本 `.env.local`（600 权限，不进 Git）
 - 样式方案：Tailwind CSS v4
 - 代码检查：ESLint 9（eslint-config-next）
 - 测试方案：暂无（以真机双设备验收 + 隔离恢复演练为准）
@@ -70,14 +70,14 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ### 当前进展与产物索引
 
-- 当前状态：P0/P1/P2 全部 CLOSED（2026-08-28）；**2026-09-01~09-04 Supabase 云端多端同步已完成并获 APPROVED_FOR_EXECUTION（2026-09-03 15:00 裁定放行）**：独立 `prompt_manager` Schema（6 表 + RLS + Realtime，`20260901163555` + `20260904102000` BUG-13 已发布，Remote 7/7）、Auth（Magic Link + Google OAuth PKCE）、记录级 `revision`（含 `tags.revision` 修复）、MCP RPC、Docker 自托管、双设备验收（BUG-11/并发/MCP 隔离）、55 卡备份 + 隔离重放全绿；**收口材料已回填 §9/§10 并登记发布**，写队列 30s 超时 + BUG-12/13 已闭环，剩余待办已于 2026-09-04 经用户最终裁定全部取消；项目进入现状运行期（Mini 单设备，`http://192.168.31.60:3100`）
+- 当前状态：P0/P1/P2 全部 CLOSED（2026-08-28）；**2026-09-01~09-04 Supabase 云端多端同步已完成并获 APPROVED_FOR_EXECUTION（2026-09-03 15:00 裁定放行）**：独立 `prompt_manager` Schema（6 表 + RLS + Realtime，`20260901163555` + `20260904102000` BUG-13 已发布，Remote 7/7）、Auth（Magic Link + Google OAuth PKCE）、记录级 `revision`（含 `tags.revision` 修复）、MCP RPC、Docker 自托管、双设备验收（BUG-11/并发/MCP 隔离）、55 卡备份 + 隔离重放全绿；**收口材料已回填 §9/§10 并登记发布**，写队列 30s 超时 + BUG-12/13 已闭环，剩余待办已于 2026-09-04 经用户最终裁定全部取消；项目进入现状运行期（Mini 单设备，`http://192.168.31.60:3100`）。**2026-09-10**：AI 服务商由 8 厂商收敛为 3 家（4 选项）并已上线生产（`1b569a5`），同轮修复 D2（401 三层语义误判）与 BUG-8（env Key 跨厂商回退），dev 回环不水合已修
 - 需求文档：`docs/pm/提示词管理工具-需求文档.md`
 - 产品报告：`docs/pm/产品报告.md`
 - 实施计划：`docs/pm/PLAN.md`（Supabase 迁移已完成并放行，§16.18）
 - 代码审查：`docs/review/CODE_REVIEW.md`（2026-08-26 基线，待 Supabase 增补）
 - 产品优化候选：`docs/review/PRODUCT_BACKLOG.md`
-- 交接上下文：`docs/handoff/HANDOFF.md`（§16.20 为当前唯一有效入口，2026-09-04 十次收束，§16.20.1 增量含 BUG-13）
-- 质量记录：`docs/qa/BUGS.md`（BUG-9/10/11/12/13 FIXED；BUG-12=数据丢失事故，BUG-13=`tags.revision` 漏建已发布；待办已全部取消）、`docs/qa/QA_CHECKLIST.md`
+- 交接上下文：`docs/handoff/HANDOFF.md`（**§16.22 为当前唯一有效入口**，2026-09-10 十二次收束：AI 服务商收敛为 3 家已上线 + 遗留物处置 + 本地 dev server 停用；§16.21 及更早小节仅作历史记录）
+- 质量记录：`docs/qa/BUGS.md`（BUG-9/10/11/12/13 FIXED；BUG-12=数据丢失事故，BUG-13=`tags.revision` 漏建已发布；**2026-09-10 第二十三次 QA（AI 服务商精简 + 上游错误提示分类）PASS，BUG-8（env Key 跨厂商回退）与 D2（401 三层语义误判）同轮收尾修复**；待办已全部取消）、`docs/qa/QA_CHECKLIST.md`
 - 规范：数据库 `2026-09-03 丨 共享 Supabase 项目与独立 Schema 数据库规范 丨 V1.3.md`（存于 `1.Active/alw丨数据库管理专家/`）+ Docker `2026-09-02 丨 Mac Mini 本地项目自托管 Docker 规范 丨 V1.1.md`（存于 `Developer/coding/docker/`；项目内 V1.0 已作废）
 - 平台仓库：`/Users/zzymima0000/Developer/coding/1.Active/alw丨数据库管理专家/平台丨共享 Supabase 数据库`（HEAD `2e92f08`，Remote 7/7 已发布，含 `20260901163555` + `20260904102000` BUG-13 修复 + habit_tracker 统一）
 - 远程仓库：https://github.com/wanghoufan/prompt-manager.git（master 已整合 mcp-delivery；部署副本即从该仓库克隆）
@@ -171,9 +171,12 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 | 当前开发阶段 / Builder 技术交接 | `docs/progress/CURRENT_STAGE.md` |
 | 开发经验 | `docs/DEV_EXPERIENCE.md` |
 | 可选模板（架构 / 决策 / 模型指南）| `docs/optional/` |
+| 根级 规范 / SOP **历史留档** | 项目根目录（`2026-08-31 …SOP 丨 V1.0.md`、`2026-09-01 …数据库规范 丨 V1.0.md`、`2026-09-02 …数据库规范 丨 V1.0 / V1.1.md`、`2026-09-02 …Docker 规范 丨 V1.0.md`）。**均为历史留档，顶部已加 HISTORICAL 横幅，禁止作为当前依据**；现行规范在项目外：数据库 V1.3 存 `1.Active/alw丨数据库管理专家/`、Docker V1.1 存 `Developer/coding/docker/` |
 | 临时资料 | `scratch/` |
 
 同一事实不要在多个位置重复维护。
+
+> **根级规范历史留档为何不搬进 `docs/`**：这 4 份文件是当时会话的**决策沿革原件**，① 自身正文里的相对链接（如 `../../docker/…`、`../alw丨数据库管理专家/…`）是按**根目录位置**校准的，搬进 `docs/` 会全部失效；② `README.md` 与 `HANDOFF.md` 多处按**裸文件名**引用它们。故保留原位，只补 HISTORICAL 横幅与位置登记，不做搬迁（2026-09-10 洁癖收尾裁定）。
 
 ---
 
@@ -227,10 +230,10 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## 九、Git 与安全规则
 
-1. 本项目已 `git init`（远程仓库未配置；首次推送需用户明确授权）。
+1. 远程仓库已配置：`https://github.com/wanghoufan/prompt-manager.git`（分支 `master`；部署副本即从该仓库克隆）。
 2. 基线约定完成后建议先提交一次。
-3. 阶段性正常 `commit` / `push`。
-4. `scratch/`、构建缓存、依赖目录、密钥配置不得提交。
+3. `commit` / `push` **逐次需用户明确授权**（推送口令：用户说「现在推送」后才可 `git push`）；用户提出推送需求时，先完成改动、验证、暂存、提交，并报告待推送内容，等第二次确认再推送。
+4. `scratch/`、`coordination/`、构建缓存、依赖目录、密钥配置不得提交。
 5. `.env*` 默认忽略；如需示例配置，只提交脱敏的 `.env.example`。
 6. 不执行远程推送、删除分支、重写历史等高影响操作，除非用户明确授权。
 

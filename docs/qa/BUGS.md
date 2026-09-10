@@ -2,6 +2,9 @@
 
 > 当前未关闭 / 已确认的 Bug。由 QA 记录，开发更新修复状态。`【修复】` 优先处理 P0、P1；P2 / P3 / Future 默认不自动开发。
 
+> **最新一次 QA 在文末：第二十三次 QA（2026-09-10，AI 服务商精简 + 上游错误提示分类，结论 PASS）**，其后附「同轮收尾修复」（BUG-8 / D2 / dev 回环水合）。
+> 下方「最近一次 QA 执行记录」小节是 2026-09-02 的 Air↔Mini 云端双设备验收快照 —— 标题里的「最近一次」已过期（2026-09-10 洁癖收尾时如实标注），保留作历史记录，不要拿它当最新状态。
+
 ## 最近一次 QA 执行记录
 
 ### Air ↔ Mini Supabase 云端双设备验收（2026-09-02）
@@ -1122,7 +1125,7 @@ P0-H 当前实现 **PASS**，无新增 Bug；建议进入后续客户端真实 M
 
 **3. 文档同步**
 
-`README.md`（4 处）、`AGENTS.md`（1 处）、`docker/env.template`：把「8 厂商 / 8 选 1」更新为当前 3 家（DeepSeek 官方 / OpenRouter / OpenCode），并补注 env 回退的同源约束。
+`README.md`（4 处）、`AGENTS.md`（1 处）、`docker/env.template`：把「8 厂商 / 8 选 1」更新为当前**3 家服务商 / 4 个选项**（DeepSeek 官方 / OpenRouter / OpenCode Zen / OpenCode Go），并补注 env 回退的同源约束。
 
 **本轮实验环境踩坑（供后续复验参考）**
 

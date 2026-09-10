@@ -187,44 +187,33 @@
 - 可直接给 Agent 的规则：`QA 完成测试后必须删除本轮新建的所有测试卡片并落盘，禁止残留污染正式库；Prompt 中必须包含清理步骤。`
 - 候选升级位置：`docs/roles/qa.md` 增加“测试后清理”条目 + `docs/workflow/QUALITY_GATES.md` 增加清理门控（待授权）
 
-## 12. 开发前必须预检查dev server和Orca状态
+## 15. 开发前必须预检查 dev server 与 Orca 状态（Builder 视角）
 
 - 成熟度：A 本项目保留（已验证可复用）
 - 时间：2026-08-28
-- 现象：开发者遇到"端口3000有Node进程但HTTP探测失败"和"Orca状态是stale_bootstrap/runtime_unavailable"问题，导致UI验证无法进行。
+- 现象：开发者遇到「端口有 Node 进程但 HTTP 探测失败」和「Orca 状态是 stale_bootstrap / runtime_unavailable」问题，导致 UI 验证无法进行。
 - 小白解释：就像开车前不检查油和轮胎，半路抛锚了才后悔。开发前先检查服务和工具状态，避免白忙活。
 - 技术处理：
-  1. **预检查dev server**：`./dev-server.sh status` 检查watchdog和next dev是否运行
-  2. **预检查端口**：`curl -s http://localhost:3100 > /dev/null && echo "HTTP 200" || echo "HTTP 失败"` 验证服务可达
-  3. **预检查Orca**：`orca status --json` 检查状态是否为ready
-  4. **启动服务**：如果dev server未运行，执行 `./dev-server.sh start`
-  5. **重启Orca**：如果Orca状态异常，执行 `open /Applications/Orca.app` 并等待10秒
-- 可直接给 Agent 的规则：`开发者在执行UI验证前必须预检查：1) ./dev-server.sh status 2) curl http://localhost:3100 3) orca status --json。如果任一项失败，先修复再验证。`
-- 候选升级位置：`docs/roles/builder.md` 增加"开发前预检查"硬约束（待授权）
+  1. **预检查 dev server**：`./dev-server.sh status` 检查 watchdog 和 next dev 是否运行
+     - 坑：脚本按默认端口判定，在 `PORT=3199` 等自定义端口场景会**误报「未运行」**；以 `lsof -nP -iTCP:<端口> -sTCP:LISTEN` 为准
+  2. **预检查端口**：`curl -s http://localhost:<端口> > /dev/null && echo "HTTP 200" || echo "HTTP 失败"` 验证服务可达
+     - 坑：**选端口前先 `lsof`**；3100 归生产 Docker（禁止占用），3200 亦被占
+  3. **预检查 Orca**：`orca status --json` 检查状态是否为 ready
+  4. **启动服务**：如果 dev server 未运行，执行 `./dev-server.sh start`（四个子命令必须成对携带同一个 PORT）
+  5. **重启 Orca**：如果 Orca 状态异常，**由 Stage Manager 执行** `open /Applications/Orca.app` 并等待 10 秒（权限边界见 #13）
+- 可直接给 Agent 的规则：`开发者在执行 UI 验证前必须预检查：1) ./dev-server.sh status 2) curl http://localhost:<端口> 3) orca status --json。如果任一项失败，先修复再验证。`
+- 候选升级位置：`docs/roles/builder.md` 增加「开发前预检查」硬约束（待授权）
 
-## 13. Builder权限边界：禁止重启Orca进程
+---
 
-- 成熟度：A 本项目保留（已验证可复用）
-- 时间：2026-08-28
-- 现象：Builder在开发过程中遇到Orca状态异常时，直接执行`orca open`重启Orca，导致权限过大，可能意外关闭Orca影响整个流程。
-- 小白解释：就像普通员工不应该有权限重启公司的服务器，只有运维人员才能操作。Builder只能改代码，不能动系统进程。
-- 技术处理：
-  - **Builder禁止执行**：`orca open`、`orca close`、`orca status`等Orca相关命令
-  - **Builder只能执行**：修改业务代码、运行npx tsc --noEmit、运行npm run lint、检查页面状态
-  - **Orca问题由Stage Manager处理**：Builder遇到Orca状态异常时，记录问题到BUGS.md，继续完成代码修改
-- 可直接给 Agent 的规则：`Builder禁止重启/关闭Orca进程，只能修改业务代码和运行检查命令。Orca状态异常由Stage Manager处理。`
-- 候选升级位置：`docs/roles/builder.md` 增加"权限边界"硬约束（已添加）
+## 附：编号去重记录（2026-09-10 洁癖收尾）
 
-## 14. QA测试后必须清理测试卡片
+本文件尾部原有一批 2026-08-28 的早期记录，编号与正文前段**重复**（出现两个 12 / 两个 13 / 两个 14），且 13、14 属近重复内容。处理如下：
 
-- 成熟度：A 本项目保留（已验证可复用）
-- 时间：2026-08-28
-- 现象：QA验证过程中创建的测试卡片（如composer-*-qa）没有清理，污染了用户的正式数据库。
-- 小白解释：就像医生做完手术后不收拾手术室，留下一堆纱布和针头。测试完应该把测试数据清理干净。
-- 技术处理：
-  - QA验证完成后，必须删除所有测试过程中创建的卡片
-  - 测试卡片通常有特定前缀（如composer-*-qa、test-*等）
-  - 可以通过批量删除或手动删除的方式清理
-  - 清理完成后需要确认数据库恢复到测试前的状态
-- 可直接给 Agent 的规则：`QA验证完成后必须清理所有测试过程中创建的卡片，避免污染用户数据库。测试卡片通常有特定前缀，需要在验证报告中记录并清理。`
-- 候选升级位置：`docs/roles/qa.md` 增加"测试数据清理"硬约束（待授权）
+| 原编号 | 原标题 | 处置 |
+|---|---|---|
+| 12 | 开发前必须预检查dev server和Orca状态 | 编号重复 → 改为 **#15**（Builder 视角预检查；Stage Manager 视角见 #12） |
+| 13 | Builder权限边界：禁止重启Orca进程 | 与 #13 重复 → **合并删除**；其标注的「已添加」经核实为真（`docs/roles/builder.md §权限边界` 存在且含「禁止重启 Orca 进程」） |
+| 14 | QA测试后必须清理测试卡片 | 与 #14 重复 → **合并删除**；`docs/roles/qa.md` 与 `docs/workflow/QUALITY_GATES.md` 目前**均无**测试数据清理门控，升级仍为「待授权」 |
+
+去重后本文件编号 `1–15` 连续且唯一。内容按「正文前段更详细的版本为准」合并，无信息丢失。

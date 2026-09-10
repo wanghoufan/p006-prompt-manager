@@ -1,9 +1,23 @@
-# 交接上下文 — Supabase 云端同步、数据库 V1.2 与 Docker V1.0
+# 交接上下文 — Supabase 云端同步、数据库 V1.3 与 Docker V1.1
 
-> 更新日期：2026-09-04
+> 更新日期：2026-09-10
 >
-> 当前阶段：裁定后收尾期。P1 写队列修复已部署；P2 legacy 退场申请草稿待管理员审批；**BUG-12 数据丢失修复已提交（`5c2359c`）待用户授权部署**；Mini 单设备安全运行期。用户长期只用 Mini 单设备，**任何会话不得要求/建议双设备测试**。
-> 交接原则：先阅读 `AGENTS.md`、本文件 **§16.19（当前唯一有效入口）**、数据库规范 V1.3 和 Docker 规范 V1.0；不要凭旧文档或浏览器缓存判断现状。
+> 当前阶段：现状运行期 + AI 服务商收敛已上线。2026-09-04 剩余待办经用户最终裁定全部取消；2026-09-10 完成 AI 服务商从 8 厂商收敛为 **3 家服务商 / 4 个选项**，commit `1b569a5` 已 push 并部署生产（见 §16.22）。Mini 单设备安全运行期，用户长期只用 Mini，**任何会话不得要求/建议双设备测试**。
+> 交接原则：先阅读 `AGENTS.md`、本文件 **§16.22（当前唯一有效入口）**、数据库规范 V1.3 和 Docker 规范 V1.1；不要凭旧文档或浏览器缓存判断现状。
+
+## 0. 章节速查（导航；2026-09-10 洁癖收尾新增）
+
+> 本文件是**只追加**的交接日志，累计 1700+ 行、存在新老小节交错（例如 §16.10 插在 §3 与 §4 之间）。**正文排列顺序不代表阅读顺序** —— 接手时只需读「本索引 + §16.22」，其余按需检索。
+
+| 区段 | 内容 | 状态 |
+|---|---|---|
+| §1–§3 | 最初一轮云端接入记录（云端数据与认证、多端同步代码、MCP、已验证结果、未完成项） | 历史 |
+| §4–§15 | 阶段推进与裁定过程（关键文件 / Git 注意事项 / 数据库治理决策 / Docker 部署与备份演练 / AI 调用通用化等） | 历史 |
+| §16（含 `### 16.1`–`### 16.9`） | 早期阶段收束（`###` 级小节，散落在 §16 正文内） | 历史 |
+| §16.10–§16.21 | 持续收束与裁定序列（标题中「当前唯一有效入口」字样**已统一降级**） | 历史 |
+| **§16.22** | **当前唯一有效入口**（2026-09-10 十二次收束：进展 / 下一步 / 注意事项 / 一键复制提示词） | **现役** |
+
+> ⚠️ 全文件**只有 §16.22 是现役入口**。任何更早小节即便标题写着「当前唯一」，均已作废；遇到冲突一律以 §16.22 + `AGENTS.md` 为准。
 
 ## 1. 本轮已完成
 
@@ -58,7 +72,7 @@
 /Users/zzymima0000/Developer/coding/1.Active/alw丨数据库管理专家/平台丨共享 Supabase 数据库
 ```
 
-## 16.10 阶段暂停交接（2026-09-02；当前唯一有效入口）
+## 16.10 阶段暂停交接（2026-09-02；已被后续收束取代，降级为历史记录 —— 当前入口见 §16.22）
 
 > 用户指示“开发先到这里暂时结束”。本节取代 §16.9 及更早的恢复提示；接续者必须从本节恢复，不得把历史任务顺序当作当前授权。
 
@@ -726,7 +740,9 @@ supabase/migrations/20260901163555_fix_prompt_manager_activate_prompt_variable_c
 
 本阶段没有改动 Supabase 线上数据库、Dashboard、Migration `20260901163555` 或旧 JSON / `/api/sync` / SSE 兼容链路。项目接入智能体不得据此宣布收口。
 
-### 16.8 当前唯一下一步（2026-09-02）
+### 16.8 当轮下一步（2026-09-02；**已被后续收束取代，降级为历史记录**）
+
+> ⚠️ 本节列出的「**真实双设备**验收」任务**已于 2026-09-04 经用户最终裁定全部取消**，且与现行 **Mini 单设备铁律**（任何会话不得要求、也不得建议做双设备冲突回归）冲突 —— **不要再据此安排 Air ↔ Mini 测试**。以下原文保留，仅作沿革记录。
 
 仅剩两项**真实双设备**验收，均须在 Air 与 Mini 保持 Google 登录、使用 `http://192.168.31.60:3100` 的正式容器时完成：
 
@@ -735,7 +751,7 @@ supabase/migrations/20260901163555_fix_prompt_manager_activate_prompt_variable_c
 
 完成后，由 QA 在 `docs/qa/BUGS.md` 更新两项真实结果，再由项目接入智能体生成完整《共享 Supabase 数据库接入收口材料》并原样转交共享 Supabase 数据库审核人。此之前：不得宣布收口、不得发布 `20260901163555`、不得执行 `supabase db push`，兼容链路继续保留。
 
-### 16.9 当前唯一交接（2026-09-02，本节为当前唯一有效入口）
+### 16.9 当轮交接（2026-09-02；**已被后续收束取代，降级为历史记录 —— 当前入口见 §16.22**）
 
 > 用户指示「开发先到这里暂时结束」。接续者必须以本节为准；§16.4 的旧恢复提示和 §16.8 的旧任务摘要只作历史记录，不得跳过本节直接继续。
 
@@ -832,7 +848,7 @@ supabase/migrations/20260901163555_fix_prompt_manager_activate_prompt_variable_c
 - 材料自评结论为「请求审核人裁定（预期 `CHANGES_REQUIRED` 或 `BLOCKED`）」；接入智能体未自行宣布收口，未发布 Migration，未执行 `supabase db push`，未改 Dashboard，未动兼容链路与 Git 状态。
 - §16.10 门禁不变：即使审核人放行，BUG-11、并发冲突、MCP 隔离的真实双设备验收仍须按原顺序补齐。
 
-## 16.12 阶段三次收束（2026-09-02，用户指示「开发先到这里暂时结束」；当前唯一有效入口）
+## 16.12 阶段三次收束（2026-09-02，用户指示「开发先到这里暂时结束」；已被后续收束取代，降级为历史记录 —— 当前入口见 §16.22）
 
 > 本节取代 §16.10 / §16.11 成为当前唯一有效入口；更早小节仅作历史记录。
 
@@ -1041,7 +1057,7 @@ supabase/migrations/20260901163555_fix_prompt_manager_activate_prompt_variable_c
 输出要求：每项写清“已验证 / 待验证 / 存在问题”，给出文件路径、命令结果和实际设备证据；遇到权限、项目 link、数据或线上状态不确定时先停下并报告，不要自行扩大权限或范围。
 ```
 
-## 16.15 阶段五次收束（2026-09-02 深夜，用户指示「开发先到这里暂时结束」；当前唯一有效入口）
+## 16.15 阶段五次收束（2026-09-02 深夜，用户指示「开发先到这里暂时结束」；已被后续收束取代，降级为历史记录 —— 当前入口见 §16.22）
 
 > 本节取代 §16.13/§16.14 成为当前唯一有效入口；更早小节仅作历史记录。
 
@@ -1157,7 +1173,7 @@ supabase/migrations/20260901163555_fix_prompt_manager_activate_prompt_variable_c
 - REST/RPC 云端核验必须带 Accept-Profile: prompt_manager；QA 不得自行登录 Google 账号。
 ```
 
-## 16.16 阶段六次收束（2026-09-03，用户指示「开发先到这里暂时结束」；当前唯一有效入口）
+## 16.16 阶段六次收束（2026-09-03，用户指示「开发先到这里暂时结束」；已被后续收束取代，降级为历史记录 —— 当前入口见 §16.22）
 
 > 本节取代 §16.15 成为当前唯一有效入口；更早小节仅作历史记录。本项目侧验收已全部完成，当前球在两处：①用户把收口材料转交审核人并取回裁定；②开发待办（写队列停摆等）等用户启动。
 
@@ -1220,7 +1236,7 @@ supabase/migrations/20260901163555_fix_prompt_manager_activate_prompt_variable_c
 9. **文档归属**：QA 结果只写 `docs/qa/BUGS.md`；收口材料只在 `docs/review/共享Supabase数据库接入收口材料-2026-09-02.md` 维护；HANDOFF 只留指针；不新建重复文档。
 10. **QA 自动化**：临时探针脚本在 `scratch/`；PreviewPanel 编辑需真实键盘输入或「保存」按钮；合成事件与无手势点击不可靠；QA 不得自行登录 Google 账号。
 
-## 16.17 阶段七次收束（2026-09-03，用户指示「开发先到这里暂时结束」；当前唯一有效入口）
+## 16.17 阶段七次收束（2026-09-03，用户指示「开发先到这里暂时结束」；已被后续收束取代，降级为历史记录 —— 当前入口见 §16.22）
 
 > 本节取代 §16.16 成为当前唯一有效入口；更早小节仅作历史记录。本次为收口材料最终版（2026-09-03 修订版）后的正式交接收束，**球在审核人**——用户需把收口材料原样转交共享 Supabase 数据库审核人，等裁定后再恢复开发。
 
@@ -1499,7 +1515,7 @@ supabase/migrations/20260901163555_fix_prompt_manager_activate_prompt_variable_c
 - 收口材料正文只在 `docs/review/共享Supabase数据库接入收口材料-2026-09-02.md`；BUG 记录只在 `docs/qa/BUGS.md`；不新建重复文档。
 - 动手前先 `git status`；绝不 reset/checkout/覆盖/删除用户改动。
 
-## 16.20 阶段十次收束（2026-09-04，用户指示「开发先到这里暂时结束」；**当前唯一有效入口**）
+## 16.20 阶段十次收束（2026-09-04，用户指示「开发先到这里暂时结束」；**已被 §16.21 / §16.22 取代，降级为历史记录**）
 
 > 本节取代 §16.19 成为当前唯一有效入口；更早小节仅作历史记录。本轮为 Docker 部署契约治理专项：把 V1.1 规范的关键信息前置到 AGENTS.md，消除双 docker 目录分叉。
 
@@ -1574,7 +1590,7 @@ supabase/migrations/20260901163555_fix_prompt_manager_activate_prompt_variable_c
 | **BUG-13：云端标签保存 100% 失败**（`column tags.revision does not exist`） | ✅ **FIXED（已上线闭环）** | 根因：建表 Migration 给 cards/settings 建了 `revision` 列、tags 漏建；`revisionedSave('tags')` 读取即报错。上线以来即存在（24 标签离线导入未经 UI），属验收盲区。修复走数据库侧（应用层零改动零部署）：项目侧出草案 + Docker PG16 隔离复现 V1–V4 全绿 + 审批申请单转送 → 管理员 **2026-09-04 11:03 经用户批准发布 `20260904102000_add_prompt_manager_tags_revision.sql`**，线上验收达标（Local=Remote=**7** 对齐）、此前失败的 5 条标签入库成功、11:18 用户 UI 确认。记录：`docs/qa/BUGS.md` BUG-13；平台仓库 `docs/reviews/MIGRATION_20260904102000_审查记录.md` §7 |
 | 待办顺序 | ❌ **2026-09-04 11:38 用户最终裁定：剩余待办（P2 legacy 退场 / P3 连字符调取码 / 掉登录监控 / 契约卡推广）全部取消，不做**；项目进入现状运行期，仅日常使用与故障响应（BUG-13 监控条款同样降级为被动响应：再现标签报错先抓完整原文回报管理员） |
 
-## 16.21 阶段十一次收束（2026-09-04 11:52，用户指示「开发先到这里暂时结束」；**当前唯一有效入口**）
+## 16.21 阶段十一次收束（2026-09-04 11:52，用户指示「开发先到这里暂时结束」；**已被 §16.22 取代，降级为历史记录**）
 
 > 本节取代 §16.20 / §16.20.1 成为当前唯一有效入口；更早小节仅作历史记录。本轮 = BUG-13 修复闭环 + 标题布局上线 + Docker 误杀事故根治 + **待办清零**。项目进入「现状运行期」。
 
@@ -1610,4 +1626,202 @@ supabase/migrations/20260901163555_fix_prompt_manager_activate_prompt_variable_c
 
 ### 4. 下一个智能体接续恢复提示词（一键复制）
 
-见下方 §16.21.1，或直接使用当次会话转发的文本。
+> 原「§16.21.1」小节实际未落盘（曾为死引用，2026-09-10 洁癖收尾时修正）。
+
+本节提示词已失效 —— 请直接使用 **§16.22 §4** 的一键复制提示词。
+
+## 16.22 阶段十二次收束（2026-09-10 16:30，用户指示「开发先到这里暂时结束」；**当前唯一有效入口**）
+
+> 本节取代 §16.20 / §16.20.1 / §16.21 成为当前唯一有效入口；更早小节仅作历史记录。
+> 本轮 = **AI 服务商从 8 厂商收敛为 3 家** + 上游错误分类修复（D2）+ env Key 跨厂商回退修复（BUG-8）+ dev 回环不水合修复，**已提交、已推送、已部署生产**；随后完成工作区遗留物处置与本地 dev server 停用。项目回到「现状运行期」。
+
+### 1. 当前工作进展
+
+| 事项 | 状态 | 说明 |
+|---|---|---|
+| **AI 服务商收敛为 3 家 / 4 选项** | ✅ **已上线** | 移除智谱 / 腾讯混元 / 豆包 / Kimi / Google Gemini / OpenAI（6 个 provider + 6 个适配器文件删除）。保留：**DeepSeek 官方**（`deepseek-v4-flash`）、**OpenRouter**（模型用户自填）、**OpenCode Zen**（`glm-5.3-flash`）、**OpenCode Go**（`deepseek-v4-flash` / `glm-5.3-flash`）。`AIProvider` 类型收敛为 `'deepseek' \| 'openrouter' \| 'opencode' \| 'opencode-go'`；历史配置若指向已移除厂商，由 `normalizeSettings` 回退 `deepseek`，不报错 |
+| **D2：401 三层语义误判** | ✅ 已修 | 上游对「模型不存在」（`ModelError`）、「Zen 余额不足」、「Key 无效」（`AuthError`）**都返回 401**。原实现一律译成「Key 无效」，会把用户引到错误的排查方向。现按 `error.type` + 错误文本分类，且**模型类 / 额度类先于鉴权类**判定；逻辑统一收敛到 `adapter.ts` 的 `describeUpstreamError`，全适配器共用 |
+| **BUG-8：env Key 跨厂商回退** | ✅ 已修（OPEN → FIXED） | 原实现把「AI 回退」当成与厂商无关的全局兜底：本环境 `AI_API_KEY` 是 OpenCode 的 Key，用户在设置页切到 DeepSeek 官方且 Key 留空时，**这把 OpenCode Key 会被发往 `api.deepseek.com`**（首次实网复现结果 401）。修复：`src/lib/ai.ts` 新增 `resolveEnvFallbacks(provider, envProvider)`，`AI_MODEL` / `AI_BASE_URL` / `AI_API_KEY` 仅当所选 provider 与 `AI_PROVIDER` 一致时回退；`DEEPSEEK_API_KEY` 属指名变量，仅按 `provider === 'deepseek'` 判断（保住只填 `DEEPSEEK_*` 的老部署） |
+| **dev 回环地址不水合** | ✅ 已修 | `allowedDevOrigins` 原只收集非 internal IPv4，`127.0.0.1` 不在其中 → 用 `http://127.0.0.1:PORT` 打开时 HTML 200 但 `/_next/` 资源被判 403，表现为**页面能开、React 不水合、按钮无响应**。已在 `next.config.ts` 显式列入 `localhost` 与 `127.0.0.1`；修复后 `reactKeys` 由 0 变 2 |
+| **Git + 部署** | ✅ 已上线 | 项目仓库 commit `1b569a5`（18 files, +285/−413），`f1e731d..1b569a5` 已 push master；部署副本 `bash scripts/deploy.sh` → `f1e731d → 1b569a5`，镜像 `9401eee167d7 → 328a58fe4ec2`，HTTP 200 |
+| **生产验收（只读）** | ✅ 通过 | `localhost:3100` 与 `192.168.31.60:3100` 均 200；容器 `prompt-manager-prompt-manager-1` Up 绑 `0.0.0.0:3100`；生产 store 的 `aiProvider=opencode-go` / `aiModel=deepseek-v4-flash` **仍在新清单内，无需配置迁移**；store mtime 15:19 早于部署，确认**部署未回写生产数据** |
+| **工作区遗留物处置** | ⏳ 已暂存，待推送 | ① `coordination/STATE.md`（Orca **运行态控制面快照**：Run/Terminal 临时 ID、逐回合 dispatch 进度）→ **不进仓库**，已写入 `.gitignore`（`coordination/`，与 `scratch/` 同类），文件本身保留；② `docs/review/` 下 **8 份未跟踪 md**（Orca 治理提示词 V1.1/V2.1、Day 1 初始需求反推 V1.0/V1.1、需求差距分析与改进指南 V1.0/V1.1、两份任务提示词）→ **归档进仓库**（`docs/review/` 本就是其归属，且 `coordination/STATE.md` 按路径 + sha256 引用其中 2 份）。敏感度已核：8 份**无密钥/令牌、无本地用户路径**，仅含 `192.168.31.60` 内网地址（该写法在已跟踪材料中早已存在）。**当前已 `git add`，未 commit、未 push** |
+| **本地 dev server** | ✅ 已停用 | `./dev-server.sh stop` 后 3199 无监听、dev 进程为 0；Docker 占用的 3100 未被触碰（脚本已跳过非本服务进程）。预览职责交给生产 `http://192.168.31.60:3100` |
+| **QA 记录** | ✅ 已落盘 | `docs/qa/BUGS.md` 第二十三次 QA（AI 服务商精简）+「同轮收尾修复」节；BUG-8 条目 OPEN → FIXED；原始输出归档 `scratch/qa-ai-20260910/` |
+
+**观察项（非缺陷，供后续判断）**：生产 `~/DockerData/prompt-manager/legacy-store/store.json` 本轮实测 **74 张卡**，而文档最后记录的**云端**卡数为 **54 张（2026-09-04）**。两者属不同数据层（legacy 本地兜底 vs 云端权威），本轮**未重新核对云端**，差值原因未查 —— 需要时以登录后的云端页面为准，不要拿 legacy 数字当云端真相。
+
+### 2. 下一步任务
+
+**无排期开发任务**——项目处于现状运行期 + 待推送收尾。仅有这两项：
+
+1. **推送本轮收尾改动**（需用户口令「现在推送」）：`.gitignore`(M) + 8 份 `docs/review`(A)。**纯文档 + 忽略规则，不触发部署**。用户已授权范围 = 已暂存内容；不要再夹带其他文件。
+2. **处置 OpenCode Zen 条目**（需用户二选一，选定后如需改清单要再走一轮「提交 → 推送 → 部署」）：
+   - **充值**：账户有余额后 `glm-5.3-flash` 即可用（当前上游返回 401 `Insufficient balance`，属账号问题、非代码问题）；
+   - **删除该条目**：把 provider 从 4 项收敛为 3 项（`types.ts` / `SettingsModal.tsx` / `factory.ts` 三处同步 + 文档 + 一轮上线）。
+
+**日常使用**：Mini 单设备 `http://192.168.31.60:3100`，云端 Supabase 为主数据源；重要新增保存后刷新确认，并定期导出。
+
+### 3. 注意事项及相关规矩（继承 + 本轮新增）
+
+**继承（§16.19 / §16.20 / §16.21 全部条款继续有效）**：
+
+- **Mini 单设备铁律**：用户长期只用 Mini，**不得要求、也不得建议做双设备冲突回归**。
+- **未授权不动手**：不 commit / push；不创建、删除、迁移、覆盖部署副本 / 容器 / `DockerData` / `DockerBackups` / Named Volume；`dev-server.sh` 仅限开发，禁占 3100。
+- **数据库红线**：不 `supabase db push`、不改 Dashboard / `SECURITY DEFINER`、不查改生产数据；legacy `/api/sync` + `data/store.json` + SSE 链路**长期保留**（2026-09-04 已裁定不退场）。
+- **不泄露**：AI API Key、MCP 原始令牌、数据库密码、Auth token、真实提示词正文不得回显、记录或写入仓库；`.env.local` 不进 Git。
+- **路径铁律**：部署相关一律用无空格 `~/Developer/coding/docker/`；带空格 `docker /` 已删除，禁止引用或重建。
+- **部署唯一入口**：改动 push master → 在**部署副本** `~/Developer/coding/docker/prompt-manager/` 内 `bash scripts/deploy.sh`（前提：用户明确授权）。
+- **`dev-server.sh` 必须成对带 `PORT`**：start / stop / restart / status 四个子命令要用同一个 `PORT`；3100 为生产 Docker 专用。
+- **动手前先 `git status`**；BUG 只记 `docs/qa/BUGS.md`，交接只记本文件。
+
+**本轮新增**：
+
+1. **服务商清单是三处同源**：`src/lib/ai/types.ts` 的 `AI_PROVIDERS`（唯一权威）→ `SettingsModal.tsx` 的 `AI_SERVICES`（UI 展示）→ `factory.ts` 的 switch 分支。**改清单必须三处同步**，只改一处会出现「能选但调不通」或「调得通但选不到」。环境变量模板同步改 `docker/env.template`。
+2. **OpenCode 系两个必备请求头**：`x-opencode-session`（稳定会话 ID，可用 `OPENCODE_SESSION_ID` 覆盖）+ 自有 `User-Agent`。缺则上游返回 400 `MissingSessionID`，且**校验发生在鉴权之后**，极易被误判成 Key 失效。**鉴权头按端点分**：`/messages` 只认 `x-api-key`；`/chat/completions`、`/responses` 认 `Bearer`。
+3. **401 不等于 Key 错**：模型不存在、额度不足、Key 无效**都是 401**。判错方向会把排查引到错误的地方 —— 分类顺序必须是「模型类 / 额度类 → 鉴权类」，统一走 `adapter.ts` 的 `describeUpstreamError`，不要在各适配器里另写一套。
+4. **env 回退必须同厂商同源**：`AI_API_KEY` / `AI_MODEL` / `AI_BASE_URL` 只在所选 provider 与 `AI_PROVIDER` 一致时回退；`DEEPSEEK_API_KEY` 只服务 `provider === 'deepseek'`。**不要新增「跨厂商通用兜底 Key」**（BUG-8 就是这么来的）。
+5. **`GET {baseUrl}/models` 目录 ≠ 当前可用**：曾上架、现已下架或需付费的模型仍在目录里（`deepseek-v4-flash-free` 恒 400）。校准清单只能靠**实打实调一次**，不能照目录抄。
+6. **提交范围纪律**：只暂存与本次改动相关的文件。仓库里长期存在 Orca 遗留的未跟踪文件（`coordination/`、旧 `docs/review/*`），不要顺手裹进功能提交；它们各自定性后单独处理。
+7. **上线标准动作**（本次实测可用）：
+   `npx tsc --noEmit` 通过 → 只暂存本次文件 → commit → push master → 部署副本 `PATH="/Applications/Docker.app/Contents/Resources/bin:$PATH" bash scripts/deploy.sh`（**不补这条 PATH 会报 `docker-credential-desktop: executable file not found`**）→ 容器 Up + HTTP 200 → **只读核对生产数据未变**。
+8. **选端口先 `lsof`**：本机已确认被占 3100（生产）、3200、8080、8081、1200。**Next 16 有同目录 dev server 单实例锁**（再起会打印 `Another next dev server is already running` 后退出）→ 带自定义 env 做对照实验前必须先把现有实例 `stop`；`dev-server.sh status` 按**默认 3100** 判定，在 `PORT=3199` 场景会误报「未运行」，看 `lsof -nP -iTCP:<PORT> -sTCP:LISTEN` 才准。
+
+### 4. 下一个智能体接续恢复提示词（一键复制）
+
+> ⚠️ **本节提示词已过时（保留作当时原文）** —— 2026-09-10 16:45 洁癖收尾后请直接使用 **§16.22.1「更新后的一键复制提示词」**（Git 待推送清单与禁区均已更新）。
+
+```text
+【恢复 Prompt Manager｜现状运行期 + AI 服务商已收敛为 3 家（待推送收尾）】
+
+项目目录：
+/Users/zzymima0000/Developer/coding/1.Active/ing丨0813提示词管理器 mac gpt桌面 v1.0
+
+你是本项目的接续开发者。当前处于「现状运行期」，开发已暂停，用户没有排期任务。
+先理解现状，不要主动开发新功能，不要顺手重构。
+
+开始前按顺序阅读（不要一次性读全部文档）：
+1. AGENTS.md —— 公共规则 + §〇 部署契约卡 + 文档唯一归属表
+2. docs/handoff/HANDOFF.md —— **§16.22 是当前唯一有效入口**（§16.21 及更早仅作历史）
+3. src/lib/ai/types.ts、src/lib/ai/factory.ts、src/components/SettingsModal.tsx（AI 清单三处同源）
+4. docs/qa/BUGS.md —— 第二十三次 QA + 同轮收尾修复；BUG-8 / D2 已 FIXED
+5. 需要时再看 docs/progress/CURRENT_STAGE.md
+
+当前事实（均已验证）：
+- 生产运行中：容器 prompt-manager-prompt-manager-1，0.0.0.0:3100，http://192.168.31.60:3100；2026-09-10 已部署 commit 1b569a5（镜像 328a58fe4ec2），HTTP 200。
+- AI 服务商已从 8 厂商收敛为 3 家服务商 / 4 个选项 / 5 个模型：DeepSeek 官方（deepseek-v4-flash）、OpenRouter（用户自填模型）、OpenCode Zen（glm-5.3-flash）、OpenCode Go（deepseek-v4-flash + glm-5.3-flash）。清单唯一来源 = types.ts 的 AI_PROVIDERS，另需同步 SettingsModal 的 AI_SERVICES 与 factory.ts 分支。
+- 生产配置 aiProvider=opencode-go / aiModel=deepseek-v4-flash，仍在新清单内，无需迁移。
+- OpenCode Zen 的 glm-5.3-flash 当前上游返回 401 Insufficient balance（账户无余额，非代码问题），该 provider 暂不可用。
+- 本地 dev server 已停用（3199 已释放）；预览走生产 http://192.168.31.60:3100。
+- 云端为权威数据源（Supabase prompt_manager Schema，Migration Remote 7/7）。
+
+Git 现状（重要）：
+- 已 push：1b569a5（AI 服务商收敛 + D2 + BUG-8 + 回环水合）。
+- **已暂存、未提交**：.gitignore（新增 coordination/ 忽略）+ docs/review 下 8 份 md（Orca 治理提示词与复盘产物归档）。这是用户已知的待推送内容。
+- 提交范围纪律：只暂存与本次改动相关的文件，不要把 coordination/ 或无关遗留文件裹进来。
+
+下一步（两项，均需用户启动）：
+1. 用户说「现在推送」时：把已暂存的 .gitignore + 8 份 docs/review 提交并 push master。纯文档 + 忽略规则，不触发部署。
+2. 处置 OpenCode Zen 条目（用户二选一）：充值使其可用，或删除该 provider 条目（删除需三处清单同步 + 文档 + 一轮上线）。
+
+硬性禁区：
+- 未经明确授权不 commit / push；不创建、删除、迁移、覆盖部署副本 / 容器 / DockerData / DockerBackups / Named Volume。
+- 部署唯一入口：push master 后在部署副本 ~/Developer/coding/docker/prompt-manager/ 内跑 bash scripts/deploy.sh，且必须先 PATH="/Applications/Docker.app/Contents/Resources/bin:$PATH"（否则 docker-credential-desktop 报错）。部署前提是用户明确授权。
+- 数据库红线：不得 supabase db push、不得改 Dashboard/SECURITY DEFINER、不得查改生产数据；legacy /api/sync + data/store.json + SSE 链路长期保留（2026-09-04 已裁定不退场）。
+- Mini 单设备铁律：不得要求、也不得建议做双设备冲突回归。
+- 不泄露 AI API Key / MCP 原始令牌 / 数据库密码 / Auth token / 真实提示词正文。
+- dev-server.sh 仅开发用，四个子命令必须成对携带同一个 PORT；3100 归生产 Docker，不要占。
+- 选端口前先 lsof（3100/3200/8080/8081/1200 已被占）；Next 16 同目录 dev server 单实例锁，做对照实验前先停现有实例。
+- 改 AI 服务商清单必须三处同源（types.ts + SettingsModal.tsx + factory.ts）并同步 docker/env.template。
+- 401 不等于 Key 错：模型不存在 / 额度不足 / Key 无效都是 401，分类顺序「模型类、额度类 → 鉴权类」。
+- env 回退必须同厂商同源，不要新增跨厂商通用兜底 Key（BUG-8 教训）。
+- 沟通口径：用户是编程小白 —— 讲人话、给结论；每次代码改动附预览链接；commit/push 逐次授权。
+```
+
+### 16.22.1 增量：洁癖收尾第二轮 + 待推送清单（2026-09-10 16:45）
+
+> 接续者先读本节，再读 §16.22 §1–§3（**现状事实不变**，本节只覆盖「遗留物裁定的后续处置」与「最新 Git 状态」）。
+
+**本轮（用户指令「全部按你建议 现在推送」）追加处置 5 项**：
+
+| # | 事项 | 处置 | 结果 |
+|---|---|---|---|
+| 1 | `备份本文件夹.command`（含用户环境路径却已被 Git 跟踪并推送） | 建议 = **移除跟踪 + 加入忽略**（不重写历史） | ✅ `git rm --cached` + `.gitignore` 新增条目；**磁盘文件保留**，`git check-ignore` 命中 `.gitignore:51`。实测内容只用 `$HOME` / `dirname "$0"`，**无绝对路径**、历史泄露风险低，但性质仍不符「本地脚本不推送」的规矩 |
+| 2 | `docs/DEV_EXPERIENCE.md` 编号重复（12/13/14 各出现两次，13/14 近重复） | 合并去重 | ✅ 尾部早期批次的 12 → **#15**（Builder 视角预检查，区别于 #12 的 Stage Manager 视角）；13 / 14 **合并删除**。现编号 **1–15 连续且唯一**，文件末新增「附：编号去重记录」。**核实结论**：`docs/roles/builder.md §权限边界` 确实存在（旧条目标注的「已添加」为真）；`docs/roles/qa.md` 与 `docs/workflow/QUALITY_GATES.md` **均无**测试数据清理门控（升级仍为「待授权」） |
+| 3 | 根目录 4 份 SOP / 规范 md「位置可疑」 | **裁定不搬迁，改为就地打标** | ⚠️ 搬迁会破坏引用：① 这些文件**自身正文的相对链接**（`../../docker/…`、`../alw丨数据库管理专家/…`）是按**根目录位置**校准的；② `README.md` / `HANDOFF.md` 多处按**裸文件名**引用。故：3 份补 HISTORICAL 横幅（Docker V1.0 原有），并把 `2026-09-02 …数据库规范 丨 V1.1.md` 里**已过期的「状态：当前生效」**改为指向 V1.3；`AGENTS.md` §四 归属表新增「根级 规范 / SOP 历史留档」行 + 位置说明 |
+| 4 | `HANDOFF.md` 1721 行、§4–§15 乱序、多个「收束」小节高度重复 | **不重整正文**（破坏性），只加导航 | ✅ 文件头新增 **§0 章节速查**（区段表 + 明确声明「全文件只有 §16.22 是现役入口」），**正文一字未动** |
+| 5 | `PRODUCT_BACKLOG.md` 内多处「8 家」 | **不越界** | 属 Product Reviewer 角色权限（AGENTS.md §六 写权限表），留待该角色处理 |
+
+**本轮新发现（未处置，待用户确认）**：
+
+- `docs/roles/builder.md:79` 写 `检查页面状态：curl http://localhost:3100` —— **3100 现为生产 Docker 专用**，此条已失效。属角色规范文件，未擅改。
+
+**待推送清单（建议三笔提交，纯文档 + 忽略规则，不触发部署）**：
+
+| 提交 | 内容 |
+|---|---|
+| ① `chore` | `.gitignore`(M)（新增 `coordination/` 与 `备份本文件夹.command` 忽略）+ 8 份 `docs/review`(A) + `备份本文件夹.command`(D，仅解除跟踪、不删文件) |
+| ② `docs` | 上一轮洁癖收尾：`AGENTS.md` / `HANDOFF.md` / `docs/progress/CURRENT_STAGE.md` / `docs/qa/BUGS.md` |
+| ③ `docs` | 本轮洁癖收尾：`docs/DEV_EXPERIENCE.md` + 3 份根级规范 + §0 导航 + 本节 |
+
+> 用户同意合并为 1–2 笔亦可；**核心纪律 = 不夹带 `coordination/` 与无关遗留文件**。
+
+#### 16.22.1 附：更新后的一键复制提示词（**替代 §16.22 §4**）
+
+```text
+【恢复 Prompt Manager｜现状运行期 + AI 服务商已收敛为 3 家（待推送收尾）】
+
+项目目录：
+/Users/zzymima0000/Developer/coding/1.Active/ing丨0813提示词管理器 mac gpt桌面 v1.0
+
+你是本项目的接续开发者。当前处于「现状运行期」，开发已暂停，用户没有排期任务。
+先理解现状，不要主动开发新功能，不要顺手重构。
+
+开始前按顺序阅读（不要一次性读全部文档）：
+1. AGENTS.md —— 公共规则 + §〇 部署契约卡 + §四 文档唯一归属表
+2. docs/handoff/HANDOFF.md —— §0 章节速查 → **§16.22 → §16.22.1 是当前唯一有效入口**
+3. src/lib/ai/types.ts、src/lib/ai/factory.ts、src/components/SettingsModal.tsx（AI 清单三处同源）
+4. docs/qa/BUGS.md —— 第二十三次 QA + 同轮收尾修复；BUG-8 / D2 已 FIXED
+5. 需要时再看 docs/progress/CURRENT_STAGE.md
+
+当前事实（均已验证）：
+- 生产运行中：容器 prompt-manager-prompt-manager-1，0.0.0.0:3100，http://192.168.31.60:3100；
+  2026-09-10 已部署 commit 1b569a5（镜像 328a58fe4ec2），HTTP 200。
+- AI 服务商已从 8 厂商收敛为 3 家服务商 / 4 个选项 / 5 个模型：
+  DeepSeek 官方（deepseek-v4-flash）、OpenRouter（用户自填模型）、
+  OpenCode Zen（glm-5.3-flash）、OpenCode Go（deepseek-v4-flash + glm-5.3-flash）。
+  清单唯一来源 = types.ts 的 AI_PROVIDERS，另需同步 SettingsModal 的 AI_SERVICES 与 factory.ts 分支。
+- 生产配置 aiProvider=opencode-go / aiModel=deepseek-v4-flash，仍在新清单内，无需迁移。
+- OpenCode Zen 的 glm-5.3-flash 当前上游返回 401 Insufficient balance（账户无余额，非代码问题），该 provider 暂不可用。
+- 本地 dev server 已停用（3199 已释放）；预览走生产 http://192.168.31.60:3100。
+- 云端为权威数据源（Supabase prompt_manager Schema，Migration Remote 7/7）。
+
+Git 现状（重要）：
+- 已 push：1b569a5（AI 服务商收敛 + D2 + BUG-8 + 回环水合）。
+- 待提交（洁癖收尾，纯文档 + 忽略规则，不触发部署）：见 HANDOFF §16.22.1 的「待推送清单」。
+  其中 `备份本文件夹.command` 为「解除跟踪」而非删除，磁盘文件必须保留。
+- 提交范围纪律：只暂存与本次改动相关的文件，不要夹带 coordination/ 或无关遗留文件。
+
+下一步（均需用户启动）：
+1. 用户说「现在推送」时：按 §16.22.1「待推送清单」提交并 push master。
+2. 处置 OpenCode Zen 条目（用户二选一）：充值使其可用，或删除该 provider（三处清单同步 + 文档 + 一轮上线）。
+3. 可选修正：docs/roles/builder.md 里过期的 `curl http://localhost:3100`（3100 已是生产端口）。
+
+硬性禁区：
+- 未经明确授权不 commit / push；不创建、删除、迁移、覆盖部署副本 / 容器 / DockerData / DockerBackups / Named Volume。
+- 部署唯一入口：push master 后在部署副本 ~/Developer/coding/docker/prompt-manager/ 内跑 bash scripts/deploy.sh，
+  且必须先 PATH="/Applications/Docker.app/Contents/Resources/bin:$PATH"（否则 docker-credential-desktop 报错）。
+  部署前提是用户明确授权。
+- 数据库红线：不得 supabase db push、不得改 Dashboard/SECURITY DEFINER、不得查改生产数据；
+  legacy /api/sync + data/store.json + SSE 链路长期保留（2026-09-04 已裁定不退场）。
+- Mini 单设备铁律：不得要求、也不得建议做双设备冲突回归。
+- 不泄露 AI API Key / MCP 原始令牌 / 数据库密码 / Auth token / 真实提示词正文。
+- dev-server.sh 仅开发用，四个子命令必须成对携带同一个 PORT；3100 归生产 Docker，不要占。
+- 选端口前先 lsof（3100/3200/8080/8081/1200 已被占）；Next 16 同目录 dev server 单实例锁，做对照实验前先停现有实例。
+- 改 AI 服务商清单必须三处同源并同步 docker/env.template。
+- 401 不等于 Key 错：模型不存在 / 额度不足 / Key 无效都是 401，分类顺序「模型类、额度类 → 鉴权类」。
+- env 回退必须同厂商同源，不要新增跨厂商通用兜底 Key（BUG-8 教训）。
+- 根目录 4 份规范 / SOP md 是**历史留档**，禁止作为当前依据；也**不要**把它们搬进 docs/（会破坏其内部相对链接与既有裸文件名引用）。
+- HANDOFF.md 是**只追加**日志：新增收束请追加 `## 16.NN` 并只在标题标「当前唯一有效入口」，同时把上一节的现役标记降级 —— 不要同时留多个「当前入口」。
+- 沟通口径：用户是编程小白 —— 讲人话、给结论；每次代码改动附预览链接；commit/push 逐次授权。
+```
