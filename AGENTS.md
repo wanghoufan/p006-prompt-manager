@@ -50,7 +50,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - 认证：Supabase Auth（Magic Link + Google OAuth PKCE），`http://192.168.31.60:3100` 为已核验访问地址（`localhost`/`.local` 不在白名单/被代理劫持）
 - MCP：`mcp/prompt-server/`（`@modelcontextprotocol/sdk` + zod，stdio，v0.2.0 直连 Supabase RPC），工具 `prompt_manager_activate_prompt`（`prompt_manager.activate_prompt` RPC，能力令牌 SHA-256 哈希，`SECURITY DEFINER` 已裁定接受，2 WARN 存档）
 - 部署：Docker 自托管（`prompt-manager-prompt-manager-1` 绑定 `0.0.0.0:3100`；正式部署副本 `Developer/coding/docker/prompt-manager/`（GitHub 克隆，规范 V1.1），一键部署 `bash scripts/deploy.sh`（前提：已 push master）；`DockerData/prompt-manager/legacy-store` bind mount，`DockerBackups/prompt-manager/` 备份不进 Git）
-- AI 调用：通用 `AI_PROVIDER/AI_MODEL/AI_BASE_URL/AI_API_KEY`（支持 opencode-go 等 8 厂商），`docker/env.template` 为模板，部署副本 `.env.local`（600 权限，不进 Git）
+- AI 调用：通用 `AI_PROVIDER/AI_MODEL/AI_BASE_URL/AI_API_KEY`（3 家：`deepseek` / `openrouter` / `opencode` / `opencode-go`；2026-09-10 从 8 厂商收敛），`docker/env.template` 为模板，部署副本 `.env.local`（600 权限，不进 Git）
 - 样式方案：Tailwind CSS v4
 - 代码检查：ESLint 9（eslint-config-next）
 - 测试方案：暂无（以真机双设备验收 + 隔离恢复演练为准）

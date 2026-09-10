@@ -1,4 +1,5 @@
 import type { Card, Settings, Version, Tag, PromptTag } from '@/lib/types'
+import { AI_PROVIDERS } from '@/lib/ai/types'
 import { nowIso, uid } from '@/lib/util'
 import { normalizeBody } from '@/lib/cards'
 import { isTag, isPromptTag, normalizeTag } from '@/lib/tags'
@@ -107,18 +108,7 @@ const DEFAULT_SETTINGS: Settings = {
   aiBaseUrl: '',
 }
 
-const AI_PROVIDERS = [
-  'deepseek',
-  'zhipu',
-  'tencent',
-  'doubao',
-  'kimi',
-  'google',
-  'openai',
-  'openrouter',
-  'opencode',
-  'opencode-go',
-] as const
+const AI_PROVIDERS_SET = AI_PROVIDERS as readonly string[]
 
 /** 设置归一化（P0-4/P0-5）：老数据缺 confirmDelete / theme 字段时补默认值；
  *  theme 仅接受 'dark' | 'light' | 'system'，其余（含 undefined）回退 'system'。
@@ -128,7 +118,7 @@ function normalizeSettings(v: unknown): Settings {
   const theme = s.theme === 'dark' || s.theme === 'light' || s.theme === 'system' ? s.theme : 'system'
   const bodyAlignment = s.bodyAlignment === 'center' || s.bodyAlignment === 'right' ? s.bodyAlignment : 'left'
   const composerAddMode = s.composerAddMode === 'manual' ? 'manual' : 'auto'
-  const aiProvider = (AI_PROVIDERS as readonly string[]).includes(s.aiProvider ?? '')
+  const aiProvider = AI_PROVIDERS_SET.includes(s.aiProvider ?? '')
     ? (s.aiProvider as Settings['aiProvider'])
     : 'deepseek'
   const aiModel = typeof s.aiModel === 'string' && s.aiModel.trim() ? s.aiModel : 'deepseek-v4-flash'

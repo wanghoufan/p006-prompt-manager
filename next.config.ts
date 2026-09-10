@@ -34,6 +34,12 @@ const nextConfig: NextConfig = {
   // 否则 Next 会把非 localhost 来源的请求当作跨域拦截，导致另一台电脑无法同步。
   // 动态加入当前 LAN IP，.local 主机名作为兜底（需客户端支持 Bonjour）。
   allowedDevOrigins: [
+    // 本机回环必须显式列出：getLanIpv4Addresses() 有意排除了 internal 接口，
+    // 127.0.0.1 因此不在返回结果里。缺了这两项时用 http://127.0.0.1:PORT 打开，
+    // HTML 依然返回 200，但 /_next/ 下的 dev 资源被判 403 —— 表现为页面能开、
+    // React 不水合、按钮点了没反应，极易误判成前端 bug。
+    "localhost",
+    "127.0.0.1",
     ...getLanIpv4Addresses(),
     "zzymima0000deMacBook-Air.local",
   ],

@@ -198,16 +198,19 @@
 
 ### BUG-8
 
-- **状态**：OPEN
+- **状态**：**FIXED**（2026-09-10，第二十三次 QA 同轮收尾修复）
 - **严重程度**：P1
-- **涉及功能**：通用 AI 接口的多厂商 API Key 环境变量回退
-- **前置条件**：在设置中选择非 DeepSeek 厂商，API Key 留空
-- **复现步骤**：选择 OpenAI、智谱或其他非 DeepSeek 服务；保持 API Key 为空；触发标题、标签、摘要或正文整理请求
-- **预期结果**：按当前厂商读取对应的服务端环境变量，或明确提示该厂商未配置密钥
-- **实际结果**：`src/lib/ai.ts:35-38` 固定回退 `process.env.DEEPSEEK_API_KEY`，可能把 DeepSeek 密钥发送至其他厂商 Base URL
-- **复现概率**：100%（满足前置条件时）
-- **影响范围**：所有未在设置中显式填写 API Key 的非 DeepSeek 配置；可能导致鉴权失败或密钥误发
-- **备注**：设置页 `SettingsModal.tsx:343-346` 也固定提示 `DEEPSEEK_API_KEY`。建议按厂商建立环境变量映射，或仅允许 DeepSeek 使用该回退。
+- **涉及功能**：通用 AI 接口的服务商环境变量回退
+- **前置条件**：`.env.local` 配了 `AI_PROVIDER` 与 `AI_API_KEY`，用户在设置页选了**别的**服务商且 API Key 留空
+- **复现步骤**：选择非 `AI_PROVIDER` 声明的服务商；保持 API Key 为空；触发标题 / 标签 / 摘要 / 正文整理请求
+- **预期结果**：只在「所选厂商与 env 声明的厂商一致」时回退 env 值；不一致时提示该厂商未配置密钥
+- **实际结果（修复前）**：`apiKey` 无条件回退 `process.env.AI_API_KEY` / `DEEPSEEK_API_KEY`，与所选厂商无关——等于把 A 家的密钥发到 B 家的端点（实测 2026-09-10：生产 Key 属 OpenCode，设置页切到 DeepSeek 官方后被发往 `api.deepseek.com`）。`model` / `baseUrl` 同样不受厂商约束，配置整体串味。
+- **修复**：`src/lib/ai.ts` 新增 `resolveEnvFallbacks(provider, envProvider)`，用**一条规则**收口三个字段——
+  `AI_MODEL` / `AI_BASE_URL` / `AI_API_KEY` 仅在 `provider === envProvider` 时回退；
+  `DEEPSEEK_API_KEY` 属指名道姓的变量，仅按 `provider === 'deepseek'` 判断，与 `AI_PROVIDER` 无关，保证只填 `DEEPSEEK_*` 的老部署仍可用。
+  同步更新设置页文案（`SettingsModal.tsx` 第 461 行）与 `README.md` 环境变量表，把「留空自动回退」的生效条件写清。
+- **验证**：见「第二十三次 QA」§同轮收尾修复，A1/B1/C1/D1/D2/E1 六组对照全绿
+- **备注（历史）**：本条最初于 2026-08-29 QA 记为静态代码风险；本轮首次实网触发并复现，随后修复。设置页原有「固定提示 `DEEPSEEK_API_KEY`」的文案在界面改版时已移除。
 
 ### Bug #2 残留修复：resolveTagIds 路径解析被历史扁平标签遮蔽（2026-08-29）
 
@@ -1048,3 +1051,82 @@ P0-H 当前实现 **PASS**，无新增 Bug；建议进入后续客户端真实 M
 **修复路径（数据库侧欠账，应用层零改动零部署）**：管理员已出 Migration 草案 `20260904102000_add_prompt_manager_tags_revision.sql`（`alter table prompt_manager.tags add column revision bigint not null default 1 check (revision > 0)`，纯增量、元数据级瞬时完成、现有 24 行回填 1），隔离 Docker PG16 复现验证全绿（迁移前精确复现线上报错，迁移后 V1–V4 全过）。材料：平台仓库 `docs/reviews/MIGRATION_20260904102000_审查记录.md`（APPROVED_FOR_EXECUTION 草案）+ `docs/reviews/20260904102000_验证/`；登记于平台转送清单第 2 项。
 
 - **状态**：✅ **FIXED（2026-09-04 11:03 上线，修复单号 MIG-20260904102000）**。管理员经用户批准后 `supabase db push` 发布；线上验收达标：列定义正确（bigint / NOT NULL / default 1）、全部行 revision=1、check 约束在位、`supabase migration list` Local=Remote=7 对齐；此前保存失败的 5 条标签在修复上线后同步入库成功（端到端实证）；2026-09-04 11:18 用户 UI 确认「标签确实不会掉了」。发布前备份与完整发布记录见平台仓库 `docs/reviews/MIGRATION_20260904102000_审查记录.md` §7。应用侧零代码改动、零重新部署。监控条款：若 UI 再现标签保存报错，第一时间把完整报错原文回报管理员。
+
+## 第二十三次 QA - AI 服务商精简（3 家）+ 上游错误提示分类（2026-09-10）
+
+**触发**：用户判定「10 家服务商 × 数十个模型」的清单维护成本过高，要求大幅收敛。
+
+**目标形态（4 个 provider 实体 / 5 个模型）**
+
+| 服务商 | 保留模型 | 端点类型 | 实测 |
+|---|---|---|---|
+| DeepSeek 官方 | `deepseek-v4-flash` | chat/completions | 通道正常（无真 Key；401 鉴权提示准确） |
+| OpenRouter | 用户自填（含 `auto`） | chat/completions | 通道正常（无真 Key；401 鉴权提示准确） |
+| OpenCode Zen | `glm-5.3-flash` | chat/completions | ⚠️ 401 `Insufficient balance` —— 该模型在 Zen 属按量付费，账户无余额 |
+| OpenCode Go | `deepseek-v4-flash`、`glm-5.3-flash` | chat/completions | ✅ 均 200 |
+
+移除：智谱 / 腾讯混元 / 豆包 / Kimi / Google Gemini / OpenAI（6 家 provider、6 个适配器文件、`AIProvider` 联合类型成员、storage 与 ai.ts 的重复白名单）。历史配置若指向被移除项，由 `normalizeSettings` 回退 `deepseek`，不报错（已由 C 组实测确认）。
+
+**验证矩阵（走应用真实链路 `/api/ai/summarize-thinking`，请求头与前端完全一致）**
+
+| 组 | 用例 | 结果 |
+|---|---|---|
+| 正向 | Go · `deepseek-v4-flash` / `glm-5.3-flash` / 同模型连打 2 次 | 4/4 **200**，返回内容正确 |
+| 错误分类 | Go · 不存在的模型 | 401「模型 xxx 当前不可用（上游：Model ... is not supported）」 |
+| 错误分类 | Go · 假 Key | 401「OpenCode Go 鉴权失败，API Key 无效或无权限」 |
+| 错误分类 | Zen · `glm-5.3-flash` | 401「账户余额或额度不足」 |
+| 兼容回退 | 请求头带已移除 provider（`zhipu` / `kimi`） | 回退 DeepSeek，不崩，提示准确 |
+| 另一家通道 | DeepSeek 官方 / OpenRouter + 假 Key | 401 鉴权提示准确 |
+
+**真机 UI**（`192.168.31.60:3199`，dev 实例）：设置页服务商下拉 = 「DeepSeek / OpenRouter / OpenCode Zen / OpenCode Go（$10/月）」共 4 项；模型下拉随 provider 正确切换（Go 显示 2 项）。
+
+> 注：`127.0.0.1:3199` 当时打开**不水合**（React 未接管、按钮点击无响应）——`allowedDevOrigins` 只收集非 internal IPv4，loopback 不在其中，dev 资源被判 403。**该问题已在同轮收尾修复**（`next.config.ts` 显式列入 `localhost` 与 `127.0.0.1`）；修复后实测 `reactKeys` 由 0 变 2、设置面板可正常交互，本机回环与局域网 IP 均可用于真机验证。
+
+**本轮发现与处置**
+
+1. **D1（已消解）** 上一轮加入 Zen 清单的 `deepseek-v4-flash-free` 恒 400 `Model is unavailable`、`nemotron-3.5-lightning-free` 上游 240s 无响应，而两者**至今仍在 `GET /zen/v1/models` 目录里** —— 证明「照目录校准」只代表曾上架、不代表当前可用。本轮清单收敛后两条均已移除，缺陷随之消失。
+2. **D2（已修复）** 上游对「模型不存在」返回 **401 `ModelError`**、对「Key 无效」返回 **401 `AuthError`**、对「Zen 余额不足」同样返回 **401** —— 三者同码。原实现把 401 一律译成「Key 无效」，用户会拿着提示去查 Key，而真问题在模型名或余额上（该坑本项目自己踩过）。现改为按 `error.type` 与错误文本分类，且模型类、额度类**先于**鉴权类判定；判定逻辑抽到 `adapter.ts` 的 `describeUpstreamError` 由全部适配器共用，避免各写一套顺序。
+3. **观察项（非缺陷）** `deepseek-v4-flash` 首轮矩阵有一次 **10.6s 后 503**（`无法连接到 https://opencode.ai/zen/go/v1`），随后 4 次连打均 200 —— 判定为上游瞬时断连。Next.js 日志只记状态码不记堆栈，已把 fetch 层失败原因（含 undici `cause`）附到提示后，便于下次定位。
+4. **BUG-8 实网复现并修复（P1）** Key 回退链与厂商无关：本环境 `AI_API_KEY` 是 OpenCode 的 Key，若用户在设置页切到 DeepSeek 官方且 Key 留空，会把这把 OpenCode Key 发到 `api.deepseek.com`。本轮 C 组实测**首次实网复现**（结果为 401，提示准确），随后在**同轮收尾**完成修复（见下方「同轮收尾修复」）；条目状态由 OPEN 改为 FIXED。
+
+**未覆盖**：OpenRouter 与 DeepSeek 官方**无真实 Key**，只验证了通道连通与错误提示，未验证真实生成质量；Zen 的 `glm-5.3-flash` 因账户无余额未能验证成功路径。
+
+**结论**：**PASS**。目标形态全部达成，保留项中除 Zen（账户余额问题，非代码问题）外均实测可用；D1 消解、D2 已修复。
+
+### 同轮收尾修复（2026-09-10，第二十三次 QA 之后）
+
+本轮 QA 结论为 PASS，但留下三笔欠账；经用户确认后一并处理完毕。
+
+**1. BUG-8 修复：env 回退按厂商同源收口**（`src/lib/ai.ts`）
+
+新增 `resolveEnvFallbacks(provider, envProvider)`：`AI_MODEL` / `AI_BASE_URL` / `AI_API_KEY` 仅在所选 provider 与 `AI_PROVIDER` 一致时回退；`DEEPSEEK_API_KEY` 属指名道姓的变量，仅按 `provider === 'deepseek'` 判断（保住只填 `DEEPSEEK_*` 的老部署）。设置页文案与 README 环境变量表同步注明生效条件。
+
+验证方式：起临时实例（env 显式声明 `AI_PROVIDER=opencode-go` + 真实 OpenCode Key），走应用真实链路 `/api/ai/summarize-thinking` 打六组对照：
+
+| 组 | 场景 | 期望 | 实测 |
+|---|---|---|---|
+| A1 | `opencode-go`，不传 Key | env 回退生效 | **200** 摘要正常（11s） |
+| B1 | `deepseek`，不传 Key/地址 | 不得挪用 OpenCode 的 Key | **503**「AI 服务尚未配置」 |
+| C1 | `deepseek` + 地址填成 opencode | Key 不得跟着别家地址走 | **503**「AI 服务尚未配置」 |
+| D1 | 实例 env 只有 `DEEPSEEK_API_KEY`，选 `deepseek` | 老部署兼容仍生效 | **401**「DeepSeek 鉴权失败（上游：Invalid API key.）」 |
+| D2 | 同实例选 `opencode-go` | 不得挪用 DeepSeek 的 Key | **502**「OpenCode Go 尚未配置 API Key」 |
+| E1 | `opencode-go` + 显式传 Key（= 设置页测试连接） | UI 主路径不受影响 | **200**（4s） |
+
+修复前 B1/C1 的行为是把 OpenCode 的 Key 发往 `api.deepseek.com`；修复后该请求在服务端即被拦下，不产生任何外部流量。
+
+**2. dev 回环地址不水合**（`next.config.ts`）
+
+`allowedDevOrigins` 原只收集非 internal IPv4，`127.0.0.1` 不在其中 → 用 `http://127.0.0.1:PORT` 打开时 HTML 返回 200，但 `/_next/` 资源被判 403，表现为页面能开、React 不水合、按钮无响应。已显式列入 `localhost` 与 `127.0.0.1`。
+
+修复后实测：`127.0.0.1:3199` 的 `reactKeys` 由 0 变 2（已水合），设置面板可点开、服务商下拉 4 项正确。
+
+**3. 文档同步**
+
+`README.md`（4 处）、`AGENTS.md`（1 处）、`docker/env.template`：把「8 厂商 / 8 选 1」更新为当前 3 家（DeepSeek 官方 / OpenRouter / OpenCode），并补注 env 回退的同源约束。
+
+**本轮实验环境踩坑（供后续复验参考）**
+
+- **Next 16 有同目录 dev server 单实例锁**：同项目再起 `next dev` 会打印 `Another next dev server is already running` 并退出。想在带自定义环境变量的实例上做对照实验，必须先 `PORT=3199 ./dev-server.sh stop`。
+- **端口 3200 被 Docker 容器占用**：首次实验误用 3200，`curl` 拿到的 200 其实是 Docker 回的，差点把「已退出的实例」当成已就绪。**选端口前必须先 `lsof`**；本项目周边已确认被占用的有 3100（prompt-manager 生产）、3200、8080、8081、1200。
+
+**脚本与原始输出**：`scratch/qa-ai-20260910/`（`matrix.sh` / `matrix2.sh` / `verify-simplify.sh` 及各自 `*-result*.txt`；另存本次 `bug8-verify-result.txt`、`bug8-d-result.txt`）。

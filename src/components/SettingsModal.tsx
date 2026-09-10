@@ -44,68 +44,9 @@ const AI_SERVICES: {
     provider: 'deepseek',
     label: 'DeepSeek',
     available: true,
-    models: ['deepseek-v4-pro', 'deepseek-v4-flash-vision-exp', 'deepseek-v4-flash'],
+    models: ['deepseek-v4-flash'],
     defaultBaseUrl: 'https://api.deepseek.com',
     docsUrl: 'https://api-docs.deepseek.com/zh-cn/',
-  },
-  {
-    provider: 'zhipu',
-    label: '智谱（GLM）',
-    available: true,
-    models: [
-      'glm-5.3', 'glm-5.3-flash', 'glm-5.2',
-      'glm-4.7', 'glm-4.7-flashx', 'glm-4.6', 'glm-4.5-air', 'glm-4.5-airx',
-      'glm-4-long', 'glm-4-flashx-250414', 'glm-4-flash-250414', 'glm-3-turbo',
-    ],
-    defaultBaseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-    docsUrl: 'https://docs.bigmodel.cn/cn/guide/start/model-overview',
-  },
-  {
-    provider: 'tencent',
-    label: '腾讯混元',
-    available: true,
-    models: ['hunyuan-pro', 'hunyuan-standard', 'hunyuan-lite'],
-    defaultBaseUrl: 'https://hunyuan.cloud.tencent.com',
-    docsUrl: 'https://cloud.tencent.com/document/product/1729/101837',
-  },
-  {
-    provider: 'doubao',
-    label: '豆包（火山引擎）',
-    available: true,
-    models: [
-      'doubao-seed-2-1-pro-260628', 'doubao-seed-evolving', 'doubao-seed-2-1-turbo-260628',
-      'doubao-seed-2-0-pro-260215', 'doubao-seed-2-0-code-preview-260215',
-      'doubao-seed-2-0-lite-260215', 'doubao-seed-2-0-mini-260215',
-    ],
-    defaultBaseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
-    docsUrl: 'https://www.volcengine.com/docs/82379/1330310',
-  },
-  {
-    provider: 'kimi',
-    label: 'Kimi（月之暗面）',
-    available: true,
-    models: [
-      'kimi-k3', 'kimi-k2.7-code', 'kimi-k2.6', 'kimi-k2.5',
-      'moonshot-v1-128k', 'moonshot-v1-32k', 'moonshot-v1-8k',
-    ],
-    defaultBaseUrl: 'https://api.moonshot.cn/v1',
-    docsUrl: 'https://platform.kimi.com/docs/models',
-  },
-  {
-    provider: 'google',
-    label: 'Google Gemini',
-    available: true,
-    models: ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-1.0-pro'],
-    defaultBaseUrl: 'https://generativelanguage.googleapis.com',
-    docsUrl: 'https://ai.google.dev/gemini-api/docs',
-  },
-  {
-    provider: 'openai',
-    label: 'OpenAI',
-    available: true,
-    models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
-    defaultBaseUrl: 'https://api.openai.com/v1',
-    docsUrl: 'https://platform.openai.com/docs/api-reference',
   },
   {
     provider: 'openrouter',
@@ -117,12 +58,9 @@ const AI_SERVICES: {
   },
   {
     provider: 'opencode',
-    label: 'OpenCode（免费）',
+    label: 'OpenCode Zen',
     available: true,
-    models: [
-      'muse-spark-1.3-contributor-free', 'muse-spark-1.2-contributor-free',
-      'deepseek-v4-flash-free', 'ling-3.0-flash-fin-free', 'nemotron-3.5-lightning-free',
-    ],
+    models: ['glm-5.3-flash'],
     defaultBaseUrl: 'https://opencode.ai/zen/v1',
     docsUrl: 'https://opencode.ai/docs/zh-cn/zen',
   },
@@ -130,18 +68,7 @@ const AI_SERVICES: {
     provider: 'opencode-go',
     label: 'OpenCode Go（$10/月）',
     available: true,
-    models: [
-      'glm-5.3-flash', 'glm-5.3', 'glm-5.2', 'glm-5.1', 'glm-5',
-      'grok-4.6', 'grok-4.5', 'gpt-5.6-luna',
-      'qwen3.8-max', 'qwen3.8-flash', 'qwen3.7-max', 'qwen3.7-plus', 'qwen3.6-plus', 'qwen3.5-plus',
-      'minimax-m3', 'minimax-m2.7', 'minimax-m2.5',
-      'kimi-k3', 'kimi-k2.7-code', 'kimi-k2.6', 'kimi-k2.5',
-      'deepseek-v4-pro', 'deepseek-v4-flash', 'deepseek-v4-flash-vision-exp', 'deepseek-flash',
-      'mimo-v2.5', 'mimo-v2.5-pro', 'mimo-v2-pro', 'mimo-v2-omni',
-      'muse-spark-1.3-contributor', 'muse-spark-1.2-contributor',
-      'hy4-preview', 'hy3', 'hy3-preview',
-      'longcat-2.0', 'omen-alpha',
-    ],
+    models: ['deepseek-v4-flash', 'glm-5.3-flash'],
     defaultBaseUrl: 'https://opencode.ai/zen/go/v1',
     docsUrl: 'https://opencode.ai/docs/zh-cn/go',
   },
@@ -532,7 +459,8 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
             )}
             <p className="mt-2 text-xs leading-relaxed text-muted">
               本机填写的 API Key 仅保存在浏览器本地，不会上传到同步服务端；留空时自动回退到服务端{' '}
-              <code className="font-mono">.env.local</code> 环境变量。
+              <code className="font-mono">.env.local</code> 环境变量——但仅当该环境变量所属厂商与上方所选服务商一致时生效，
+              否则会提示未配置 Key，以免把别家的密钥发到本服务商的端点。
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <button

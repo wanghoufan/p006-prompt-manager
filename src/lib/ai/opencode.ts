@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
-import { AiError, BaseAIAdapter } from './adapter'
+import { AiError, BaseAIAdapter, PROVIDER_LABELS, describeUpstreamError } from './adapter'
 import type { AIConfig, ChatMessage, ChatOptions } from './types'
 
 export const OPENCODE_DEFAULT_BASE_URL = (
@@ -22,57 +22,17 @@ const OPENCODE_USER_AGENT = 'prompt-manager/1.0'
 
 type EndpointType = 'responses' | 'messages' | 'chat' | 'google'
 
-/** Zen 免费端点。2026-09-10 按 GET /zen/v1/models 实测目录校准：
- *  big-pickle / mimo-v2.5-free / hy3-free / nemotron-3-ultra-free 已下线（上游报 disabled），
- *  deepseek-v4-flash-free 与 muse-spark-1.3-contributor-free 为新上架条目。 */
+/** Zen 免费版端点。2026-09-10 收敛为 1 条：glm-5.3-flash（付费模型，Zen 账户需有余额）。
+ *  实测被移除的条目：deepseek-v4-flash-free 恒 400「Model is unavailable」、
+ *  nemotron-3.5-lightning-free 上游无响应（240s 仍挂）、其余 free 条目不在精简口径内。 */
 export const FREE_ENDPOINTS: Record<string, Extract<EndpointType, 'responses' | 'chat'>> = {
-  'muse-spark-1.3-contributor-free': 'responses',
-  'muse-spark-1.2-contributor-free': 'responses',
-  'deepseek-v4-flash-free': 'chat',
-  'ling-3.0-flash-fin-free': 'chat',
-  'nemotron-3.5-lightning-free': 'chat',
+  'glm-5.3-flash': 'chat',
 }
 
-/** Go 端点。2026-09-10 按 GET /zen/go/v1/models 实测目录逐条校准（36 条 = 目录全集），
- *  端点类型取自官方文档表格；文档未列出的模型按同族推断：grok 系与 muse-spark 系走 responses，
- *  qwen 系与 minimax 系走 messages，其余走 chat。 */
+/** Go 端点。2026-09-10 收敛为 2 条，均实测 200 可用（此前 36 条的清单维护成本过高）。 */
 export const GO_ENDPOINTS: Record<string, Extract<EndpointType, 'responses' | 'messages' | 'chat'>> = {
-  'grok-4.6': 'responses',
-  'grok-4.5': 'responses',
-  'gpt-5.6-luna': 'responses',
-  'muse-spark-1.3-contributor': 'responses',
-  'muse-spark-1.2-contributor': 'responses',
-  'minimax-m3': 'messages',
-  'minimax-m2.7': 'messages',
-  'minimax-m2.5': 'messages',
-  'qwen3.8-max': 'messages',
-  'qwen3.8-flash': 'messages',
-  'qwen3.7-max': 'messages',
-  'qwen3.7-plus': 'messages',
-  'qwen3.6-plus': 'messages',
-  'qwen3.5-plus': 'messages',
-  'glm-5.3-flash': 'chat',
-  'glm-5.3': 'chat',
-  'glm-5.2': 'chat',
-  'glm-5.1': 'chat',
-  'glm-5': 'chat',
-  'kimi-k3': 'chat',
-  'kimi-k2.7-code': 'chat',
-  'kimi-k2.6': 'chat',
-  'kimi-k2.5': 'chat',
-  'longcat-2.0': 'chat',
-  'deepseek-v4-pro': 'chat',
   'deepseek-v4-flash': 'chat',
-  'deepseek-v4-flash-vision-exp': 'chat',
-  'deepseek-flash': 'chat',
-  'mimo-v2.5': 'chat',
-  'mimo-v2.5-pro': 'chat',
-  'mimo-v2-pro': 'chat',
-  'mimo-v2-omni': 'chat',
-  'hy4-preview': 'chat',
-  'hy3': 'chat',
-  'hy3-preview': 'chat',
-  'omen-alpha': 'chat',
+  'glm-5.3-flash': 'chat',
 }
 
 export function getEndpointType(model: string, provider: AIConfig['provider']): EndpointType {
@@ -169,17 +129,43 @@ function getMessagesContent(data: unknown): string | undefined {
   return firstNonEmptyString(...texts, ...thinking)
 }
 
-function getUpstreamErrorMessage(body: string): string | undefined {
+interface UpstreamError {
+  type?: string
+  message?: string
+}
+
+function getUpstreamError(body: string): UpstreamError {
   try {
     const data = JSON.parse(body) as { message?: unknown; error?: unknown }
-    const nestedError =
-      data.error && typeof data.error === 'object'
-        ? (data.error as { message?: unknown }).message
-        : data.error
-    return firstNonEmptyString(data.message, nestedError)
+    const error = data.error
+    if (error && typeof error === 'object') {
+      const nested = error as { type?: unknown; message?: unknown }
+      return {
+        type: typeof nested.type === 'string' ? nested.type : undefined,
+        message: firstNonEmptyString(nested.message, data.message),
+      }
+    }
+    return {
+      message: firstNonEmptyString(data.message, typeof error === 'string' ? error : undefined),
+    }
   } catch {
-    return body.trim() || undefined
+    return { message: body.trim() || undefined }
   }
+}
+
+/** 上游的错误分类不能只看状态码：实测（2026-09-10）「模型不存在」返回 401 ModelError，
+ *  「Key 无效」返回 401 AuthError，「Zen 余额不足」也是 401 —— 三者状态码相同。
+ *  分类规则统一在 adapter.ts 的 describeUpstreamError（所有适配器共用一份判定顺序）。 */
+
+/** 把 fetch 层失败原因附到提示后。undici 常把真实原因放在 cause 里，而 Next.js 日志只记
+ *  状态码、不记堆栈 —— 实测 2026-09-10 有一次 10.6s 后 503（上游瞬时断连），只靠日志无法定位。 */
+function describeFetchFailure(error: unknown): string {
+  if (!(error instanceof Error)) return ''
+  const cause = error.cause
+  const causeText =
+    cause instanceof Error ? cause.message : typeof cause === 'string' ? cause : ''
+  const text = causeText || error.message
+  return text ? `（${text.slice(0, 120)}）` : ''
 }
 
 /** OpenCode Zen：按每个模型的明确端点映射构造与解析上游请求。 */
@@ -196,7 +182,8 @@ export class OpenCodeAdapter extends BaseAIAdapter {
 
   async chat(messages: ChatMessage[], options: ChatOptions = {}): Promise<string> {
     if (!this.apiKey || this.apiKey.startsWith('sk-your-key')) {
-      throw new AiError('OpenCode Zen 尚未配置 API Key，请到 https://opencode.ai/auth 获取后填写')
+      const label = this.provider === 'opencode-go' ? 'OpenCode Go' : 'OpenCode Zen'
+      throw new AiError(`${label} 尚未配置 API Key，请到 https://opencode.ai/auth 获取后填写`)
     }
 
     const endpointType = getEndpointType(this.model, this.provider)
@@ -254,17 +241,11 @@ export class OpenCodeAdapter extends BaseAIAdapter {
       })
 
       if (!res.ok) {
-        const upstreamMessage = getUpstreamErrorMessage((await res.text()).slice(0, 2_000))
-        if (/model is disabled/i.test(upstreamMessage ?? '')) {
-          throw new AiError(`模型 ${this.model} 已被禁用，请更换其他模型`, res.status)
-        }
-        if (res.status === 401 || res.status === 403) {
-          throw new AiError('API Key 无效，请检查后重试', res.status)
-        }
-        throw new AiError(
-          `OpenCode 接口返回错误（${res.status}）：${upstreamMessage ?? '未提供错误信息'}`,
-          res.status,
-        )
+        const upstreamError = getUpstreamError((await res.text()).slice(0, 2_000))
+        throw describeUpstreamError(PROVIDER_LABELS[this.provider], res.status, this.model, {
+          type: upstreamError.type,
+          reason: upstreamError.message ?? '',
+        })
       }
 
       const data: unknown = await res.json()
@@ -295,7 +276,10 @@ export class OpenCodeAdapter extends BaseAIAdapter {
       if (error instanceof SyntaxError) {
         throw new AiError('OpenCode 返回了无法解析的响应')
       }
-      throw new AiError(`无法连接到 ${this.baseUrl}，请检查网络`, 503)
+      throw new AiError(
+        `无法连接到 ${this.baseUrl}${describeFetchFailure(error)}，请检查网络后重试`,
+        503,
+      )
     } finally {
       clearTimeout(timeout)
     }

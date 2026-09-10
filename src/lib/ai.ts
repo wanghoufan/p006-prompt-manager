@@ -1,6 +1,6 @@
 import { createAIAdapter } from '@/lib/ai/factory'
 import { AiError } from '@/lib/ai/adapter'
-import type { AIConfig, AIProvider, ChatMessage, ChatOptions } from '@/lib/ai/types'
+import { AI_PROVIDERS, type AIConfig, type AIProvider, type ChatMessage, type ChatOptions } from '@/lib/ai/types'
 import { DEFAULT_THINKING_PROMPT, META_PROMPT } from '@/lib/prompts'
 import { normalizeTags } from '@/lib/cards'
 import { getState } from '@/lib/serverStore'
@@ -10,18 +10,32 @@ export { AiError } from '@/lib/ai/adapter'
 
 export type BodyAlignment = 'left' | 'center' | 'right'
 
-const AI_PROVIDERS = [
-  'deepseek',
-  'zhipu',
-  'tencent',
-  'doubao',
-  'kimi',
-  'google',
-  'openai',
-  'openrouter',
-  'opencode',
-  'opencode-go',
-] as const
+const AI_PROVIDER_NAMES = AI_PROVIDERS as readonly string[]
+
+/** BUG-8：`.env` 里的值只服务于「它自己声明的那家厂商」（`AI_PROVIDER` 指到谁就服务谁）。
+ *  当用户在设置页显式选了别的厂商时，env 里的 `AI_MODEL` / `AI_BASE_URL` / `AI_API_KEY`
+ *  都是为原厂商准备的，继续回退会把配置串味——最严重的一条是把 A 家的 Key 发到 B 家的端点
+ *  （实测 2026-09-10：生产 Key 属 OpenCode，设置页切到 DeepSeek 官方且 Key 留空后，
+ *  这把 Key 被发往 api.deepseek.com，拿到 401）。
+ *  此时正确行为是让适配器报「尚未配置 API Key」并提示用户填写，而不是拿别家的 Key 去试。
+ *  `DEEPSEEK_API_KEY` 是「指名道姓」的变量，因此只按 provider 判断、与 AI_PROVIDER 无关，
+ *  保证只填了 DEEPSEEK_* 的老部署仍然可用。 */
+function resolveEnvFallbacks(provider: AIProvider, envProvider: string): {
+  model: string
+  baseUrl: string
+  apiKey: string
+} {
+  const sameOrigin = provider === envProvider
+  return {
+    model: sameOrigin ? (process.env.AI_MODEL ?? '').trim() : '',
+    baseUrl: sameOrigin ? (process.env.AI_BASE_URL ?? '').trim() : '',
+    apiKey: sameOrigin
+      ? (process.env.AI_API_KEY ?? '').trim()
+      : provider === 'deepseek'
+        ? (process.env.DEEPSEEK_API_KEY ?? '').trim()
+        : '',
+  }
+}
 
 /** Phase 3：从服务端共享设置解析 AI 配置，缺省回退环境变量（.env.local）。
  *  通用环境变量 AI_PROVIDER / AI_MODEL / AI_BASE_URL / AI_API_KEY 可指向任意厂商；
@@ -31,7 +45,7 @@ const AI_PROVIDERS = [
 export async function resolveAIConfig(override?: Partial<AIConfig>): Promise<AIConfig> {
   const s = await getState()
   const st = (s.settings && typeof s.settings === 'object' ? s.settings : {}) as Partial<Settings>
-  const providerNames = AI_PROVIDERS as readonly string[]
+  const providerNames = AI_PROVIDER_NAMES
   const chosen = override?.provider ?? st.aiProvider ?? ''
   const envProvider = (process.env.AI_PROVIDER ?? '').trim()
   const provider = providerNames.includes(chosen)
@@ -40,6 +54,7 @@ export async function resolveAIConfig(override?: Partial<AIConfig>): Promise<AIC
       ? (envProvider as AIProvider)
       : 'deepseek'
   const storedKey = typeof st.aiApiKey === 'string' && st.aiApiKey.trim() ? st.aiApiKey.trim() : ''
+  const env = resolveEnvFallbacks(provider, envProvider)
   return {
     provider,
     model:
@@ -47,19 +62,17 @@ export async function resolveAIConfig(override?: Partial<AIConfig>): Promise<AIC
         ? override.model.trim()
         : typeof st.aiModel === 'string' && st.aiModel.trim()
           ? st.aiModel.trim()
-          : (process.env.AI_MODEL ?? '').trim(),
+          : env.model,
     apiKey:
       typeof override?.apiKey === 'string' && override.apiKey.trim()
         ? override.apiKey.trim()
-        : storedKey ||
-          (process.env.AI_API_KEY ?? '').trim() ||
-          (process.env.DEEPSEEK_API_KEY ?? ''),
+        : storedKey || env.apiKey,
     baseUrl:
       typeof override?.baseUrl === 'string' && override.baseUrl.trim()
         ? override.baseUrl.trim()
         : typeof st.aiBaseUrl === 'string' && st.aiBaseUrl.trim()
           ? st.aiBaseUrl.trim()
-          : (process.env.AI_BASE_URL ?? '').trim(),
+          : env.baseUrl,
   }
 }
 

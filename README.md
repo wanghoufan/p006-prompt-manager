@@ -76,7 +76,7 @@
 ### 先决条件
 
 - **Node.js** ≥ 18（推荐 20+）
-- **AI API Key**（8 选 1：DeepSeek/智谱/腾讯/豆包/Kimi/Google/OpenAI/OpenRouter，当前默认 `opencode-go`：https://opencode.ai/zen/go/v1）
+- **AI API Key**（3 家选 1：DeepSeek 官方 / OpenRouter / OpenCode（Zen 免费版或 Go 付费版），当前默认 `opencode-go`：https://opencode.ai/zen/go/v1）
 - **Supabase 账号**（共享项目 `yacgnikzvutbpoqvokth`，publishable key 可公开；登录后云端为主数据源）
 
 ### 安装与运行
@@ -212,7 +212,7 @@ docker compose ps
 
 - **Next.js 16**（App Router）+ **React 19** + **TypeScript 5**
 - **Tailwind CSS v4** — 深色主题，响应式布局
-- **通用 AI 适配** — `AI_PROVIDER/AI_MODEL/AI_BASE_URL/AI_API_KEY`（8 厂商：DeepSeek/智谱/腾讯/豆包/Kimi/Google/OpenAI/OpenRouter，默认 `opencode-go`），`src/lib/ai/` 适配器 + Route Handler 代理，自动生成标题 / 标签 / 思维方式总结
+- **通用 AI 适配** — `AI_PROVIDER/AI_MODEL/AI_BASE_URL/AI_API_KEY`（3 家：DeepSeek 官方 / OpenRouter / OpenCode，默认 `opencode-go`），`src/lib/ai/` 适配器 + Route Handler 代理，自动生成标题 / 标签 / 思维方式总结
 - **云端主存储** — Supabase `prompt_manager` Schema（6 表 + RLS 24 策略 + Realtime 5 表，记录级 `revision` 含 `tags.revision` 修复，`owner_user_id` 归属），已获放行（Migration 7/7）；`/api/sync` + `data/store.json` + SSE 仅作未登录兼容兜底（退场草稿已于 2026-09-04 取消、长期保留）
 - **认证** — Supabase Auth（Magic Link + Google OAuth PKCE，`http://192.168.31.60:3100` 白名单）
 - **MCP** — `@modelcontextprotocol/sdk`（stdio，v0.2.0 直连 Supabase `prompt_manager.activate_prompt` RPC，能力令牌 SHA-256，`SECURITY DEFINER` 已裁定接受）
@@ -242,7 +242,7 @@ src/
 │   ├── TagPanel.tsx / SortBar.tsx / CardItem.tsx / TopBar.tsx / SettingsModal.tsx
 │   └── ...
 └── lib/
-    ├── ai/                                  # 通用 AI 适配器（types/adapter/factory + 8 厂商）
+    ├── ai/                                  # 通用 AI 适配器（types/adapter/factory + 3 家服务商）
     ├── supabase/
     │   ├── config.ts / browser.ts           # PROMPT_MANAGER_SCHEMA + 浏览器客户端
     │   ├── promptRepository.ts              # 云端快照/Realtime/revision 写入/标签关系增量/版本追加
@@ -263,11 +263,11 @@ Dockerfile / compose.yaml / docker/env.template  # Docker 自托管模板（stan
 
 | 变量 | 必填 | 说明 |
 |---|---|---|
-| `AI_PROVIDER` | 否 | AI 厂商（deepseek/zhipu/tencent/doubao/kimi/google/openai/openrouter/opencode-go，默认 `deepseek`） |
-| `AI_MODEL` | 否 | 模型名（例 `deepseek-v4-flash` / `gpt-4o`），默认随厂商自动选择 |
+| `AI_PROVIDER` | 否 | AI 厂商（4 个取值：`deepseek` / `openrouter` / `opencode` / `opencode-go`，默认 `deepseek`） |
+| `AI_MODEL` | 否 | 模型名（例 `deepseek-v4-flash` / `glm-5.3-flash`），默认随厂商自动选择 |
 | `AI_BASE_URL` | 否 | 自定义 Base URL（留空用厂商默认） |
-| `AI_API_KEY` | 是（UI 或 env 二选一） | 厂商 API Key（`Settings` 中填入即存 localStorage，或填于 `.env.local` 服务端） |
-| `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL` / `DEEPSEEK_BASE_URL` | 兼容 | 旧 DeepSeek 专用变量，`AI_*` 未填时回退 |
+| `AI_API_KEY` | 是（UI 或 env 二选一） | 厂商 API Key（设置页填入即随设置持久化并云端同步，离线兜底存 localStorage；或填于 `.env.local` 服务端）。**env 里的 Key 只会回退给与 `AI_PROVIDER` 同源的厂商**，避免把 A 家的密钥发到 B 家端点 |
+| `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL` / `DEEPSEEK_BASE_URL` | 兼容 | 旧 DeepSeek 专用变量，`AI_*` 未填时回退（仅 `AI_PROVIDER=deepseek` 时采用） |
 | `NEXT_PUBLIC_SUPABASE_URL` | 云端同步必填 | Supabase 项目 URL（`https://yacgnikzvutbpoqvokth.supabase.co`，可公开） |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | 云端同步必填 | Supabase publishable key（`sb_publishable_…`，可公开，绝不能使用 `sb_secret_…`/service_role） |
 | `NEXT_PUBLIC_APP_URL` | Docker 部署必填 | 统一访问地址 `http://192.168.31.60:3100`（白名单精确地址，勿用 localhost/.local） |
