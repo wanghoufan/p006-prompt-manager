@@ -1738,7 +1738,7 @@ Git 现状（重要）：
 - 沟通口径：用户是编程小白 —— 讲人话、给结论；每次代码改动附预览链接；commit/push 逐次授权。
 ```
 
-### 16.22.1 增量：洁癖收尾第二轮 + 待推送清单（2026-09-10 16:45）
+### 16.22.1 增量：洁癖收尾第二轮 + 推送清单（2026-09-10 16:45，已于 17:05 推送）
 
 > 接续者先读本节，再读 §16.22 §1–§3（**现状事实不变**，本节只覆盖「遗留物裁定的后续处置」与「最新 Git 状态」）。
 
@@ -1765,11 +1765,12 @@ Git 现状（重要）：
 | ③ `docs` | 本轮洁癖收尾：`docs/DEV_EXPERIENCE.md` + 3 份根级规范 + §0 导航 + 本节 |
 
 > 用户同意合并为 1–2 笔亦可；**核心纪律 = 不夹带 `coordination/` 与无关遗留文件**。
+> ✅ 实际提交为 2 笔（`86ccce8` chore + `aa6f7ed` docs），已于 2026-09-10 17:05 推送至 origin/master，工作区干净。
 
 #### 16.22.1 附：更新后的一键复制提示词（**替代 §16.22 §4**）
 
 ```text
-【恢复 Prompt Manager｜现状运行期 + AI 服务商已收敛为 3 家（待推送收尾）】
+【恢复 Prompt Manager｜现状运行期 + AI 服务商已收敛为 3 家（收尾已推送）】
 
 项目目录：
 /Users/zzymima0000/Developer/coding/1.Active/ing丨0813提示词管理器 mac gpt桌面 v1.0
@@ -1797,15 +1798,14 @@ Git 现状（重要）：
 - 云端为权威数据源（Supabase prompt_manager Schema，Migration Remote 7/7）。
 
 Git 现状（重要）：
-- 已 push：1b569a5（AI 服务商收敛 + D2 + BUG-8 + 回环水合）。
-- 待提交（洁癖收尾，纯文档 + 忽略规则，不触发部署）：见 HANDOFF §16.22.1 的「待推送清单」。
-  其中 `备份本文件夹.command` 为「解除跟踪」而非删除，磁盘文件必须保留。
+- 已 push master（origin/master = aa6f7ed）：1b569a5（AI 服务商收敛 + D2 + BUG-8 + 回环水合，已部署生产）+ 86ccce8（chore：coordination/ 忽略、备份脚本解除跟踪、docs/review 归档）+ aa6f7ed（docs：HANDOFF 现役入口唯一化、AGENTS 归属表、根级规范打标、DEV_EXPERIENCE 去重）。工作区干净。
+- `备份本文件夹.command` 为「解除跟踪」而非删除，磁盘文件必须保留。
 - 提交范围纪律：只暂存与本次改动相关的文件，不要夹带 coordination/ 或无关遗留文件。
 
 下一步（均需用户启动）：
-1. 用户说「现在推送」时：按 §16.22.1「待推送清单」提交并 push master。
-2. 处置 OpenCode Zen 条目（用户二选一）：充值使其可用，或删除该 provider（三处清单同步 + 文档 + 一轮上线）。
-3. 可选修正：docs/roles/builder.md 里过期的 `curl http://localhost:3100`（3100 已是生产端口）。
+1. 处置 OpenCode Zen 条目（用户二选一）：充值使其可用，或删除该 provider（三处清单同步 + 文档 + 一轮上线）。
+2. 可选修正：docs/roles/builder.md 里过期的 `curl http://localhost:3100`（3100 已是生产端口）。
+3. 任何新改动走标准动作：改动 → 只暂存相关文件 → commit → 用户说「现在推送」→ push master → 部署副本 `bash scripts/deploy.sh`（记得补 Docker PATH）。
 
 硬性禁区：
 - 未经明确授权不 commit / push；不创建、删除、迁移、覆盖部署副本 / 容器 / DockerData / DockerBackups / Named Volume。
