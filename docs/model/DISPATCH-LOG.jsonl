@@ -2,3 +2,5 @@
 {"date":"2026-09-13","model":"deepseek-v4.1-flash","note":"reviewer独立复核PASS，4个P2/P3不阻拦","result":"PASS","role":"code-reviewer","runtime":"本窗口subagent","task":"TASK-P0-prompt-tags-fk-2026-09-13","used":"主"}
 {"date":"2026-09-13","model":"deepseek-v4.1-flash","note":"qa静态重跑tsc0+eslint0+文案一致，真机待部署后补","result":"PASS","role":"qa","runtime":"codebuddy","task":"TASK-P0-prompt-tags-fk-2026-09-13","used":"主"}
 {"date":"2026-09-13","model":"deepseek-v4.1-flash","note":"supervisor终检FAIL：缺基线账本+缺真机回归，不收工","result":"FAIL","role":"supervisor","runtime":"codebuddy","task":"TASK-P0-prompt-tags-fk-2026-09-13","used":"主"}
+{"date":"2026-09-13","model":"deepseek-v4.1-flash","note":"push 989e321+部署副本deploy.sh成功，HTTP200","result":"PASS","role":"task-manager","runtime":"本窗口subagent","task":"TASK-P0-prompt-tags-fk-2026-09-13","used":"主"}
+{"date":"2026-09-13","model":"deepseek-v4.1-flash","note":"QA真机PASS：FK裸错0出现，重试收敛，测试数据已清","result":"PASS","role":"qa","runtime":"本窗口subagent","task":"TASK-P0-prompt-tags-fk-2026-09-13","used":"主"}

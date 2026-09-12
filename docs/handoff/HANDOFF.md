@@ -1834,3 +1834,10 @@ Git 现状（重要）：
 - 修复（未push）：`promptRepository.ts`取uid+预检cards/tags父行+upsert显式`owner_user_id`；`page.tsx`父行缺失时删卡片快照+标脏下轮先补父行
 - 执行链：builder（本窗口subagent，通道偏离）→reviewer PASS→qa codebuddy静态PASS（tsc0/eslint0）→supervisor codebuddy FAIL（缺基线账本+缺真机，不收工）；账本已补`TASK-MODEL-LOG/DISPATCH-LOG`首行（_example已删）
 - 待办：push+部署副本deploy.sh+真机回归（新卡+新标签立即关联）后收工
+
+## 16.24 P0标签FK真机闭环（2026-09-13；当前唯一有效入口 —— §16.23降级为历史）
+
+- PROJECT_PHASE: DEVELOP ｜ DEV_BASELINE: STATUS-QUO-2026-09-10 ｜ CHANGE_REQUEST: A（同§16.23）
+- 部署：`989e321`已push+部署副本`deploy.sh`成功（`1b569a5→989e321`，镜像`328a58fe→f6594aa1`，HTTP 200）
+- 真机（生产Chrome，Orca Vision+Computer Use）：新建卡+新标签，旧FK裸错0出现，新友好提示出现1次后重试收敛；`fkfix2`计数0→1，删卡级联回0；测试卡+4测试标签已清，71张归位。BUG-14记`docs/qa/BUGS.md`为FIXED，截图`scratch/qa-real-device/`4张
+- 执行链补记：qa codebuddy静态PASS→supervisor codebuddy FAIL（补基线账本后）→部署→QA真机PASS→收工；P0闭环

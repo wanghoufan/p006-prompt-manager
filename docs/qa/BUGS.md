@@ -1133,3 +1133,10 @@ P0-H 当前实现 **PASS**，无新增 Bug；建议进入后续客户端真实 M
 - **端口 3200 被 Docker 容器占用**：首次实验误用 3200，`curl` 拿到的 200 其实是 Docker 回的，差点把「已退出的实例」当成已就绪。**选端口前必须先 `lsof`**；本项目周边已确认被占用的有 3100（prompt-manager 生产）、3200、8080、8081、1200。
 
 **脚本与原始输出**：`scratch/qa-ai-20260910/`（`matrix.sh` / `matrix2.sh` / `verify-simplify.sh` 及各自 `*-result*.txt`；另存本次 `bug8-verify-result.txt`、`bug8-d-result.txt`）。
+
+## BUG-14 prompt_tags外键裸错（2026-09-13，真机PASS已闭环）
+
+- 症状：给卡片加标签时吐司`insert or update on table "prompt_tags" violates foreign key constraint "prompt_tags_prompt_id_owner_user_id_fkey"`。
+- 根因：`prompt_tags`两条FK均为复合`(id,owner_user_id)`；旧写入upsert只带`{prompt_id,tag_id}`且卡/标签父行与关联分属两个effect无序，父行未到即FK挂。
+- 修复（`989e321`已上线）：`promptRepository.ts`取uid+预检父行+显式`owner_user_id`；缺父行回可读“稍后重试”，调用方标脏卡片下轮先补父行。
+- 真机（生产`http://192.168.31.60:3100`，Chrome，Vision+Computer Use）：新建卡+新标签，旧FK裸错0出现，新友好提示出现1次后重试收敛，`fkfix2`计数0→1，删卡级联回0；测试卡+4个测试标签已清，71张归位。截图`scratch/qa-real-device/qa-{before,tag-added,after-reload,final-clean}.png`。状态：FIXED。
