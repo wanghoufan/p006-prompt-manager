@@ -178,6 +178,8 @@ export default function Home() {
   // P2-11 批量多选：选中卡片 id 集合（demo 视图不启用）
   const [bulkIds, setBulkIds] = useState<ReadonlySet<string>>(new Set())
   const undoRef = useRef<(() => void) | null>(null)
+  // 标签关联失败去重：同一错误重试期间静默（仍 retryCloudSync），仅在 message 变化时再吐司。
+  const lastRelationErrorRef = useRef<string | null>(null)
 
   const notify = useCallback((msg: string, detail?: string[]) => {
     undoRef.current = null
@@ -637,18 +639,32 @@ export default function Home() {
         const previousIds = previousByCard.get(cardId) ?? []
         const nextIds = nextByCard.get(cardId) ?? []
         if (JSON.stringify(previousIds) === JSON.stringify(nextIds)) continue
-        const result = await syncPromptCardTags(cardId, previousIds, nextIds)
+        const card = cardsRef.current.find((item) => item.id === cardId)
+        if (!card) {
+          // 仅纯删除残留（nextIds 为空，卡片已删、只剩待清关联）可跳过；
+          // 仍有待写关联却找不到卡片属异常，按失败处理且不推进基线，避免静默永久分叉。
+          if (nextIds.length === 0) continue
+          const missingCardMessage = '云端标签关联保存失败：目标卡片不存在'
+          if (lastRelationErrorRef.current !== missingCardMessage) {
+            lastRelationErrorRef.current = missingCardMessage
+            notify(missingCardMessage)
+          }
+          retryCloudSync()
+          return
+        }
+        const result = await syncPromptCardTags(card, previousIds, nextIds, tags)
         if (!result.ok) {
-          notify(`云端标签关联保存失败：${result.message}`)
-          if (result.message.includes('尚未同步到云端')) {
-            // 父行缺失：使该卡片快照失效并标脏，下轮卡片 effect（声明在前、串行队列先执行）先补推父行。
-            cloudCardsRef.current?.delete(cardId)
-            markCardsCloudDirty()
+          // 父行补推已在 syncPromptCardTags 内同 job 完成，此处只负责提示 + 重试。
+          const relationMessage = `云端标签关联保存失败：${result.message}`
+          if (lastRelationErrorRef.current !== relationMessage) {
+            lastRelationErrorRef.current = relationMessage
+            notify(relationMessage)
           }
           retryCloudSync()
           return
         }
       }
+      lastRelationErrorRef.current = null
       for (const tagId of previousTags.keys()) {
         if (nextTags.has(tagId)) continue
         const result = await deletePromptTag(tagId)
@@ -661,7 +677,7 @@ export default function Home() {
       cloudTagsRef.current = nextTags
       cloudPromptTagsRef.current = nextRelations
     })
-  }, [tags, promptTags, cloudMode, cloudRetryTick, enqueueCloudWrite, hydrated, markCardsCloudDirty, notify, retryCloudSync])
+  }, [tags, promptTags, cloudMode, cloudRetryTick, enqueueCloudWrite, hydrated, notify, retryCloudSync])
 
   useEffect(() => {
     if (hydrated) savePromptTags(promptTags)

@@ -1841,3 +1841,10 @@ Git 现状（重要）：
 - 部署：`989e321`已push+部署副本`deploy.sh`成功（`1b569a5→989e321`，镜像`328a58fe→f6594aa1`，HTTP 200）
 - 真机（生产Chrome，Orca Vision+Computer Use）：新建卡+新标签，旧FK裸错0出现，新友好提示出现1次后重试收敛；`fkfix2`计数0→1，删卡级联回0；测试卡+4测试标签已清，71张归位。BUG-14记`docs/qa/BUGS.md`为FIXED，截图`scratch/qa-real-device/`4张
 - 执行链补记：qa codebuddy静态PASS→supervisor codebuddy FAIL（补基线账本后）→部署→QA真机PASS→收工；P0闭环
+
+## 16.25 吐司刷屏返修（2026-09-13；当前唯一有效入口 —— §16.24降级为历史）
+
+- PROJECT_PHASE: DEVELOP ｜ DEV_BASELINE: STATUS-QUO-2026-09-10 ｜ CHANGE_REQUEST: A
+- 起因：§16.23修复把FK裸错换成可读错误，但每2秒notify＋重试致吐司常驻刷屏，且跨effect重试时序脆弱；修的过程中还在建卡，顺序错误，已向用户认错并清掉测试数据（71张归位，吐司0）
+- 修复（待push）：syncPromptCardTags改签名同job内补推卡/标签父行（失败回真实错误＋短id）；page.tsx吐司按message去重（仅变化才弹）；找不到卡且仍有待写关联按失败不推进基线
+- 执行链：builder codebuddy→reviewer codebuddy PASS（2中：#1静默分叉已返修，#2批量超时已知局限）→qa codebuddy静态PASS；待push+部署+真机（只看吐司＋单次标签往返，不建卡）

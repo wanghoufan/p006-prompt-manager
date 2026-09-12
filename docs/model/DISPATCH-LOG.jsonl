@@ -4,3 +4,6 @@
 {"date":"2026-09-13","model":"deepseek-v4.1-flash","note":"supervisor终检FAIL：缺基线账本+缺真机回归，不收工","result":"FAIL","role":"supervisor","runtime":"codebuddy","task":"TASK-P0-prompt-tags-fk-2026-09-13","used":"主"}
 {"date":"2026-09-13","model":"deepseek-v4.1-flash","note":"push 989e321+部署副本deploy.sh成功，HTTP200","result":"PASS","role":"task-manager","runtime":"本窗口subagent","task":"TASK-P0-prompt-tags-fk-2026-09-13","used":"主"}
 {"date":"2026-09-13","model":"deepseek-v4.1-flash","note":"QA真机PASS：FK裸错0出现，重试收敛，测试数据已清","result":"PASS","role":"qa","runtime":"本窗口subagent","task":"TASK-P0-prompt-tags-fk-2026-09-13","used":"主"}
+{"date":"2026-09-13","model":"deepseek-v4.1-flash","note":"builder同job补推父行+吐司去重，reviewer PASS，qa静态PASS","result":"PASS","role":"builder","runtime":"codebuddy","task":"TASK-P0-toast-spam-2026-09-13","used":"主"}
+{"date":"2026-09-13","model":"deepseek-v4.1-flash","note":"reviewer独立复核PASS（2中4低不阻拦，#1已返修）","result":"PASS","role":"code-reviewer","runtime":"codebuddy","task":"TASK-P0-toast-spam-2026-09-13","used":"主"}
+{"date":"2026-09-13","model":"deepseek-v4.1-flash","note":"qa静态门禁PASS tsc0+eslint0","result":"PASS","role":"qa","runtime":"codebuddy","task":"TASK-P0-toast-spam-2026-09-13","used":"主"}

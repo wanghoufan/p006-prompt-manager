@@ -349,9 +349,10 @@ export async function deletePromptTag(tagId: string): Promise<PromptMutationResu
  * 关联先整体删除而造成数据丢失。`prompt_tags` 的复合主键会继续兜底去重。
  */
 export async function syncPromptCardTags(
-  cardId: string,
+  card: Card,
   previousTagIds: string[],
   nextTagIds: string[],
+  tags: Tag[],
 ): Promise<PromptMutationResult> {
   const supabase = getSupabaseBrowserClient()
   if (!supabase) return unavailable()
@@ -361,14 +362,16 @@ export async function syncPromptCardTags(
   if (authError || !userId) return unavailable()
   const database = supabase.schema(PROMPT_MANAGER_SCHEMA)
   const table = database.from('prompt_tags')
+  const cardId = card.id
+  const shortId = cardId.slice(0, 8)
   const previous = new Set(previousTagIds)
   const next = new Set(nextTagIds)
   const additions = [...next].filter((tagId) => !previous.has(tagId))
   const removals = [...previous].filter((tagId) => !next.has(tagId))
 
   if (additions.length > 0) {
-    // 父行存在性预检：卡片/标签父行尚未同步到云端时返回可读错误，
-    // 调用方 retryCloudSync 下轮重试，而不是抛出 FK 裸错。
+    // 父行存在性预检：父行缺失时在同一次写入内直接补推父行（缺父行才是根因），
+    // 不再依赖调用方跨 effect 重试；补推失败则回传补推的真实错误。
     const { data: parentCard, error: cardError } = await database
       .from('cards')
       .select('id')
@@ -376,7 +379,10 @@ export async function syncPromptCardTags(
       .maybeSingle()
     if (cardError) return failure(cardError)
     if (!parentCard) {
-      return { ok: false, kind: 'error', message: '卡片尚未同步到云端，标签关联稍后重试' }
+      const backfilledCard = await savePromptCard(card)
+      if (!backfilledCard.ok) {
+        return { ok: false, kind: 'error', message: `卡片父行缺失且补推失败：${backfilledCard.message} [${shortId}]` }
+      }
     }
     const { data: parentTags, error: tagsError } = await database
       .from('tags')
@@ -384,8 +390,20 @@ export async function syncPromptCardTags(
       .in('id', additions)
     if (tagsError) return failure(tagsError)
     const foundTagIds = new Set(((parentTags ?? []) as { id: string }[]).map((row) => row.id))
-    if (additions.some((tagId) => !foundTagIds.has(tagId))) {
-      return { ok: false, kind: 'error', message: '标签尚未同步到云端，标签关联稍后重试' }
+    const missingTagIds = additions.filter((tagId) => !foundTagIds.has(tagId))
+    if (missingTagIds.length > 0) {
+      // 同 job 内补推缺失标签：本地有该标签才补，补推失败回传真实错误（含导致重试的根因）。
+      const tagsById = new Map(tags.map((tag) => [tag.id, tag]))
+      for (const tagId of missingTagIds) {
+        const tag = tagsById.get(tagId)
+        if (!tag) {
+          return { ok: false, kind: 'error', message: `标签父行缺失且本地无该标签可补推：${tagId} [${shortId}]` }
+        }
+        const backfilledTag = await savePromptTag(tag)
+        if (!backfilledTag.ok) {
+          return { ok: false, kind: 'error', message: `标签父行缺失且补推失败：${backfilledTag.message} [${shortId}]` }
+        }
+      }
     }
     const { error } = await table.upsert(
       additions.map((tag_id) => ({ prompt_id: cardId, tag_id, owner_user_id: userId })),

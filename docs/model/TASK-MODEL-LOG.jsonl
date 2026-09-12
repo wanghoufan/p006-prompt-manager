@@ -1,1 +1,2 @@
 {"cost_cny":null,"date":"2026-09-13","escalated":"NO","escalation_reason":"supervisor曾打回1次（缺基线账本+缺真机），已补齐闭环","model":"deepseek-v4.1-flash","project":"ing丨0813提示词管理器 mac gpt桌面 v1.0","result":"PASS","rework":1,"role":"builder","task":"TASK-P0-prompt-tags-fk-2026-09-13","tokens":null}
+{"cost_cny":null,"date":"2026-09-13","escalated":"NO","escalation_reason":null,"model":"deepseek-v4.1-flash","project":"ing丨0813提示词管理器 mac gpt桌面 v1.0","result":"PASS","rework":0,"role":"builder","task":"TASK-P0-toast-spam-2026-09-13","tokens":null}
