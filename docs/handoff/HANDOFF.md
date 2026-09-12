@@ -1825,3 +1825,12 @@ Git 现状（重要）：
 - HANDOFF.md 是**只追加**日志：新增收束请追加 `## 16.NN` 并只在标题标「当前唯一有效入口」，同时把上一节的现役标记降级 —— 不要同时留多个「当前入口」。
 - 沟通口径：用户是编程小白 —— 讲人话、给结论；每次代码改动附预览链接；commit/push 逐次授权。
 ```
+
+## 16.23 P0标签FK修复（2026-09-13；当前唯一有效入口 —— §16.22/16.22.1降级为历史）
+
+- PROJECT_PHASE: DEVELOP ｜ PLAN_GATE: N/A（被动P0修，非PLAN链）｜ DEV_BASELINE: STATUS-QUO-2026-09-10（`1b569a5` AI收敛已上线；无PRODUCT_PLAN，如实记录）｜ CHANGE_REQUEST: A（开发内小改，留DEVELOP不召Planner）
+- 症状：`云端标签关联保存失败：prompt_tags violates FK "prompt_tags_prompt_id_owner_user_id_fkey"`（`page.tsx:642`，写入`promptRepository.ts:351`）
+- 根因：`prompt_tags`两条FK均为复合`(id,owner_user_id)`；旧写入upsert只带`{prompt_id,tag_id}`依赖default，且卡片/标签父行与关联分属两个effect无序，父行未到即FK挂
+- 修复（未push）：`promptRepository.ts`取uid+预检cards/tags父行+upsert显式`owner_user_id`；`page.tsx`父行缺失时删卡片快照+标脏下轮先补父行
+- 执行链：builder（本窗口subagent，通道偏离）→reviewer PASS→qa codebuddy静态PASS（tsc0/eslint0）→supervisor codebuddy FAIL（缺基线账本+缺真机，不收工）；账本已补`TASK-MODEL-LOG/DISPATCH-LOG`首行（_example已删）
+- 待办：push+部署副本deploy.sh+真机回归（新卡+新标签立即关联）后收工

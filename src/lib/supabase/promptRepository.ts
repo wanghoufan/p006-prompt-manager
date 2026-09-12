@@ -355,15 +355,40 @@ export async function syncPromptCardTags(
 ): Promise<PromptMutationResult> {
   const supabase = getSupabaseBrowserClient()
   if (!supabase) return unavailable()
-  const table = supabase.schema(PROMPT_MANAGER_SCHEMA).from('prompt_tags')
+  // 显式归属：插入时带上当前 uid，不依赖服务端 default，避免失效会话/跨用户时 FK 对不上。
+  const { data: auth, error: authError } = await supabase.auth.getUser()
+  const userId = auth.user?.id ?? null
+  if (authError || !userId) return unavailable()
+  const database = supabase.schema(PROMPT_MANAGER_SCHEMA)
+  const table = database.from('prompt_tags')
   const previous = new Set(previousTagIds)
   const next = new Set(nextTagIds)
   const additions = [...next].filter((tagId) => !previous.has(tagId))
   const removals = [...previous].filter((tagId) => !next.has(tagId))
 
   if (additions.length > 0) {
+    // 父行存在性预检：卡片/标签父行尚未同步到云端时返回可读错误，
+    // 调用方 retryCloudSync 下轮重试，而不是抛出 FK 裸错。
+    const { data: parentCard, error: cardError } = await database
+      .from('cards')
+      .select('id')
+      .eq('id', cardId)
+      .maybeSingle()
+    if (cardError) return failure(cardError)
+    if (!parentCard) {
+      return { ok: false, kind: 'error', message: '卡片尚未同步到云端，标签关联稍后重试' }
+    }
+    const { data: parentTags, error: tagsError } = await database
+      .from('tags')
+      .select('id')
+      .in('id', additions)
+    if (tagsError) return failure(tagsError)
+    const foundTagIds = new Set(((parentTags ?? []) as { id: string }[]).map((row) => row.id))
+    if (additions.some((tagId) => !foundTagIds.has(tagId))) {
+      return { ok: false, kind: 'error', message: '标签尚未同步到云端，标签关联稍后重试' }
+    }
     const { error } = await table.upsert(
-      additions.map((tag_id) => ({ prompt_id: cardId, tag_id })),
+      additions.map((tag_id) => ({ prompt_id: cardId, tag_id, owner_user_id: userId })),
       { onConflict: 'prompt_id,tag_id', ignoreDuplicates: true },
     )
     if (error) return failure(error)

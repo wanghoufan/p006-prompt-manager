@@ -640,6 +640,11 @@ export default function Home() {
         const result = await syncPromptCardTags(cardId, previousIds, nextIds)
         if (!result.ok) {
           notify(`云端标签关联保存失败：${result.message}`)
+          if (result.message.includes('尚未同步到云端')) {
+            // 父行缺失：使该卡片快照失效并标脏，下轮卡片 effect（声明在前、串行队列先执行）先补推父行。
+            cloudCardsRef.current?.delete(cardId)
+            markCardsCloudDirty()
+          }
           retryCloudSync()
           return
         }
@@ -656,7 +661,7 @@ export default function Home() {
       cloudTagsRef.current = nextTags
       cloudPromptTagsRef.current = nextRelations
     })
-  }, [tags, promptTags, cloudMode, cloudRetryTick, enqueueCloudWrite, hydrated, notify, retryCloudSync])
+  }, [tags, promptTags, cloudMode, cloudRetryTick, enqueueCloudWrite, hydrated, markCardsCloudDirty, notify, retryCloudSync])
 
   useEffect(() => {
     if (hydrated) savePromptTags(promptTags)
