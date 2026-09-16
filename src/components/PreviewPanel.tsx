@@ -35,6 +35,8 @@ interface PreviewPanelProps {
   /** P2-3 移动端底部抽屉：收起抽屉时回调（桌面侧边栏不渲染该按钮） */
   onClose?: () => void
   notify: (msg: string) => void
+  /** 卡片标签的展示串（完整路径 父/子）；不传则回退显示 card.tags */
+  tagLabels?: string[]
 }
 
 const WIDTH_KEY = 'pm:preview-width'
@@ -78,6 +80,7 @@ export function PreviewPanel({
   onDelete,
   onClose,
   notify,
+  tagLabels,
 }: PreviewPanelProps) {
   const [draft, setDraft] = useState<CardDraft>(() =>
     card ? cardDraftFrom(card) : { title: '', tagsText: '', body: '', rating: 0, code: '', notes: '', sourceUrl: '' },
@@ -545,8 +548,8 @@ export function PreviewPanel({
             </span>
           </header>
           <div className="flex flex-wrap gap-1.5 border-b border-line px-3 py-1.5">
-            {card.tags.length > 0 ? (
-              card.tags.map((t) => (
+            {(tagLabels ?? card.tags).length > 0 ? (
+              (tagLabels ?? card.tags).map((t) => (
                 <span
                   key={t}
                   className="rounded-full border border-gold/25 bg-gold/5 px-2 py-0.5 text-[11px] text-gold-bright"

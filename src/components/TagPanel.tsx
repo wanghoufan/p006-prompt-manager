@@ -503,7 +503,7 @@ export function TagPanel({
       return
     }
     const targetInput = promptForName(
-      `将「${tagPath(tags, tag.id)}」合并到哪个标签？\n请输入完整路径（例如：开发 / 前端）；同名时必须输入完整路径。`,
+      `将「${tagPath(tags, tag.id)}」合并到哪个标签？\n请输入完整路径（例如：开发/前端）；同名时必须输入完整路径。`,
     )
     if (targetInput === null) return
     const trimmed = targetInput.trim()

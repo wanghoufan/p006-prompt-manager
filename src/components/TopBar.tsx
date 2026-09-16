@@ -14,6 +14,8 @@ interface TopBarProps {
   onExport: () => void
   onImportFile: (file: File) => void
   onOpenSettings: () => void
+  onOpenTrash: () => void
+  trashCount: number
 }
 
 export function TopBar({
@@ -26,6 +28,8 @@ export function TopBar({
   onExport,
   onImportFile,
   onOpenSettings,
+  onOpenTrash,
+  trashCount,
 }: TopBarProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const readOnly = view === 'demo'
@@ -77,6 +81,14 @@ export function TopBar({
           }}
         />
         <SupabaseAuthControl />
+        <button
+          type="button"
+          className="btn"
+          onClick={onOpenTrash}
+          title="回收站：恢复删除的卡片与标签"
+        >
+          回收站{trashCount > 0 ? `（${trashCount}）` : ''}
+        </button>
         <button type="button" className="btn" onClick={onOpenSettings}>
           设置
         </button>

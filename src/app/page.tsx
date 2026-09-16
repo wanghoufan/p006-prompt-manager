@@ -16,7 +16,9 @@ import { CardItem } from '@/components/CardItem'
 import { PreviewPanel } from '@/components/PreviewPanel'
 import { CardDetail } from '@/components/CardDetail'
 import { SettingsModal } from '@/components/SettingsModal'
+import { TrashModal } from '@/components/TrashModal'
 import { Toast } from '@/components/Toast'
+import { newTrashId, readTrash, writeTrash, type TrashEntry } from '@/lib/trash'
 import {
   createTag,
   renameTag,
@@ -31,6 +33,7 @@ import {
   isNameUnique,
   assertNoCycle,
   tagPath,
+  promptTagPathsOf,
   deriveTagsFromCards,
   syncCardsToPromptTags,
 } from '@/lib/tags'
@@ -147,6 +150,12 @@ export default function Home() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [detailId, setDetailId] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
+  // 回收站：本机持久化（pm:trash），删除进站、手动清空；恢复走正常保存链路重新上云。
+  const [trash, setTrash] = useState<TrashEntry[]>(() => readTrash())
+  const [showTrash, setShowTrash] = useState(false)
+  useEffect(() => {
+    writeTrash(trash)
+  }, [trash])
   const [toast, setToast] = useState<{ msg: string; detail?: string[] | null; withUndo?: boolean } | null>(null)
   const [serverOnline, setServerOnline] = useState<boolean | null>(null)
   const [cloudMode, setCloudMode] = useState(false)
@@ -717,6 +726,16 @@ export default function Home() {
   // AI 生成接口用的标签名列表（供补全候选 / 避免生成重复标签）
   const existingTags = useMemo(() => activeTags.map((t) => t.name), [activeTags])
 
+  // 卡片标签展示串：关联 id → 完整路径（父/子），同名不同父一眼区分；无关联时回退 card.tags 冗余名
+  const cardTagLabels = useMemo(() => {
+    const map = new Map<string, string[]>()
+    for (const card of cards) {
+      const paths = promptTagPathsOf(tags, promptTags, card.id)
+      map.set(card.id, paths.length > 0 ? paths : card.tags)
+    }
+    return map
+  }, [cards, tags, promptTags])
+
   // 无标签卡片数（未与任何标签建立关联的卡片）
   const untaggedCount = useMemo(() => {
     const linked = new Set(activePromptTags.map((rt) => rt.prompt_id))
@@ -1144,12 +1163,84 @@ export default function Home() {
     updateCard(id, (c) => ({ ...c, thinkingSummary: summary }))
   }
 
+  /** 回收站入站（本机快照；调用方继续走原删除流程硬删云端行） */
+  function pushTrash(entry: TrashEntry) {
+    setTrash((prev) => [entry, ...prev].slice(0, 100))
+  }
+
+  /** 从回收站恢复一条：仅补回缺失的 id，已存在的跳过（与 10s 撤销共存不翻倍） */
+  function handleRestoreTrash(entryId: string) {
+    if (isDemoView) {
+      notify('请先切回「我的仓库」再恢复')
+      return
+    }
+    const entry = trash.find((e) => e.id === entryId)
+    if (!entry) return
+    if (entry.kind === 'card') {
+      const haveCardIds = new Set(cards.map((c) => c.id))
+      const missingCards = entry.cards.filter((c) => !haveCardIds.has(c.id))
+      const havePairs = new Set(promptTags.map((rt) => `${rt.prompt_id}\u0000${rt.tag_id}`))
+      const missingRelations = entry.relations.filter(
+        (rt) => !havePairs.has(`${rt.prompt_id}\u0000${rt.tag_id}`),
+      )
+      if (missingCards.length === 0 && missingRelations.length === 0) {
+        notify('该内容已在仓库中，无需恢复')
+        return
+      }
+      markCardsCloudDirty()
+      const restoredCards = [...missingCards, ...cards]
+      const restoredRelations = [...promptTags, ...missingRelations]
+      setCards(syncCardsToPromptTags(restoredCards, tags, restoredRelations))
+      setPromptTags(restoredRelations)
+      notify(
+        missingCards.length > 0
+          ? `已恢复卡片「${missingCards[0].title}」等 ${missingCards.length} 张`
+          : '关联已恢复',
+      )
+    } else {
+      const haveTagIds = new Set(tags.map((t) => t.id))
+      const missingTags = entry.tags.filter((t) => !haveTagIds.has(t.id))
+      if (missingTags.length === 0) {
+        notify('这些标签已在仓库中，无需恢复')
+        return
+      }
+      // 父级若已不在（后删的）：挂回顶级，避免悬空
+      const knownIds = new Set([...haveTagIds, ...missingTags.map((t) => t.id)])
+      const fixedTags = missingTags.map((t) =>
+        t.parent_id !== null && !knownIds.has(t.parent_id) ? { ...t, parent_id: null } : t,
+      )
+      const havePairs = new Set(promptTags.map((rt) => `${rt.prompt_id}\u0000${rt.tag_id}`))
+      const restoringIds = new Set(fixedTags.map((t) => t.id))
+      const missingRelations = entry.relations.filter(
+        (rt) => restoringIds.has(rt.tag_id) && !havePairs.has(`${rt.prompt_id}\u0000${rt.tag_id}`),
+      )
+      applyTags([...tags, ...fixedTags], [...promptTags, ...missingRelations])
+      notify(
+        `已恢复标签「${fixedTags.map((t) => t.name).slice(0, 3).join('、')}${fixedTags.length > 3 ? `等 ${fixedTags.length} 个` : ''}」`,
+      )
+    }
+  }
+
+  function handleEmptyTrash() {
+    setTrash([])
+    notify('回收站已清空')
+  }
+
   // P0-4：删除入口统一（网格直删 / PreviewPanel / CardDetail 共用）；
   // settings.confirmDelete=true 时二次确认（默认），关闭后直接删
   function handleDeleteCard(id: string) {
     const card = cards.find((c) => c.id === id)
     if (!card) return
-    if (settings.confirmDelete && !window.confirm(`确定删除「${card.title}」？此操作不可撤销。`)) return
+    if (settings.confirmDelete && !window.confirm(`确定删除「${card.title}」？可在回收站恢复。`)) return
+    // 回收站：先留快照（卡片 + 其标签关联），再走原流程
+    pushTrash({
+      kind: 'card',
+      id: newTrashId(),
+      deletedAt: nowIso(),
+      title: card.title,
+      cards: [card],
+      relations: promptTags.filter((rt) => rt.prompt_id === id),
+    })
     // P2-5：缓存删除前快照，10s 内可撤销回退
     const snapshotCards = cards
     const snapshotPromptTags = promptTags
@@ -1279,9 +1370,19 @@ export default function Home() {
     const tag = tags.find((t) => t.id === id)
     if (!tag) return
     const snapshot = captureTagSnapshot()
+    // 回收站：先留快照（被删标签实体 + 被级联删掉的关联），子标签上提的不算删除不进站
+    const removedIds = mode === 'subtree' ? new Set([id, ...collectDescendantIds(tags, id)]) : new Set([id])
+    pushTrash({
+      kind: 'tag',
+      id: newTrashId(),
+      deletedAt: nowIso(),
+      title: mode === 'subtree' ? `${tagPath(tags, id)}（子树）` : tagPath(tags, id),
+      tags: tags.filter((t) => removedIds.has(t.id)),
+      relations: promptTags.filter((rt) => removedIds.has(rt.tag_id)),
+    })
     const { tags: nextTags, promptTags: nextPromptTags } = deleteTag(tags, promptTags, id, mode === 'subtree')
     applyTags(nextTags, nextPromptTags)
-    const removedFilterIds = mode === 'subtree' ? new Set([id, ...collectDescendantIds(tags, id)]) : new Set([id])
+    const removedFilterIds = removedIds
     setTagFilters((prev) => ({
       ...prev,
       any: prev.any.filter((filterId) => !removedFilterIds.has(filterId)),
@@ -1350,7 +1451,7 @@ export default function Home() {
     if (bulkIds.size === 0) return
     if (
       settings.confirmDelete &&
-      !window.confirm(`确定删除选中的 ${bulkIds.size} 张卡片？此操作不可撤销。`)
+      !window.confirm(`确定删除选中的 ${bulkIds.size} 张卡片？可在回收站恢复。`)
     ) {
       return
     }
@@ -1358,6 +1459,14 @@ export default function Home() {
     const snapshotPromptTags = promptTags
     const ids = bulkIds
     const count = ids.size
+    pushTrash({
+      kind: 'card',
+      id: newTrashId(),
+      deletedAt: nowIso(),
+      title: `${cards.find((c) => ids.has(c.id))?.title ?? '卡片'}等 ${count} 张`,
+      cards: cards.filter((c) => ids.has(c.id)),
+      relations: promptTags.filter((rt) => ids.has(rt.prompt_id)),
+    })
     markCardsCloudDirty()
     setCards((prev) => prev.filter((c) => !ids.has(c.id)))
     // P0-A 关联不悬空：批量删除卡片时一并清除其标签关联
@@ -1547,8 +1656,8 @@ export default function Home() {
   useEffect(() => {
     if (view === 'demo') return
     const onKey = (e: KeyboardEvent) => {
-      // 详情弹窗 / 设置弹窗打开时屏蔽全局评分快捷键，避免误触背景卡片评分
-      if (detailId || showSettings) return
+      // 详情弹窗 / 设置弹窗 / 回收站打开时屏蔽全局评分快捷键，避免误触背景卡片评分
+      if (detailId || showSettings || showTrash) return
       const target = e.target as HTMLElement | null
       if (
         target &&
@@ -1568,7 +1677,7 @@ export default function Home() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [view, detailCard, selectedId, cards, handleRate, detailId, showSettings])
+  }, [view, detailCard, selectedId, cards, handleRate, detailId, showSettings, showTrash])
 
   return (
     <div className="flex h-dvh flex-col">
@@ -1582,6 +1691,8 @@ export default function Home() {
         onExport={handleExport}
         onImportFile={handleImportFile}
         onOpenSettings={() => setShowSettings(true)}
+        onOpenTrash={() => setShowTrash(true)}
+        trashCount={trash.length}
       />
       <div className="flex min-h-0 flex-1">
         <TagPanel
@@ -1734,6 +1845,7 @@ export default function Home() {
                     key={card.id}
                     card={card}
                     query={debouncedQuery}
+                    tagLabels={cardTagLabels.get(card.id)}
                     selected={selectedId === card.id}
                     readonly={isDemoView}
                     onSelect={() => setSelectedId(card.id)}
@@ -1755,6 +1867,7 @@ export default function Home() {
             card={previewCard}
             readonly={isDemoView}
             existingTags={existingTags}
+            tagLabels={previewCard ? cardTagLabels.get(previewCard.id) : undefined}
             allCodes={allCodes}
             customThinkingPrompt={settings.thinkingSummaryPrompt}
             autoFormatBody={settings.autoFormatBody}
@@ -1781,6 +1894,7 @@ export default function Home() {
           card={detailCard}
           readonly={isDemoView}
           existingTags={existingTags}
+          tagLabels={cardTagLabels.get(detailCard.id)}
           allCodes={allCodes}
           customThinkingPrompt={settings.thinkingSummaryPrompt}
           bodyAlignment={settings.bodyAlignment}
@@ -1797,6 +1911,14 @@ export default function Home() {
           onSetSummary={handleSetSummary}
           onDelete={handleDeleteCard}
           notify={notify}
+        />
+      )}
+      {showTrash && (
+        <TrashModal
+          entries={trash}
+          onRestore={handleRestoreTrash}
+          onEmpty={handleEmptyTrash}
+          onClose={() => setShowTrash(false)}
         />
       )}
       {showSettings && (
