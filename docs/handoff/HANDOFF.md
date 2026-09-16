@@ -1848,3 +1848,20 @@ Git 现状（重要）：
 - 起因：§16.23修复把FK裸错换成可读错误，但每2秒notify＋重试致吐司常驻刷屏，且跨effect重试时序脆弱；修的过程中还在建卡，顺序错误，已向用户认错并清掉测试数据（71张归位，吐司0）
 - 修复（待push）：syncPromptCardTags改签名同job内补推卡/标签父行（失败回真实错误＋短id）；page.tsx吐司按message去重（仅变化才弹）；找不到卡且仍有待写关联按失败不推进基线
 - 执行链：builder codebuddy→reviewer codebuddy PASS（2中：#1静默分叉已返修，#2批量超时已知局限）→qa codebuddy静态PASS；待push+部署+真机（只看吐司＋单次标签往返，不建卡）
+
+## 16.26 吐司问题部署闭环（2026-09-16；当前唯一有效入口 —— §16.25降级为历史）
+
+- PROJECT_PHASE: DEVELOP ｜ DEV_BASELINE: STATUS-QUO-2026-09-10 ｜ CHANGE_REQUEST: A（同§16.23）
+- 用户报障：生产页出现「云端标签关联保存失败：卡片尚未同步到云端，标签关联稍后重试」。排查结论：该文案是 `989e321`（生产当时版本）的早期返回，工作区 `0ea4339`（§16.25 同job补推+吐司去重）已将其删除，但一直未部署 —— 报障时生产仍跑旧镜像。
+- 处置：`0ea4339` 已在 `origin/master`（免push）→ 部署副本 `deploy.sh` 成功（`00abeaf2813c→0aa3a6265bae`，HTTP 200；`git pull` 因 github SSL 失败但副本已是 0ea4339，前进为空，等价）。生产 `legacy-store/store.json` mtime 停在 09-10、74 张，部署未回写数据。
+- 真机（生产 Chrome，Orca Vision+Computer Use）：已登录（wanghoufan13@gmail.com，实时同步开）；reload 新包后 15s 快照：5 类错误文案 0 出现、无吐司；截图 `scratch/qa-real-device/2026-09-16-toast-fix-reload-clean.png`。未做标签往返（不碰真实卡片数据，如需可单独做）。
+- 基线：`npm run lint` PASS；根 `tsc` 剩 1 条历史错误（`layout.tsx:9 LayoutProps`，`989e321` 已有，非本轮引入，不改）；`mcp/prompt-server` 内 tsc PASS。
+- 执行链：orchestrator 本窗口直驱（排查+部署+真机），账本已补 `TASK-MODEL-LOG/DISPATCH-LOG`；P0 闭环。
+
+## 16.27 左右面板自由拖宽（2026-09-16；施工中 —— 待用户授权提交/推送/部署）
+
+- 需求：左侧标签面板太占地方，要可拖动缩小；右侧预览也要能拖；最小值放开，拖多小都行。
+- 现状摸底：右侧预览本就可拖（`PreviewPanel` 左缘条，MIN 320 / MAX 720，双击重置，localStorage 持久化）；左侧 `TagPanel` 写死 `w-60` 不可拖。
+- 改动（未提交）：`TagPanel.tsx` 右缘加拖拽条（与右侧镜像，方向相反），宽度走 `--tw` 变量，默认 240 / 下限 0 / 上限 480，`pm:tag-panel-width` 持久化，双击回 240；`aside` 加 `relative + overflow-hidden`（0 宽时内容不漫出；标签右键菜单定位在行内，常规宽度不受影响）；`PreviewPanel.tsx` `MIN_W 320→0`。移动端（<md）拖拽条隐藏，不干扰触屏标签排序。
+- 验证：`npm run lint` PASS；`npx tsc --noEmit` 全绿（含此前 `layout.tsx` 历史错误，本轮已无）；dev（3199）`GET / 200` 编译通过，已杀。真机拖拽手感未验（等部署后在生产页拖一次；测试时在 Chrome 新开了一个空白标签页，用户可随手关）。
+- 待办：commit → 用户说「现在推送」→ push → 部署副本 deploy.sh → 生产真机拖验后收工。

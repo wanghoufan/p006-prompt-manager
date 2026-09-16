@@ -38,7 +38,7 @@ interface PreviewPanelProps {
 }
 
 const WIDTH_KEY = 'pm:preview-width'
-const MIN_W = 320
+const MIN_W = 0
 const MAX_W = 720
 
 function clampWidth(w: number): number {
