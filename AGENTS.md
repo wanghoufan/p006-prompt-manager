@@ -37,7 +37,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 - 项目名称：提示词管理工具（Prompt Manager）
 - 项目类型：Next.js 应用 + 共享 Supabase 云端存储 + Docker 自托管 + MCP 子包
-- 当前阶段：Supabase 云端多端同步已完成并获 APPROVED_FOR_EXECUTION（2026-09-03 15:00 裁定放行），Migration 7/7 已发布（含 2026-09-04 BUG-13 `tags.revision` 修复）；剩余待办已于 2026-09-04 经用户最终裁定全部取消；**2026-09-10 完成 AI 服务商从 8 厂商收敛为 3 家（4 选项）并已上线生产（`1b569a5`）**；项目处于现状运行期（Mini 单设备，日常使用与被动故障响应）
+- 当前阶段：Supabase 云端多端同步已完成并获 APPROVED_FOR_EXECUTION（2026-09-03 15:00 裁定放行），Migration 7/7 已发布（含 2026-09-04 BUG-13 `tags.revision` 修复）；剩余待办已于 2026-09-04 经用户最终裁定全部取消；**2026-09-10 完成 AI 服务商从 8 厂商收敛为 3 家（4 选项）并已上线生产（`1b569a5`）**；项目处于现状运行期（Mini 单设备，日常使用与被动故障响应）。**2026-09-13**：P0 标签 FK 修复（`989e321`）+ 吐司刷屏返修（`0ea4339`，同 job 补推父行 + 吐司去重）已上线，BUG-14 FIXED。**2026-09-16**：左右面板自由拖宽（`1d4d589`）+ 回收站/标签`父/子`全路径显示（`2d49adf`，真机 QA PASS，73 卡归位）已上线
 - 主要目标：管理、编辑与测试提示词
 - 主要用户：使用 GPT 等大模型、需要集中管理 Prompt 的个人 / 团队
 
@@ -76,8 +76,8 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - 实施计划：`docs/pm/PLAN.md`（Supabase 迁移已完成并放行，§16.18）
 - 代码审查：`docs/review/CODE_REVIEW.md`（2026-08-26 基线，待 Supabase 增补）
 - 产品优化候选：`docs/review/PRODUCT_BACKLOG.md`
-- 交接上下文：`docs/handoff/HANDOFF.md`（**§16.22 为当前唯一有效入口**，2026-09-10 十二次收束：AI 服务商收敛为 3 家已上线 + 遗留物处置 + 本地 dev server 停用；§16.21 及更早小节仅作历史记录）
-- 质量记录：`docs/qa/BUGS.md`（BUG-9/10/11/12/13 FIXED；BUG-12=数据丢失事故，BUG-13=`tags.revision` 漏建已发布；**2026-09-10 第二十三次 QA（AI 服务商精简 + 上游错误提示分类）PASS，BUG-8（env Key 跨厂商回退）与 D2（401 三层语义误判）同轮收尾修复**；待办已全部取消）、`docs/qa/QA_CHECKLIST.md`
+- 交接上下文：`docs/handoff/HANDOFF.md`（**§16.28补3 为当前唯一有效入口**，2026-09-16：回收站 + 标签全路径显示真机 QA PASS 收工；§16.23–16.28 为 P0 FK/吐司/拖宽收敛过程，§16.22 及更早小节仅作历史记录）
+- 质量记录：`docs/qa/BUGS.md`（BUG-9/10/11/12/13/14 FIXED；BUG-12=数据丢失事故，BUG-13=`tags.revision` 漏建已发布，BUG-14=标签 FK 裸错已除；**2026-09-10 第二十三次 QA（AI 服务商精简 + 上游错误提示分类）PASS，BUG-8（env Key 跨厂商回退）与 D2（401 三层语义误判）同轮收尾修复**；**2026-09-16 回收站 + 标签全路径显示真机 QA PASS（删→站→恢复→清空，73 卡归位）**；待办已全部取消）、`docs/qa/QA_CHECKLIST.md`
 - 规范：数据库 `2026-09-03 丨 共享 Supabase 项目与独立 Schema 数据库规范 丨 V1.3.md`（存于 `1.Active/alw丨数据库管理专家/`）+ Docker `2026-09-02 丨 Mac Mini 本地项目自托管 Docker 规范 丨 V1.1.md`（存于 `Developer/coding/docker/`；项目内 V1.0 已作废）
 - 平台仓库：`/Users/zzymima0000/Developer/coding/1.Active/alw丨数据库管理专家/平台丨共享 Supabase 数据库`（HEAD `2e92f08`，Remote 7/7 已发布，含 `20260901163555` + `20260904102000` BUG-13 修复 + habit_tracker 统一）
 - 远程仓库：https://github.com/wanghoufan/prompt-manager.git（master 已整合 mcp-delivery；部署副本即从该仓库克隆）
