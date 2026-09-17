@@ -1848,3 +1848,57 @@ Git 现状（重要）：
 - 起因：§16.23修复把FK裸错换成可读错误，但每2秒notify＋重试致吐司常驻刷屏，且跨effect重试时序脆弱；修的过程中还在建卡，顺序错误，已向用户认错并清掉测试数据（71张归位，吐司0）
 - 修复（待push）：syncPromptCardTags改签名同job内补推卡/标签父行（失败回真实错误＋短id）；page.tsx吐司按message去重（仅变化才弹）；找不到卡且仍有待写关联按失败不推进基线
 - 执行链：builder codebuddy→reviewer codebuddy PASS（2中：#1静默分叉已返修，#2批量超时已知局限）→qa codebuddy静态PASS；待push+部署+真机（只看吐司＋单次标签往返，不建卡）
+
+## 16.26 吐司问题部署闭环（2026-09-16；当前唯一有效入口 —— §16.25降级为历史）
+
+- PROJECT_PHASE: DEVELOP ｜ DEV_BASELINE: STATUS-QUO-2026-09-10 ｜ CHANGE_REQUEST: A（同§16.23）
+- 用户报障：生产页出现「云端标签关联保存失败：卡片尚未同步到云端，标签关联稍后重试」。排查结论：该文案是 `989e321`（生产当时版本）的早期返回，工作区 `0ea4339`（§16.25 同job补推+吐司去重）已将其删除，但一直未部署 —— 报障时生产仍跑旧镜像。
+- 处置：`0ea4339` 已在 `origin/master`（免push）→ 部署副本 `deploy.sh` 成功（`00abeaf2813c→0aa3a6265bae`，HTTP 200；`git pull` 因 github SSL 失败但副本已是 0ea4339，前进为空，等价）。生产 `legacy-store/store.json` mtime 停在 09-10、74 张，部署未回写数据。
+- 真机（生产 Chrome，Orca Vision+Computer Use）：已登录（wanghoufan13@gmail.com，实时同步开）；reload 新包后 15s 快照：5 类错误文案 0 出现、无吐司；截图 `scratch/qa-real-device/2026-09-16-toast-fix-reload-clean.png`。未做标签往返（不碰真实卡片数据，如需可单独做）。
+- 基线：`npm run lint` PASS；根 `tsc` 剩 1 条历史错误（`layout.tsx:9 LayoutProps`，`989e321` 已有，非本轮引入，不改）；`mcp/prompt-server` 内 tsc PASS。
+- 执行链：orchestrator 本窗口直驱（排查+部署+真机），账本已补 `TASK-MODEL-LOG/DISPATCH-LOG`；P0 闭环。
+
+## 16.27 左右面板自由拖宽（2026-09-16；施工中 —— 待用户授权提交/推送/部署）
+
+- 需求：左侧标签面板太占地方，要可拖动缩小；右侧预览也要能拖；最小值放开，拖多小都行。
+- 现状摸底：右侧预览本就可拖（`PreviewPanel` 左缘条，MIN 320 / MAX 720，双击重置，localStorage 持久化）；左侧 `TagPanel` 写死 `w-60` 不可拖。
+- 改动（未提交）：`TagPanel.tsx` 右缘加拖拽条（与右侧镜像，方向相反），宽度走 `--tw` 变量，默认 240 / 下限 0 / 上限 480，`pm:tag-panel-width` 持久化，双击回 240；`aside` 加 `relative + overflow-hidden`（0 宽时内容不漫出；标签右键菜单定位在行内，常规宽度不受影响）；`PreviewPanel.tsx` `MIN_W 320→0`。移动端（<md）拖拽条隐藏，不干扰触屏标签排序。
+- 验证：`npm run lint` PASS；`npx tsc --noEmit` 全绿（含此前 `layout.tsx` 历史错误，本轮已无）；dev（3199）`GET / 200` 编译通过，已杀。真机拖拽手感未验（等部署后在生产页拖一次；测试时在 Chrome 新开了一个空白标签页，用户可随手关）。
+- 待办：commit → 用户说「现在推送」→ push → 部署副本 deploy.sh → 生产真机拖验后收工。
+
+## 16.27补：拖宽已上线，真机拖拽手感待用户亲手验（2026-09-16）
+
+- 合入：`1d4d589`（Playground worktree 边分支 `wanghoufan/...` 上提交，FF `origin/master 0ea4339→1d4d589` 直推，无改写；注意主 worktree（1.Active/master）仍停在 0ea4339，下次在那边 pull 即可）。
+- 部署：部署副本 `deploy.sh` 成功（`0ea4339→1d4d589`，镜像 `0aa3a6265bae→d299067fd243`，HTTP 200；生产数据未动）。
+- 生产包验证：新 chunk 含 `pm:tag-panel-width`；Chrome 真机 reload 后左侧拖拽条在位（index 46，TopBar 与「标签」之间）。
+- 未验：orca 合成 drag（元素式/坐标式各 1 次，连同右侧旧条对照 1 次）像素级 0 变化 —— 系自动化发不出真实 pointermove，非代码问题（左条与用户确认可拖的右条逐行同构）。拖拽手感请用户亲手拖一次确认。
+- 浏览器复原：测试切页未关用户标签；飞书 tab 地址栏可能残留一段未提交的 URL 草稿（未导航，无影响，进该 tab 按 Esc 即消）。
+
+## 16.28 回收站 + 标签全路径显示（2026-09-16；待用户授权提交/推送/部署）
+
+- 需求：① 删除进回收站，可恢复、手动清空；② 子标签显示`父/子`全路径（输入格式即`父/子`）。
+- 实现（未提交）：`src/lib/trash.ts`（新建：条目类型 + `pm:trash` 本机持久化，上限 100）/`src/components/TrashModal.tsx`（新建：列表+恢复+清空）；`page.tsx` 接入（单删/批量删卡、单删标签进站；恢复幂等补缺失 id；TopBar「回收站（n）」入口；确认文案改“可在回收站恢复”）；`tagPath` 默认分隔符 `' / '`→`'/'`（输入解析本就用`/`，改完两边一致；合并弹窗示例同步）；卡片/预览/详情三处 chips 经 `promptTagPathsOf` 显示全路径（无关联回退原名）。
+- 取舍：回收站纯本机（不建云端表、不碰数据库红线）；恢复走正常脏标记链路上云（`revisionedSave` 缺行即 insert，验证过）；合并标签不进站（关系已转移，恢复语义不清）；与 10s 撤销共存（恢复跳过已存在 id）。
+- 验证：lint PASS；tsc 全绿；dev（3199）`GET / 200`，已杀。真机（删→站→恢复→清空一轮）等部署后做。
+
+## 16.28补：已上线；真机交互 QA 中止待机（2026-09-16）
+
+- 合入部署：`2d49adf`（`1d4d589..2d49adf` 推远端 master；部署副本 `deploy.sh` 成功，镜像 `d299067fd243→b4c9c0375e9d`，HTTP 200；生产数据未动）。
+- 新版确认加载：真机 reload 后 TopBar「回收站」按钮在位（index 44）。
+- 中止原因：用户正在使用 Chrome（焦点已切到 flomo），继续驱动会干扰；且悬停菜单（卡片删除胶囊/标签行 ⋯）自动化够不着，删卡确认 prompt/confirm 原生框可回车但链路长。已停手，未写入任何测试数据（set-value 未成功，无残留）。
+- 待补（需用户离键盘 5 分钟或用户亲手走）：新建测试卡→删→回收站恢复→再删→清空；新建`QA/子`标签→删→恢复→清空；截图归档后清数据。
+
+## 16.28补2：真机 QA 半程（2026-09-16；待收尾）
+
+- 通过项（生产 Chrome 真机，截图 `scratch/qa-real-device/2026-09-16-trash-{1-created,2-deleted,3-modal,4-restored,5-search}.png`）：composer 建测试卡成功；删除确认框新文案「可在回收站恢复」；删后网格无残留；顶栏「回收站（1）」；弹窗条目正确（未命名提示词，1 张卡片·0 条关联·时间）。
+- 未完：恢复点击两度未中（坐标估偏一次、索引过期一次）；标签建/删/恢复/清空链路；清空；测试数据清理。
+- 残留：回收站 1 条测试条目 + 生产 tab 搜索框里 `QAtrash` 过滤词（刷新即清）。无其他写入。
+- 中止原因：用户正在用 Chrome（焦点切走），继续驱动会添乱。收尾二选一：用户离键盘 3 分钟我收，或用户亲手走 4 步（开站→恢复→确认卡回来→删掉→清空）。
+
+## 16.28补3：真机 QA PASS，收工（2026-09-16；当前唯一有效入口）
+
+- 回归链（生产 Chrome，Orca Vision+Computer Use，全测试数据）：composer 建卡（QAtrash 正文）→ 网格删除（新确认文案「可在回收站恢复」）→ 顶栏「回收站（1）」→ 弹窗条目正确（1 张卡片·0 条关联·时间）→ 恢复（卡片带正文回来）→ 再删（站内 2 项）→ 清空（二次确认「共 2 项」）→ 站空提示 → reload 复位：全部 73 张、站空 badge 消、QAtrash 0 残留。截图 `scratch/qa-real-device/2026-09-16-trash-{1-created,2-deleted,3-modal,6-restored,7-search,8-modal2,9-emptied,10-final-73}.png`。
+- `父/子` 显示：标签搜索 `交接`，flat 列表出现 `交接/大交接`、`交接/小交接`（截图 7），分隔符与输入一致；卡片/预览/详情 chips 同代码路径。
+- 未真机项：标签删除进站链（悬停 ⋯ 菜单自动化够不着；与卡片共用同一 pushTrash/restore/empty 实现，代码复核通过）；批量删除进站（同函数，直通）。
+- 附带发现（非缺陷）：生产库有 6 张历史「未命名提示词」旧卡（AI 补全失败残留，与本轮无关，未动）。
+- 基线：lint PASS / tsc 全绿 / dev 200（上线前已验）。执行链：orchestrator 本窗口直驱。

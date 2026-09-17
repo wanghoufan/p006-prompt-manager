@@ -1,12 +1,12 @@
 # 当前阶段
 
 ## 最新状态
-- **时间**：2026-09-10
-- **阶段**：现状运行期。Supabase 云端多端同步已完成 ✅（审核裁定 APPROVED_FOR_EXECUTION 2026-09-03 15:00；BUG-13 `tags.revision` 修复 2026-09-04 发布）；剩余待办已于 2026-09-04 经用户最终裁定全部取消。**2026-09-10 完成 AI 服务商从 8 厂商收敛为 3 家服务商 / 4 个选项，已上线生产**
-- **分支**：`master`（最新 `aa6f7ed` 已推至 `origin/master`；序列：`f1e731d` → `1b569a5` AI 收敛 → `86ccce8` chore 清理 → `aa6f7ed` docs 对齐）
+- **时间**：2026-09-16
+- **阶段**：现状运行期（09-13 P0 FK/吐司、09-16 拖宽/回收站均已上线并收工，见 HANDOFF §16.28补3）。Supabase 云端多端同步已完成 ✅（审核裁定 APPROVED_FOR_EXECUTION 2026-09-03 15:00；BUG-13 `tags.revision` 修复 2026-09-04 发布；BUG-14 标签 FK 裸错 2026-09-13 FIXED）；剩余待办已于 2026-09-04 经用户最终裁定全部取消。**2026-09-10 完成 AI 服务商从 8 厂商收敛为 3 家服务商 / 4 个选项，已上线生产；2026-09-16 左右面板自由拖宽（`1d4d589`）+ 回收站/标签`父/子`全路径（`2d49adf`，真机 QA PASS，73 卡归位）已上线**
+- **分支**：`origin/master` = `2d49adf`（序列：`1b569a5` AI 收敛 → `86ccce8` chore → `aa6f7ed` docs → `989e321` P0 FK → `0ea4339` 吐司 → `1d4d589` 拖宽 → `2d49adf` 回收站；均已推远端并部署）
 - **提交**：`1b569a5`（AI 服务商收敛 + D2 401 分类修复 + BUG-8 env Key 同源回退 + dev 回环水合，2026-09-10 已部署）+ `86ccce8`（chore：coordination/ 忽略、备份脚本解除跟踪、docs/review 归档）+ `aa6f7ed`（docs：HANDOFF 现役入口唯一化、AGENTS 归属表、根级规范打标、DEV_EXPERIENCE 去重），均已于 2026-09-10 推送
-- **云端**：`yacgnikzvutbpoqvokth` / `prompt_manager` Schema（6 表×4 RLS，Remote 7/7 含 BUG-13 修复 + habit_tracker 统一）；Realtime 5 表；`activate_prompt` SECURITY DEFINER 已裁定接受。⚠️ **卡数为文档最后记录 54 张（2026-09-04），本轮未复核**；生产 `legacy-store/store.json` 本轮实测为 74 张（不同数据层，勿混用）
-- **运行**：`prompt-manager-prompt-manager-1` Up 0.0.0.0:3100（`http://192.168.31.60:3100`，部署副本 `~/Developer/coding/docker/prompt-manager/` + `bash scripts/deploy.sh`）；2026-09-10 镜像 `328a58fe4ec2`、HTTP 200。**本地 dev server 已停用**（3199 已释放），预览统一走生产地址
+- **云端**：`yacgnikzvutbpoqvokth` / `prompt_manager` Schema（6 表×4 RLS，Remote 7/7 含 BUG-13 修复 + habit_tracker 统一）；Realtime 5 表；`activate_prompt` SECURITY DEFINER 已裁定接受。**卡数 73 张（2026-09-16 真机复核，生产页「全部 73」）**；生产 `legacy-store/store.json` 为 74 张（不同数据层，勿混用）
+- **运行**：`prompt-manager-prompt-manager-1` Up 0.0.0.0:3100（`http://192.168.31.60:3100`，部署副本 `~/Developer/coding/docker/prompt-manager/` + `bash scripts/deploy.sh`）；2026-09-16 镜像 `b4c9c0375e9d`（`2d49adf`）、HTTP 200。**本地 dev server 已停用**（3199 已释放），预览统一走生产地址
 - **AI 服务商（2026-09-10 收敛）**：`deepseek`（`deepseek-v4-flash`）/ `openrouter`（模型用户自填）/ `opencode`（Zen，`glm-5.3-flash`，⚠️ 账户无余额暂不可用）/ `opencode-go`（`deepseek-v4-flash` + `glm-5.3-flash`）。清单唯一来源 = `src/lib/ai/types.ts` 的 `AI_PROVIDERS`，须与 `SettingsModal.tsx`、`factory.ts` 三处同源
 - **收口材料**：`docs/review/共享Supabase数据库接入收口材料-2026-09-02.md`（2026-09-03 修订版，L0–L5 全部 ✅ / L5 审核已放行，已回填 §9/§10，7/7 已发布含 BUG-13）
 - **平台仓库**：`/Users/zzymima0000/Developer/coding/1.Active/alw丨数据库管理专家/平台丨共享 Supabase 数据库` HEAD `2e92f08`（Remote 7/7 已发布，含 `20260904102000` BUG-13），已 `supabase link` 且管理员隔离重放零错误；已由唯一发布人 `db push --include-all` 登记

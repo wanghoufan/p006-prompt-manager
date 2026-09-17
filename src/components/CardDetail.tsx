@@ -31,6 +31,8 @@ interface CardDetailProps {
   onSetSummary: (id: string, summary: string) => void
   onDelete?: (id: string) => void
   notify: (msg: string) => void
+  /** 卡片标签的展示串（完整路径 父/子）；不传则回退显示 card.tags */
+  tagLabels?: string[]
 }
 
 export function CardDetail(props: CardDetailProps) {
@@ -420,7 +422,7 @@ export function CardDetail(props: CardDetailProps) {
               <div className="space-y-1.5">
                 <p className="text-xs text-muted">标签</p>
                 <div className="flex flex-wrap items-center gap-1.5">
-                  {card.tags.map((t) => (
+                  {(props.tagLabels ?? card.tags).map((t) => (
                     <span
                       key={t}
                       className="rounded-full border border-gold/25 bg-gold/5 px-2 py-0.5 text-[11px] text-gold-bright"
@@ -428,7 +430,7 @@ export function CardDetail(props: CardDetailProps) {
                       {t}
                     </span>
                   ))}
-                  {card.tags.length === 0 && <span className="text-xs text-muted">未打标签</span>}
+                  {(props.tagLabels ?? card.tags).length === 0 && <span className="text-xs text-muted">未打标签</span>}
                 </div>
               </div>
               <div className="space-y-1.5">

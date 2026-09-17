@@ -7,3 +7,5 @@
 {"date":"2026-09-13","model":"deepseek-v4.1-flash","note":"builder同job补推父行+吐司去重，reviewer PASS，qa静态PASS","result":"PASS","role":"builder","runtime":"codebuddy","task":"TASK-P0-toast-spam-2026-09-13","used":"主"}
 {"date":"2026-09-13","model":"deepseek-v4.1-flash","note":"reviewer独立复核PASS（2中4低不阻拦，#1已返修）","result":"PASS","role":"code-reviewer","runtime":"codebuddy","task":"TASK-P0-toast-spam-2026-09-13","used":"主"}
 {"date":"2026-09-13","model":"deepseek-v4.1-flash","note":"qa静态门禁PASS tsc0+eslint0","result":"PASS","role":"qa","runtime":"codebuddy","task":"TASK-P0-toast-spam-2026-09-13","used":"主"}
+{"date":"2026-09-16","model":"muse-spark-1.3-contributor","note":"0ea4339已在远端，部署副本deploy.sh上线（镜像0aa3a6265bae，HTTP200，生产数据未动），Chrome真机reload后吐司0出现","result":"PASS","role":"orchestrator","runtime":"本窗口直驱","task":"TASK-P0-toast-fix-deploy-2026-09-16","used":"主"}
+{"date":"2026-09-16","model":"muse-spark-1.3-contributor","note":"回收站+父/子显示：2d49adf上线，真机删→站→恢复→清空全绿，73张归位","result":"PASS","role":"orchestrator","runtime":"本窗口直驱","task":"TASK-trash-tagpath-2026-09-16","used":"主"}

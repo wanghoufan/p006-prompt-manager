@@ -112,8 +112,8 @@ export function assertNoCycle(tags: Tag[], tagId: string, newParentId: string | 
   return true
 }
 
-/** 完整路径（交接 §29：同名不同父级用完整路径区分） */
-export function tagPath(tags: Tag[], tagId: string, sep = ' / '): string {
+/** 完整路径（交接 §29：同名不同父级用完整路径区分；分隔符与输入格式统一为 `/`） */
+export function tagPath(tags: Tag[], tagId: string, sep = '/'): string {
   const byId = new Map(tags.map((t) => [t.id, t]))
   const parts: string[] = []
   let cur: string | null = tagId
@@ -160,6 +160,15 @@ export function tagIdsOfPrompt(promptTags: PromptTag[], promptId: string): strin
     }
   }
   return out
+}
+
+/** 由 promptTags 关联把标签完整路径（父/子）回填为显示串，供卡片标签 chips 展示 */
+export function promptTagPathsOf(
+  tags: Tag[],
+  promptTags: PromptTag[],
+  promptId: string,
+): string[] {
+  return tagIdsOfPrompt(promptTags, promptId).map((id) => tagPath(tags, id))
 }
 
 /** 由 promptTags 关联把 tag 名回填到 Card.tags（保持方案 A 冗余一致，供导出/离线兜底使用） */

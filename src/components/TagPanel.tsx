@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { Tag, PromptTag, TagFilters } from '@/lib/types'
 import { childrenOf, collectDescendantIds, directCount, totalCount, tagPath } from '@/lib/tags'
 
@@ -52,6 +52,27 @@ function writeExpanded(set: Set<string>) {
   } catch {
     // ignore
   }
+}
+
+/** 左侧面板拖宽：默认 240（原 w-60），下限 0（拖多小都行），上限 480，持久化。 */
+const PANEL_WIDTH_KEY = 'pm:tag-panel-width'
+const PANEL_DEFAULT_W = 240
+const PANEL_MIN_W = 0
+const PANEL_MAX_W = 480
+
+function clampPanelWidth(w: number): number {
+  return Math.min(PANEL_MAX_W, Math.max(PANEL_MIN_W, Math.round(w)))
+}
+
+function readSavedPanelWidth(): number {
+  if (typeof window === 'undefined') return PANEL_DEFAULT_W
+  try {
+    const saved = Number(localStorage.getItem(PANEL_WIDTH_KEY))
+    if (Number.isFinite(saved) && saved >= PANEL_MIN_W && saved <= PANEL_MAX_W) return saved
+  } catch {
+    // ignore
+  }
+  return PANEL_DEFAULT_W
 }
 
 /** 内联弹出菜单（重命名/移动/新建子标签/删除） */
@@ -363,6 +384,43 @@ export function TagPanel({
   const [deleteConfirm, setDeleteConfirm] = useState<{ tag: Tag; top: number; left: number } | null>(null)
   const [bulkMode, setBulkMode] = useState(false)
   const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set())
+  // 左侧面板宽度：右缘拖拽条调整（方向与右侧预览条镜像），双击恢复默认。
+  const [panelWidth, setPanelWidth] = useState<number>(() => readSavedPanelWidth())
+  const panelDragState = useRef<{ startX: number; startW: number } | null>(null)
+
+  function handlePanelDragStart(e: React.PointerEvent<HTMLDivElement>) {
+    e.preventDefault()
+    panelDragState.current = { startX: e.clientX, startW: panelWidth }
+    window.addEventListener('pointermove', handlePanelDragMove)
+    window.addEventListener('pointerup', handlePanelDragEnd)
+  }
+
+  function handlePanelDragMove(e: PointerEvent) {
+    if (!panelDragState.current) return
+    const { startX, startW } = panelDragState.current
+    const next = clampPanelWidth(startW + (e.clientX - startX))
+    setPanelWidth(next)
+    try {
+      localStorage.setItem(PANEL_WIDTH_KEY, String(next))
+    } catch {
+      // ignore
+    }
+  }
+
+  function handlePanelDragEnd() {
+    panelDragState.current = null
+    window.removeEventListener('pointermove', handlePanelDragMove)
+    window.removeEventListener('pointerup', handlePanelDragEnd)
+  }
+
+  function resetPanelWidth() {
+    setPanelWidth(PANEL_DEFAULT_W)
+    try {
+      localStorage.setItem(PANEL_WIDTH_KEY, String(PANEL_DEFAULT_W))
+    } catch {
+      // ignore
+    }
+  }
 
   const toggle = (id: string) => {
     setExpanded((prev) => {
@@ -475,7 +533,7 @@ export function TagPanel({
       return
     }
     const targetInput = promptForName(
-      `将「${tagPath(tags, tag.id)}」合并到哪个标签？\n请输入完整路径（例如：开发 / 前端）；同名时必须输入完整路径。`,
+      `将「${tagPath(tags, tag.id)}」合并到哪个标签？\n请输入完整路径（例如：开发/前端）；同名时必须输入完整路径。`,
     )
     if (targetInput === null) return
     const trimmed = targetInput.trim()
@@ -639,7 +697,18 @@ export function TagPanel({
   }
 
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r border-line bg-ink-900/60">
+    <aside
+      className="relative flex w-[var(--tw)] shrink-0 flex-col overflow-hidden border-r border-line bg-ink-900/60"
+      style={{ '--tw': `${panelWidth}px` } as React.CSSProperties}
+    >
+      <div
+        onPointerDown={handlePanelDragStart}
+        onDoubleClick={resetPanelWidth}
+        role="separator"
+        aria-orientation="vertical"
+        title="拖动调整宽度 · 双击重置"
+        className="absolute right-0 top-0 z-10 hidden h-full w-2 cursor-ew-resize bg-transparent transition-colors hover:bg-gold/10 active:bg-gold/20 md:block"
+      />
       <div className="flex items-center justify-between px-4 pb-1 pt-5">
         <span className="font-serif text-xs tracking-[0.2em] text-muted">标签</span>
         {editable && (

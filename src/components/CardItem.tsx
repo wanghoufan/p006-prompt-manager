@@ -22,6 +22,8 @@ interface CardItemProps {
   onBulkToggle?: (id: string) => void
   /** 设置开启时才使用浏览器原生 title 展示正文全文。 */
   hoverPreview?: boolean
+  /** 卡片标签的展示串（完整路径 父/子）；不传则回退显示 card.tags */
+  tagLabels?: string[]
 }
 
 /** 把文本按关键词拆分为片段数组：非命中片段为纯文本节点，命中片段包 <mark>。
@@ -44,7 +46,7 @@ function highlightParts(text: string, query: string): ReactNode[] {
   return parts
 }
 
-export function CardItem({ card, selected, readonly = false, query = '', onSelect, onOpen, onCopy, onRate, onDelete, bulkSelected = false, bulkActive = false, onBulkToggle, hoverPreview = false }: CardItemProps) {
+export function CardItem({ card, selected, readonly = false, query = '', onSelect, onOpen, onCopy, onRate, onDelete, bulkSelected = false, bulkActive = false, onBulkToggle, hoverPreview = false, tagLabels }: CardItemProps) {
   // @code 直达模式：高亮词去掉 @ 前缀，命中片段落在调取码徽标上
   const match = query.replace(/^@/, '').trim()
   return (
@@ -135,7 +137,7 @@ export function CardItem({ card, selected, readonly = false, query = '', onSelec
         </p>
       )}
       <div className="flex flex-wrap items-center gap-1.5">
-        {card.tags.map((t) => (
+        {(tagLabels ?? card.tags).map((t) => (
           <span
             key={t}
             className="rounded-full border border-gold/25 bg-gold/5 px-2 py-0.5 text-[11px] text-gold-bright"
