@@ -796,9 +796,15 @@ export default function Home() {
         if (!nextTags.has(tagId)) deleteIds.add(tagId)
       }
       for (const tagId of deleteIds) {
-        const result = await deletePromptTag(tagId)
-        if (!result.ok) {
-          notify(`云端标签删除失败：${result.message}`)
+        try {
+          const result = await deletePromptTag(tagId)
+          if (!result.ok) {
+            notify(`云端标签删除失败：${result.message}`)
+            retryCloudSync()
+            return
+          }
+        } catch (error) {
+          notify(`云端标签删除异常：${error instanceof Error ? error.message : String(error)}`)
           retryCloudSync()
           return
         }
@@ -1527,9 +1533,15 @@ export default function Home() {
     const targets = [...new Set(ids)].sort((a, b) => depthOf(b) - depthOf(a))
     let failureMessage: string | null = null
     for (const tagId of targets) {
-      const result = await deletePromptTag(tagId)
-      if (!result.ok) {
-        failureMessage = result.message
+      try {
+        const result = await deletePromptTag(tagId)
+        if (!result.ok) {
+          failureMessage = result.message
+          continue
+        }
+      } catch (error) {
+        notify(`云端标签删除异常：${error instanceof Error ? error.message : String(error)}`)
+        retryCloudSync()
         continue
       }
       cloudTagsRef.current?.delete(tagId)

@@ -1182,3 +1182,16 @@ P0-H 当前实现 **PASS**，无新增 Bug；建议进入后续客户端真实 M
 - **清理**：定向 SQL 仅删本测试单 id（先落盘 `scratch/tag-test-cleanup-backup-QA15c-20260917.json`，关联 0 条；他人的 `__测单删/__测D2/__测E` 未动；回收站未清空——内有用户内容 + 本轮 1 条 tag 删除记录）。删后 20 秒云端复核无回灌（本轮未复现第二轮的同 id 推回现象）；刷新后面板无残留，全部 73，回收站 7。截图 `-6-final-clean.png`。
 - **结论：FAIL**（`6d2fc19` 未达验收标准，打回 builder）。建后即删场景下真删 2.5 分钟未落云端且无失败提示；`revision=1` 纹丝不动说明删除请求从未到达云端行。
 - **证据**：`scratch/qa-real-device/2026-09-17-bug15-round3-{1-initial,2-created,3-confirm,4-deleted,5-after-reload,6-final-clean}.png`。
+
+## BUG-15 复测第四轮（2026-09-17，`0524f25` 删除改直删已部署；结论：FAIL，打回 builder）
+
+- **验收目标**：新建 `__QA15四验` → 立即删除 → 等 60 秒 → 刷新 → 确认不复活 → 云端直查行消失 → 清残留。
+- **真机过程**（生产 `http://192.168.31.60:3100`，用户 Chrome 真机标签页，Orca Computer Use；已登录 `wanghoufan13@gmail.com`，云端模式「已开启 Supabase 云端实时同步；本机保留离线缓存」，全部 73 张，回收站 7；预检 PASS：list-apps/capabilities/get-app-state/set-value verified/截图全通）：
+  1. 新建标签 `__QA15四验`（set-value verified 回执）：面板即时出现（0 关联）。截图 `2026-09-17-bug15-round4-2-created.png`。
+  2. 立即经「更多操作 → 删除标签 → 确认框（当前有 0 条提示词使用此标签）→ 删除标签」删除：面板即时消失（树内 `__QA15` 0 命中），回收站 7→8。截图 `-3-confirm.png`/`-4-deleted.png`（删除约 06:34:37Z）。
+  3. 删后 60 秒云端直查（`recenttags` 单语句探针）：行仍在 —— `{"id":"61c49886-…","name":"__QA15四验","created_at":"2026-09-17 06:33:54.946+00","updated_at":"2026-09-17 06:33:54.946+00","revision":1}`（updated_at=创建时间，未被触碰——直删请求未到达云端行）。
+  4. 点浏览器重载 → 面板无复活（tombstone 本地遮蔽），全部 73，回收站 8，云端模式。截图 `-5-after-reload.png`。
+  5. 删后约 2.5 分钟（06:36:58Z）云端复查：行仍在，`revision=1` 未涨；UI 全程无「云端标签删除失败」吐司。**本轮是“静默未删 + 本地遮蔽”（同第一/三轮），未出现第二轮的“可见复活”与同 id 回灌。**
+- **清理**：定向 SQL 仅删本测试单 id（先落盘 `scratch/tag-test-cleanup-backup-QA15d-20260917.json`，关联 0 条；他人的 `__测单删/__测D2/__测E` 未动；回收站未清空——内有用户内容 + 本轮 1 条 tag 删除记录）。删后 20 秒云端复核无回灌；面板无残留，全部 73。截图 `-6-final-clean.png`。终态云端：cards 73 / tags 69 / rels 114（回基线）。
+- **结论：FAIL**（`0524f25` 未达验收标准，打回 builder）。建后即删场景下直删 2.5 分钟未落云端且无失败提示；`revision=1` 纹丝不动说明删除请求从未到达云端行——直删路径疑似根本未执行（await 的删云端调用未发出或走了错误分支），建议 builder 先查 handle 内直删分支是否命中，而非再调 effect 兜底时序。
+- **证据**：`scratch/qa-real-device/2026-09-17-bug15-round4-{1-initial,2-created,3-confirm,4-deleted,5-after-reload,6-final-clean}.png`。
