@@ -282,3 +282,15 @@
 - 深→浅顺序：`depthOf` 沿 `parent_id` 链计深（含环 guard）、`sort(b-a)` 子先父后，避免父先删触发 FK 拒绝；单删 subtree 传删前 `tags` 快照计深正确，批量仅删最高层同样安全。
 - cloudMode守卫：函数入口 `!cloudMode return`，与 `mark/clearTagDeletes` 非云端 no-op（`308`）及 effect 守卫（`728`）一致；离线删除意图仍有本机 tombstone，待上线后补传。
 - 小注（不判FAIL）：失败仅保留最后一条 message，多 id 部分失败时提示收敛为一条，tombstone 仍逐 id 保留由 effect 逐个重试，无丢失。
+## 2026-09-17 Code Review：TagPanel 批量行点击/筛选分支与事件隔离
+
+- 范围：`src/components/TagPanel.tsx:227-319`。结论：FAIL（P1：批量下仅中间名称按钮切选中，行空白区无响应，不符合“行点击切选中”）。
+- 分支正确：名称按钮 `selectable ? onToggleSelect : onSelectTag (289)`，批量切选中、非批量仍筛选，逻辑对。
+- 事件隔离正确：checkbox `onChange` 切选中 + `onClick stopPropagation (258-259)` 无双重触发；箭头 `stopPropagation + onToggle (269-272)`；菜单 `stopPropagation + setMenuOpen (308-311)`，三处均未误触吞事件。
+ - FAIL 点：行容器为普通 `div (228-229)` 无 `onClick`，`selectable` 下点击行左右 padding/checkbox 间隙无反应；修复：在行容器加 `onClick selectable→onToggleSelect`（并给箭头/checkbox/菜单保持 stopPropagation），或把名称按钮拉伸覆盖整行。
+## 2026-09-17 Code Review：TreeNode 整行切换返修复核
+
+- 范围：`src/components/TagPanel.tsx:231-233` 行容器 onClick、`292-297` 名称按钮分支、`264/275/317` 三处 stopPropagation。结论：PASS。
+- 整行切换：行容器 `onClick selectable→onToggleSelect`，批量下整行可点；非批量无操作，筛选仍走名称按钮。
+- 单次触发：名称按钮 `if (!selectable) onSelectTag`，批量下由整行统一处理，无冒泡双切。
+- 事件隔离：checkbox(264)/展开箭头(275)/更多菜单(317)三处 `stopPropagation` 完好，不误触行切换。

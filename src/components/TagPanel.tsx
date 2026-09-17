@@ -228,6 +228,9 @@ function TreeNode({
     <div>
       <div
         draggable={draggable}
+        onClick={() => {
+          if (selectable) onToggleSelect(tag.id)
+        }}
         onDragStart={(e) => {
           if (!draggable) return
           e.dataTransfer.effectAllowed = 'move'
@@ -247,7 +250,9 @@ function TreeNode({
           onDrop(sourceId, tag, ratio < 0.25 ? 'before' : ratio > 0.75 ? 'after' : 'on')
         }}
         className={`group relative flex w-full items-center gap-1 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors ${
-          active ? 'bg-gold/10' : 'hover:bg-ink-800'
+          selectable ? 'cursor-pointer ' : ''
+        }${
+          selected ? 'bg-gold/15 ring-1 ring-gold/40 ring-inset' : active ? 'bg-gold/10' : 'hover:bg-ink-800'
         } ${draggedId === tag.id ? 'opacity-50' : ''}`}
         style={{ paddingLeft: `${0.625 + depth * 1}rem` }}
       >
@@ -286,7 +291,10 @@ function TreeNode({
         )}
         <button
           type="button"
-          onClick={() => onSelectTag(tag.id)}
+          onClick={() => {
+            // 批量管理模式下由整行 onClick 处理，避免一行点两次
+            if (!selectable) onSelectTag(tag.id)
+          }}
           className={`flex min-w-0 flex-1 items-center gap-2 text-left ${
             active ? 'text-gold-bright' : 'text-paper-dim group-hover:text-paper'
           }`}
