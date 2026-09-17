@@ -195,6 +195,8 @@ export default function Home() {
   const undoRef = useRef<(() => void) | null>(null)
   // 标签关联失败去重：同一错误重试期间静默（仍 retryCloudSync），仅在 message 变化时再吐司。
   const lastRelationErrorRef = useRef<string | null>(null)
+  // 临时诊断（标签删除静默恢复排查）：仅在诊断轮显示，供真机无障碍树读取全文；排查结束后随本轮改动一并移除。
+  const [syncDiag, setSyncDiag] = useState<string | null>(null)
 
   const notify = useCallback((msg: string, detail?: string[]) => {
     undoRef.current = null
@@ -657,10 +659,17 @@ export default function Home() {
       const previousTags = cloudTagsRef.current
       const previousRelations = cloudPromptTagsRef.current
       if (!previousTags || !previousRelations) return
+      // 诊断计数（只读，不改变同步语义）：本轮待删的基线标签数 / 待存的本机标签数。
+      const diagPendingDeleteIds = [...previousTags.keys()].filter((tagId) => !nextTags.has(tagId))
+      const diagPendingSaveCount = tags.filter((tag) => previousTags.get(tag.id) !== nextTags.get(tag.id)).length
+      setSyncDiag(
+        `[标签同步] 轮次开始 ${new Date().toISOString()}｜待删id数=${diagPendingDeleteIds.length}｜待存标签数=${diagPendingSaveCount}`,
+      )
       for (const tag of tags) {
         if (previousTags.get(tag.id) === nextTags.get(tag.id)) continue
         const result = await savePromptTag(tag)
         if (!result.ok) {
+          setSyncDiag(`[标签同步] savePromptTag 失败 ${new Date().toISOString()}｜tagId=${tag.id.slice(0, 8)}｜${result.message}`)
           notify(`云端标签保存失败：${result.message}`)
           retryCloudSync()
           return
@@ -690,6 +699,9 @@ export default function Home() {
         }
         const result = await syncPromptCardTags(card, previousIds, nextIds, tags)
         if (!result.ok) {
+          setSyncDiag(
+            `[标签同步] syncPromptCardTags 失败 ${new Date().toISOString()}｜cardId=${cardId.slice(0, 8)}｜${result.message}`,
+          )
           // 父行补推已在 syncPromptCardTags 内同 job 完成，此处只负责提示 + 重试。
           const relationMessage = `云端标签关联保存失败：${result.message}`
           if (lastRelationErrorRef.current !== relationMessage) {
@@ -711,6 +723,11 @@ export default function Home() {
               (tagId) => !localTagIds.has(tagId) && !previousTags.has(tagId),
             )
       if (unbaselinedDeletedIds.length > 0) {
+        setSyncDiag(
+          `[标签同步] 基线防御触发 ${new Date().toISOString()}｜unbaselined=${unbaselinedDeletedIds
+            .map((tagId) => tagId.slice(0, 8))
+            .join('、')}`,
+        )
         notify(
           `云端标签删除异常：本机删除的标签不在云端基线中，云端可能仍有残留（${unbaselinedDeletedIds
             .map((tagId) => tagId.slice(0, 8))
@@ -722,6 +739,11 @@ export default function Home() {
       for (const tagId of previousTags.keys()) {
         if (nextTags.has(tagId)) continue
         const result = await deletePromptTag(tagId)
+        setSyncDiag(
+          result.ok
+            ? `[标签同步] deletePromptTag 成功 ${new Date().toISOString()}｜target=${tagId.slice(0, 8)}`
+            : `[标签同步] deletePromptTag 失败 ${new Date().toISOString()}｜target=${tagId.slice(0, 8)}｜${result.message}`,
+        )
         if (!result.ok) {
           notify(`云端标签删除失败：${result.message}`)
           retryCloudSync()
@@ -734,6 +756,9 @@ export default function Home() {
       if (cloudTagsDirtyVersionRef.current === writeVersion) {
         cloudTagsSyncedVersionRef.current = writeVersion
       }
+      setSyncDiag(
+        `[标签同步] 整轮成功 ${new Date().toISOString()}｜已推进基线 writeVersion=${writeVersion}｜待删id数=${diagPendingDeleteIds.length}｜待存标签数=${diagPendingSaveCount}`,
+      )
     })
   }, [tags, promptTags, cloudMode, cloudRetryTick, enqueueCloudWrite, hydrated, notify, retryCloudSync])
 
@@ -1799,6 +1824,11 @@ export default function Home() {
         onOpenTrash={() => setShowTrash(true)}
         trashCount={trash.length}
       />
+      {syncDiag !== null && (
+        <div className="border-b border-gold/40 bg-gold/10 px-4 py-1.5">
+          <span className="break-all font-mono text-xs leading-relaxed text-gold">{syncDiag}</span>
+        </div>
+      )}
       <div className="flex min-h-0 flex-1">
         <TagPanel
           tags={activeTags}
