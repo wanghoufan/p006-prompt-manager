@@ -25,6 +25,10 @@ export interface TagPanelProps {
   onReorderTag?: (id: string, targetId: string, position: 'before' | 'after') => { ok: boolean; error?: string }
   onDeleteTag?: (id: string, mode: 'self' | 'subtree') => void
   onMergeTag?: (sourceId: string, targetId: string) => { ok: boolean; error?: string }
+  /** 批量删除标签（仅删关系+标签实体，不删提示词）；未传则不显示批量入口 */
+  onBulkDeleteTags?: (ids: string[]) => void
+  /** 批量删除前是否需要 window.confirm 二次确认（沿用卡片批量删除的设置项） */
+  confirmDelete?: boolean
 }
 
 const EXPAND_KEY = 'pm:tag-expanded'
@@ -151,6 +155,10 @@ interface TreeNodeProps {
   onDragStart: (id: string) => void
   onDragEnd: () => void
   onDrop: (sourceId: string, target: Tag, position: 'before' | 'after' | 'on') => void
+  /** 批量管理模式：行前显示 checkbox */
+  selectable: boolean
+  selectedIds: Set<string>
+  onToggleSelect: (id: string) => void
 }
 
 function TreeNode({
@@ -173,8 +181,12 @@ function TreeNode({
   onDragStart,
   onDragEnd,
   onDrop,
+  selectable,
+  selectedIds,
+  onToggleSelect,
 }: TreeNodeProps) {
   const [menuOpen, setMenuOpen] = useState(false)
+  const selected = selectedIds.has(tag.id)
   const kids = childrenOf(tags, tag.id)
   const hasKids = kids.length > 0
   const isExpanded = expanded.has(tag.id)
@@ -210,6 +222,16 @@ function TreeNode({
         } ${draggedId === tag.id ? 'opacity-50' : ''}`}
         style={{ paddingLeft: `${0.625 + depth * 1}rem` }}
       >
+        {selectable && (
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={() => onToggleSelect(tag.id)}
+            onClick={(e) => e.stopPropagation()}
+            aria-label={`选择标签 ${tag.name}`}
+            className="shrink-0 accent-gold"
+          />
+        )}
         {hasKids ? (
           <button
             type="button"
@@ -301,6 +323,9 @@ function TreeNode({
               onDragStart={onDragStart}
               onDragEnd={onDragEnd}
               onDrop={onDrop}
+              selectable={selectable}
+              selectedIds={selectedIds}
+              onToggleSelect={onToggleSelect}
             />
           ))}
         </div>
@@ -327,6 +352,8 @@ export function TagPanel({
   onReorderTag,
   onDeleteTag,
   onMergeTag,
+  onBulkDeleteTags,
+  confirmDelete: confirmBeforeDelete = true,
 }: TagPanelProps) {
   const [expanded, setExpanded] = useState<Set<string>>(() => readExpanded())
   const [search, setSearch] = useState('')
@@ -334,6 +361,8 @@ export function TagPanel({
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [dropChoice, setDropChoice] = useState<{ sourceId: string; targetId: string } | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<{ tag: Tag; top: number; left: number } | null>(null)
+  const [bulkMode, setBulkMode] = useState(false)
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set())
 
   const toggle = (id: string) => {
     setExpanded((prev) => {
@@ -346,6 +375,7 @@ export function TagPanel({
   }
 
   const editable = Boolean(onCreateTag && onRenameTag && onMoveTag && onDeleteTag)
+  const canBulkManage = editable && Boolean(onBulkDeleteTags)
   const filterCount = filters.any.length + (filters.untaggedOnly ? 1 : 0)
 
   const roots = useMemo(() => childrenOf(tags, null), [tags])
@@ -538,6 +568,49 @@ export function TagPanel({
     setDeleteConfirm(null)
   }
 
+  // ===== 批量管理（MVP）：勾选 → 二次确认 → 批量删除标签（绝不删提示词） =====
+  function enterBulkMode() {
+    setBulkMode(true)
+    setBulkSelected(new Set())
+    setDeleteConfirm(null)
+  }
+
+  function exitBulkMode() {
+    setBulkMode(false)
+    setBulkSelected(new Set())
+  }
+
+  function toggleBulkSelect(id: string) {
+    setBulkSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function selectAllTags() {
+    setBulkSelected(new Set(tags.map((t) => t.id)))
+  }
+
+  function clearBulkSelection() {
+    setBulkSelected(new Set())
+  }
+
+  function handleBulkDelete() {
+    if (!onBulkDeleteTags) return
+    const ids = [...bulkSelected].filter((id) => tags.some((t) => t.id === id))
+    if (ids.length === 0) return
+    if (
+      confirmBeforeDelete &&
+      !window.confirm(`确定删除选中的 ${ids.length} 个标签？\n\n标签及其关联会被移除，提示词本身不会被删除；操作后 10 秒内可一键撤销。`)
+    ) {
+      return
+    }
+    onBulkDeleteTags(ids)
+    exitBulkMode()
+  }
+
   function handleDrop(sourceId: string, target: Tag, position: 'before' | 'after' | 'on') {
     setDraggedId(null)
     if (position === 'on') {
@@ -605,6 +678,47 @@ export function TagPanel({
           />
         </div>
       )}
+      {canBulkManage && (
+        <div className="px-3 pb-1.5">
+          {bulkMode ? (
+            <div className="space-y-1.5 rounded-md border border-line bg-ink-850/60 px-2 py-1.5">
+              <div className="flex items-center justify-between gap-2 text-[11px]">
+                <span className="text-paper-dim">已选 {bulkSelected.size}</span>
+                <div className="flex gap-2">
+                  <button type="button" className="text-muted hover:text-gold-bright" onClick={selectAllTags}>
+                    全选
+                  </button>
+                  <button type="button" className="text-muted hover:text-gold-bright" onClick={clearBulkSelection}>
+                    清空
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button type="button" className="btn px-2 py-1 text-xs" onClick={exitBulkMode}>
+                  退出
+                </button>
+                <button
+                  type="button"
+                  disabled={bulkSelected.size === 0}
+                  className="flex-1 rounded-md bg-rust/15 px-2 py-1 text-xs text-rust transition-colors hover:bg-rust/25 disabled:cursor-not-allowed disabled:opacity-40"
+                  onClick={handleBulkDelete}
+                >
+                  删除所选（{bulkSelected.size}）
+                </button>
+              </div>
+              <p className="text-[10px] leading-relaxed text-muted">只删除标签及其关联，提示词不会被删除。</p>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="w-full rounded-md border border-line px-2 py-1 text-[11px] text-muted transition-colors hover:bg-ink-800 hover:text-gold-bright"
+              onClick={enterBulkMode}
+            >
+              批量管理
+            </button>
+          )}
+        </div>
+      )}
       {error && (
         <div className="mx-3 mb-1 rounded-md border border-rust/40 bg-rust/10 px-2 py-1 text-[11px] leading-relaxed text-rust">
           {error}
@@ -640,6 +754,16 @@ export function TagPanel({
                   }`}
                   onClick={() => onSelectTag(t.id)}
                 >
+                  {bulkMode && (
+                    <input
+                      type="checkbox"
+                      checked={bulkSelected.has(t.id)}
+                      onChange={() => toggleBulkSelect(t.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`选择标签 ${t.name}`}
+                      className="shrink-0 accent-gold"
+                    />
+                  )}
                   <span aria-hidden className="w-4 shrink-0" />
                   <span
                     className={`min-w-0 flex-1 truncate ${active ? 'text-gold-bright' : 'text-paper-dim'}`}
@@ -673,11 +797,14 @@ export function TagPanel({
                 onMerge={handleMerge}
                 onCreateChild={(tag) => handleCreate(tag.id)}
                 onDelete={handleDelete}
-                draggable={editable}
+                draggable={editable && !bulkMode}
                 draggedId={draggedId}
                 onDragStart={setDraggedId}
                 onDragEnd={() => setDraggedId(null)}
                 onDrop={handleDrop}
+                selectable={bulkMode}
+                selectedIds={bulkSelected}
+                onToggleSelect={toggleBulkSelect}
               />
             ))}
             <div className="my-1 h-px bg-line/60" />

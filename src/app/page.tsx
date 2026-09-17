@@ -1291,6 +1291,48 @@ export default function Home() {
     notifyWithUndo(`已删除标签「${tag.name}」（提示词未受影响）`, () => restoreTagSnapshot(snapshot))
   }
 
+  /** 批量删除标签（MVP）：单快照 + 逐个 self 语义删除（子标签提升一级，绝不删 Prompt）。
+   *  所选若含祖孙关系，只删最高层，跳过已被删祖先的子孙（依据操作前的层级判定）。 */
+  function handleBulkDeleteTags(ids: string[]) {
+    const requested = [...new Set(ids)]
+    if (requested.length === 0) return
+    const snapshot = captureTagSnapshot()
+    const byId = new Map(tags.map((t) => [t.id, t]))
+    const removed = new Set<string>()
+    let nextTags = tags
+    let nextPromptTags = promptTags
+    for (const id of requested) {
+      const tag = byId.get(id)
+      if (!tag) continue // 已不存在（并发删除等），跳过
+      // 祖先已被本次删除时跳过该子孙（只删最高层）
+      let cur = tag.parent_id
+      const guard = new Set<string>()
+      let ancestorRemoved = false
+      while (cur !== null && !guard.has(cur)) {
+        if (removed.has(cur)) {
+          ancestorRemoved = true
+          break
+        }
+        guard.add(cur)
+        cur = byId.get(cur)?.parent_id ?? null
+      }
+      if (ancestorRemoved) continue
+      const result = deleteTag(nextTags, nextPromptTags, id, false)
+      nextTags = result.tags
+      nextPromptTags = result.promptTags
+      removed.add(id)
+    }
+    if (removed.size === 0) return
+    applyTags(nextTags, nextPromptTags)
+    setTagFilters((prev) => ({
+      ...prev,
+      any: prev.any.filter((filterId) => !removed.has(filterId)),
+      all: prev.all.filter((filterId) => !removed.has(filterId)),
+      none: prev.none.filter((filterId) => !removed.has(filterId)),
+    }))
+    notifyWithUndo(`已删除 ${removed.size} 个标签（提示词未受影响）`, () => restoreTagSnapshot(snapshot))
+  }
+
   /** 合并标签：source 的关联 + 子标签全部转移到 target，source 删除 */
   function handleMergeTag(sourceId: string, targetId: string): { ok: boolean; error?: string } {
     const source = tags.find((t) => t.id === sourceId)
@@ -1602,6 +1644,8 @@ export default function Home() {
           onReorderTag={isDemoView ? undefined : handleReorderTag}
           onDeleteTag={isDemoView ? undefined : handleDeleteTag}
           onMergeTag={isDemoView ? undefined : handleMergeTag}
+          onBulkDeleteTags={isDemoView ? undefined : handleBulkDeleteTags}
+          confirmDelete={settings.confirmDelete}
         />
         <main className="flex min-w-0 flex-1 gap-4 overflow-hidden px-5 py-4">
           <div className="min-w-0 flex-1 space-y-4 overflow-y-auto">
