@@ -274,3 +274,11 @@
 - 漏字段：`Tag` 共 8 字段（`src/lib/types.ts:54-67`），`tagsSemanticallyEqual` 逐字段全覆盖（id/name/parent_id/icon/is_pinned/sort_order/created_at/updated_at，时间戳经 `sameInstant` 归一化），无真改动被吞；调用处 `743` 命中即 `continue` 跳过 upsert，仅省掉纯格式差异（+00:00 vs Z）空转。
 - `Date.parse` 非法值：`a===b` 先短路（同串非法值判等，不空转）；异串但任一 NaN 时返回 false → 走向 upsert（多写一次，安全方向），不吞真改动。
 - tombstone 误伤：四处（快照合并双侧/缓存/离线/订阅）+派生兜底均按 `dead.has(tag.id / relation.tag_id)` 精确过滤，不碰正常标签；基线刻意取未过滤 `next.tags`（`427/431`），删除仍能经「基线有、本机无」+`deadTagIds` 补传（`795-797`）发起，确认成功后清 tombstone（`806-807`）及恢复清（`1067/1352`）闭环，无永久隐藏。
+## 2026-09-17 Code Review：deleteTagsInCloud 及两处调用（单删/批量）
+
+- 范围：`src/app/page.tsx:1513-1542` 定义、`1573` 单删调用、`1629` 批量调用。结论：PASS。
+- await阻塞：两调用处均先 `applyTags` 乐观更新 UI 再 `await deleteTagsInCloud`；await 期间让出主线程只做网络等待，不阻塞渲染，无 UI 卡死。
+- 失败不回滚自洽：本机已删不回滚 + 失败保留 tombstone（`markTagsDeleted` 先落盘）+ 吐司 + `retryCloudSync()`，与写 effect 删除段（`791-808`：基线有本机无 ∪ tombstone 补传、成功才 `delete` 基线 + `clearTagDeletes`）闭环；回填快照取未过滤基线（`431-432`）保证删项不复活。
+- 深→浅顺序：`depthOf` 沿 `parent_id` 链计深（含环 guard）、`sort(b-a)` 子先父后，避免父先删触发 FK 拒绝；单删 subtree 传删前 `tags` 快照计深正确，批量仅删最高层同样安全。
+- cloudMode守卫：函数入口 `!cloudMode return`，与 `mark/clearTagDeletes` 非云端 no-op（`308`）及 effect 守卫（`728`）一致；离线删除意图仍有本机 tombstone，待上线后补传。
+- 小注（不判FAIL）：失败仅保留最后一条 message，多 id 部分失败时提示收敛为一条，tombstone 仍逐 id 保留由 effect 逐个重试，无丢失。

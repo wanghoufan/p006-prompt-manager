@@ -1169,3 +1169,16 @@ P0-H 当前实现 **PASS**，无新增 Bug；建议进入后续客户端真实 M
 - **结论：FAIL**（`43e3edb` 未达验收标准）。云端证据（以现有只读探针 `scratch/tag-delete-probe-20260917.mjs recenttags` 单语句为准）：`{"id":"bcb3185e-349e-4d38-b7bb-83d909fef2b2","name":"__QA15重验","created_at":"2026-09-17 06:09:41.146+00","updated_at":"2026-09-17 06:11:54.649229+00","revision":2}` —— UI 删除 + 30 秒 + 刷新后云端行仍在且面板复活。
 - **根因指向（QA 不定论，供 builder）**：建后即删场景下真删仍未落云端；且外部删除云端行后应用用同 id 回灌（本地合并优先于云端真值），说明删除路径与本地回灌路径存在竞态/守卫缺口，`43e3edb` 的写锁 + 3 次复核未覆盖本序列。UI 全程无「云端标签删除失败」吐司。
 - **证据**：`scratch/qa-real-device/2026-09-17-bug15-{1-created,2-delete,3-deleted,4-after-reload,5-final-clean,6-reclean,7-final}.png`。
+
+## BUG-15 复测第三轮（2026-09-17，`6d2fc19` 基线语义比较+tombstone补全已部署；结论：FAIL，打回 builder）
+
+- **验收目标**：新建 `__QA15三验` → 立即删除 → 等 60 秒 → 刷新 → 面板无复活 → 云端 `tags` 行消失且 revision 不涨。
+- **真机过程**（生产 `http://192.168.31.60:3100`，用户 Chrome 真机标签页，Orca Computer Use；已登录 `wanghoufan13@gmail.com`，云端模式「已开启 Supabase 云端实时同步；本机保留离线缓存」，全部 73 张，回收站 6）：
+  1. 新建标签 `__QA15三验`：面板即时出现（0 关联）。截图 `2026-09-17-bug15-round3-2-created.png`。
+  2. 立即经「更多操作 → 删除标签 → 确认框（0 条提示词使用）→ 删除标签」删除：面板即时消失（树内 `__QA15` 0 命中），回收站 6→7。截图 `-3-confirm.png`/`-4-deleted.png`（06:27:09Z）。
+  3. 删后 60 秒云端直查（`recenttags` 单语句探针）：行仍在 —— `{"id":"f1cc459c-…","name":"__QA15三验","created_at":"2026-09-17 06:26:46.119+00","updated_at":"2026-09-17 06:26:46.119+00","revision":1}`（updated_at=创建时间，未被触碰）。
+  4. 点浏览器重载 → 面板无复活（tombstone 本地遮蔽），全部 73，回收站 7，云端模式。截图 `-5-after-reload.png`。
+  5. 删后约 2.5 分钟（06:29:18Z）云端复查：行仍在，`revision=1` 未涨；UI 全程无「云端标签删除失败」吐司。**本轮是“静默未删 + 本地遮蔽”（同第一轮），未出现第二轮的“可见复活”。**
+- **清理**：定向 SQL 仅删本测试单 id（先落盘 `scratch/tag-test-cleanup-backup-QA15c-20260917.json`，关联 0 条；他人的 `__测单删/__测D2/__测E` 未动；回收站未清空——内有用户内容 + 本轮 1 条 tag 删除记录）。删后 20 秒云端复核无回灌（本轮未复现第二轮的同 id 推回现象）；刷新后面板无残留，全部 73，回收站 7。截图 `-6-final-clean.png`。
+- **结论：FAIL**（`6d2fc19` 未达验收标准，打回 builder）。建后即删场景下真删 2.5 分钟未落云端且无失败提示；`revision=1` 纹丝不动说明删除请求从未到达云端行。
+- **证据**：`scratch/qa-real-device/2026-09-17-bug15-round3-{1-initial,2-created,3-confirm,4-deleted,5-after-reload,6-final-clean}.png`。

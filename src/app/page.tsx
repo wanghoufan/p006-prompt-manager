@@ -1504,9 +1504,46 @@ export default function Home() {
     return { ok: true }
   }
 
+  /**
+   * 本机已先行删除后的云端补删：直接 await deletePromptTag（复用其同 id 写锁，与并发的
+   * savePromptTag 排成先建后删）。成功才清该 id 的 tombstone 并推进云端基线对应 id；
+   * 失败保留 tombstone 并吐司，由 effect 删除段继续兜底重试，不回滚本机已删状态。
+   * 顺序按层级从深到浅，避免父行先删被 FK 拒绝（子行先走，父行随后必能删掉）。
+   */
+  async function deleteTagsInCloud(ids: Iterable<string>, order: Tag[]) {
+    if (!cloudMode) return
+    const byId = new Map(order.map((tag) => [tag.id, tag]))
+    const depthOf = (tagId: string) => {
+      let depth = 0
+      let cur = byId.get(tagId)?.parent_id ?? null
+      const guard = new Set<string>([tagId])
+      while (cur !== null && !guard.has(cur)) {
+        guard.add(cur)
+        depth += 1
+        cur = byId.get(cur)?.parent_id ?? null
+      }
+      return depth
+    }
+    const targets = [...new Set(ids)].sort((a, b) => depthOf(b) - depthOf(a))
+    let failureMessage: string | null = null
+    for (const tagId of targets) {
+      const result = await deletePromptTag(tagId)
+      if (!result.ok) {
+        failureMessage = result.message
+        continue
+      }
+      cloudTagsRef.current?.delete(tagId)
+      clearTagDeletes([tagId])
+    }
+    if (failureMessage !== null) {
+      notify(`云端标签删除失败：${failureMessage}`)
+      retryCloudSync()
+    }
+  }
+
   /** 删除标签（交接 §40）：级联删关系、删实体，绝不删 Prompt。
    *  @param mode self=仅删自身（子标签提升一级）/ subtree=删除整棵子树（交接 §12 模式 A/B） */
-  function handleDeleteTag(id: string, mode: 'self' | 'subtree' = 'self') {
+  async function handleDeleteTag(id: string, mode: 'self' | 'subtree' = 'self') {
     const tag = tags.find((t) => t.id === id)
     if (!tag) return
     const snapshot = captureTagSnapshot()
@@ -1532,11 +1569,13 @@ export default function Home() {
       none: prev.none.filter((filterId) => !removedFilterIds.has(filterId)),
     }))
     notifyWithUndo(`已删除标签「${tag.name}」（提示词未受影响）`, () => restoreTagSnapshot(snapshot))
+    // 不再只靠 effect 差集：本机落盘后直接补云端删除（成功清 tombstone、失败留给 effect 兜底）。
+    await deleteTagsInCloud(removedIds, tags)
   }
 
   /** 批量删除标签（MVP）：单快照 + 逐个 self 语义删除（子标签提升一级，绝不删 Prompt）。
    *  所选若含祖孙关系，只删最高层，跳过已被删祖先的子孙（依据操作前的层级判定）。 */
-  function handleBulkDeleteTags(ids: string[]) {
+  async function handleBulkDeleteTags(ids: string[]) {
     const requested = [...new Set(ids)]
     if (requested.length === 0) return
     const snapshot = captureTagSnapshot()
@@ -1587,6 +1626,7 @@ export default function Home() {
       none: prev.none.filter((filterId) => !removed.has(filterId)),
     }))
     notifyWithUndo(`已删除 ${removed.size} 个标签（提示词未受影响）`, () => restoreTagSnapshot(snapshot))
+    await deleteTagsInCloud(removed, tags)
   }
 
   /** 合并标签：source 的关联 + 子标签全部转移到 target，source 删除 */
