@@ -268,3 +268,9 @@
 - RLS不可见按成功：recheck miss→ok:true。单用户owner模型下可接受（否则delete 0行+recheck不可见会重试死循环）；代价是跨用户/策略误配的真失败会被当成功掩盖，建议仅记为已知权衡，不判FAIL。
 - Map链尾回收：`tail.then(()=>{get===tail才delete})` 防止后写被先链尾误删；tail恒settled故无永久残留，标签量级下无泄漏。极端：进程崩溃/页面卸载时内存Map随堆消失，无需持久化。
 - 未发现P0/P1问题，不建议改动。
+## 2026-09-17 Code Review：sameInstant/tagsSemanticallyEqual + tombstone补传四处
+
+- 范围：`src/app/page.tsx:114-136` 定义、`743` 调用处；tombstone 过滤 `mergeLocalOnlyIntoRemoteSnapshot(65-95)` 及调用处 `419/567`、缓存回退 `498-503`、离线兜底 `530-536`、Realtime 订阅 `583-588`、派生兜底 `832-841`。结论：PASS。
+- 漏字段：`Tag` 共 8 字段（`src/lib/types.ts:54-67`），`tagsSemanticallyEqual` 逐字段全覆盖（id/name/parent_id/icon/is_pinned/sort_order/created_at/updated_at，时间戳经 `sameInstant` 归一化），无真改动被吞；调用处 `743` 命中即 `continue` 跳过 upsert，仅省掉纯格式差异（+00:00 vs Z）空转。
+- `Date.parse` 非法值：`a===b` 先短路（同串非法值判等，不空转）；异串但任一 NaN 时返回 false → 走向 upsert（多写一次，安全方向），不吞真改动。
+- tombstone 误伤：四处（快照合并双侧/缓存/离线/订阅）+派生兜底均按 `dead.has(tag.id / relation.tag_id)` 精确过滤，不碰正常标签；基线刻意取未过滤 `next.tags`（`427/431`），删除仍能经「基线有、本机无」+`deadTagIds` 补传（`795-797`）发起，确认成功后清 tombstone（`806-807`）及恢复清（`1067/1352`）闭环，无永久隐藏。

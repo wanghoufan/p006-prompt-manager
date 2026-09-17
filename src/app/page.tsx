@@ -111,6 +111,30 @@ function cardCloudFingerprint(card: Card): string {
   })
 }
 
+/** 时间戳语义比较：云端行是 Postgres 的 `+00:00` 形式，本机 state 是 `toISOString()` 的
+ *  `Z` 形式，字符串不等但同一时刻。无法解析（缺失/非法）时按字符串比较结果处理。 */
+function sameInstant(a: string, b: string): boolean {
+  if (a === b) return true
+  const left = Date.parse(a)
+  const right = Date.parse(b)
+  return !Number.isNaN(left) && !Number.isNaN(right) && left === right
+}
+
+/** 标签语义等价：逐字段比对，时间戳归一化后再比。写队列用「基线 vs 本机」判断是否真有
+ *  改动——纯格式差异（+00:00 vs Z）不得触发云端 upsert，否则每轮空转、revision 白涨。 */
+function tagsSemanticallyEqual(a: Tag, b: Tag): boolean {
+  return (
+    a.id === b.id &&
+    a.name === b.name &&
+    (a.parent_id ?? null) === (b.parent_id ?? null) &&
+    (a.icon ?? null) === (b.icon ?? null) &&
+    Boolean(a.is_pinned) === Boolean(b.is_pinned) &&
+    Number(a.sort_order ?? 0) === Number(b.sort_order ?? 0) &&
+    sameInstant(a.created_at, b.created_at) &&
+    sameInstant(a.updated_at, b.updated_at)
+  )
+}
+
 function relationsByCard(relations: PromptTag[]): Map<string, string[]> {
   const result = new Map<string, string[]>()
   for (const relation of relations) {
@@ -471,10 +495,12 @@ export default function Home() {
       setServerOnline(false)
       if (!hydratedOnceRef.current) {
         // 首屏即遇云端不可用：先用本机缓存呈现，避免白屏；后续重试不再覆盖用户正在编辑的状态。
+        // 本机缓存可能仍留着待删标签，读缓存时同样按 tombstone 剔除（同 applyCloud）。
+        const dead = deadTagIds()
         setCards(loadCards())
         setSettings(loadSettings())
-        setTags(loadTags())
-        setPromptTags(loadPromptTags())
+        setTags(loadTags().filter((tag) => !dead.has(tag.id)))
+        setPromptTags(loadPromptTags().filter((relation) => !dead.has(relation.tag_id)))
         markHydrated()
       }
       if (cloudRetryAttemptRef.current === 0) {
@@ -501,12 +527,13 @@ export default function Home() {
     const serverOk = await isServerAvailable()
     if (generation !== connectGenerationRef.current) return
     if (!serverOk) {
-      // 离线兜底：使用本机 localStorage 数据
+      // 离线兜底：使用本机 localStorage 数据（待删标签同样按 tombstone 剔除）
       setServerOnline(false)
+      const dead = deadTagIds()
       setCards(loadCards())
       setSettings(loadSettings())
-      setTags(loadTags())
-      setPromptTags(loadPromptTags())
+      setTags(loadTags().filter((tag) => !dead.has(tag.id)))
+      setPromptTags(loadPromptTags().filter((relation) => !dead.has(relation.tag_id)))
       markHydrated()
       notify('未连接同步服务，已使用本机本地数据（不同步）')
       return
@@ -536,7 +563,8 @@ export default function Home() {
       }
     } else {
       // BUG-12：仅存本机的实体并入视图后再落盘，legacy 写失败期间的本地编辑不再被快照抹掉。
-      const merged = mergeLocalOnlyIntoRemoteSnapshot(remote)
+      // tombstone 同 applyCloud：待删标签的远端行与关系两侧都剔除，免得删除确认前回填复活。
+      const merged = mergeLocalOnlyIntoRemoteSnapshot(remote, deadTagIds())
       setCards(merged.cards)
       setSettings(remote.settings)
       setTags(merged.tags)
@@ -552,10 +580,12 @@ export default function Home() {
     }
     // 订阅实时同步：另一台电脑改动时自动拉取最新数据
     syncUnsubRef.current = subscribeSync((rc, rs, rt, rpt) => {
+      // tombstone 过滤同 applyCloud：删除确认成功前，实时推送不得把待删标签/关系回填进视图。
+      const dead = deadTagIds()
       setCards(rc)
       setSettings(rs)
-      setTags(rt)
-      setPromptTags(rpt)
+      setTags(rt.filter((tag) => !dead.has(tag.id)))
+      setPromptTags(rpt.filter((relation) => !dead.has(relation.tag_id)))
     })
     markHydrated()
   }, [hasPendingCardCloudWrite, hasPendingTagCloudWrite, deadTagIds, notify, scheduleCloudReconnect])
@@ -706,7 +736,11 @@ export default function Home() {
       // 基线**逐实体推进**：某条标签保存成功即写该 id 的基线。整轮失败不再回滚已确认的
       // 部分，否则重试时会把「云端已删」的标签又当成待保存项，或让已删项反复复活。
       for (const tag of tags) {
-        if (previousTags.get(tag.id) === nextTags.get(tag.id)) continue
+        // 基线可能来自云端行（`+00:00` 时间戳），本机 state 是 ISO `Z`：直接比字符串会因纯
+        // 格式差异永远不等，导致每轮重复 upsert（revision 空转）且 hasPendingTagCloudWrite
+        // 永真、Realtime 快照被永久挡在门外。故逐字段语义比较。
+        const previousSerialized = previousTags.get(tag.id)
+        if (previousSerialized !== undefined && tagsSemanticallyEqual(JSON.parse(previousSerialized) as Tag, tag)) continue
         const result = await savePromptTag(tag)
         if (!result.ok) {
           notify(`云端标签保存失败：${result.message}`)

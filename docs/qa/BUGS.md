@@ -1155,3 +1155,17 @@ P0-H 当前实现 **PASS**，无新增 Bug；建议进入后续客户端真实 M
 - **清理**：测试标签云端残留行已按 `scratch/tag-test-cleanup-20260917.mjs` 模式定向清除（仅 `__QA复活验证` 单 id，先落盘 `scratch/tag-test-cleanup-backup-QArevive-20260917.json` 再删关联 0 条 + 本体；他人的 `__测单删/__测D2/__测E` 未动；回收站未清空——内有用户 4 项自有内容 + 本次 1 条 tag 删除记录，清空会销毁用户数据）。清后云端：cards 73 / tags 69 / rels 114。
 - **证据**：`scratch/qa-real-device/2026-09-17-revive-{1-initial,2-menu,3-confirm,4-deleted-toast,5-final-73-norevive}.png`（注：同目录下 `revive-01-baseline.png`/`revive-02-created.png` 为本轮之前另一会话残留，非本轮产物）。
 - **复测建议**：删标签后以云端单语句直查为准（不要只看面板/刷新），观察 1–2 分钟；若复现，先查写队列是否停摆再定根因。
+
+## BUG-15 复测第二轮（2026-09-17，`43e3edb` 同id写锁+删后3次复核已部署；结论：FAIL，打回 builder）
+
+- **验收目标**：新建 `__QA15重验` → 立即删除 → 等 30 秒 → 刷新 → 面板无复活 → 云端 `tags` 行消失。
+- **真机过程**（生产 `http://192.168.31.60:3100`，用户 Chrome 真机标签页，Orca Computer Use；已登录 `wanghoufan13@gmail.com`，云端模式，全部 73 张；`[标签同步]` 诊断横幅在位）：
+  1. 新建标签 `__QA15重验`：面板即时出现（0 关联），横幅 `待存标签数=1`。截图 `2026-09-17-bug15-1-created.png`。
+  2. 立即经「更多操作 → 删除标签 → 确认框（0 条提示词使用）→ 删除标签」删除：面板即时消失，回收站 5→6（本轮两次删除各 +1，见下），横幅 `待删id数=1`。截图 `-2-delete.png`（确认框）/`-3-deleted.png`。
+  3. 等 30 秒后云端复核：横幅仍 `待删id数=1`，面板无该标签。
+  4. 点浏览器重载 → **面板复活**：`__QA15重验 0` 重现（截图 `-4-after-reload.png`，像素级确认）；云端直查行仍在 —— 同 id `bcb3185e-…`，`revision=5`（建后被同步触碰过，但删除从未落定），`rels=0`。**本轮是“可见复活”，与上一轮的“静默未删 + 本地遮蔽”表现不同。**
+  5. 等 60 秒以上云端复查：行仍在（`revision=2`，`updated_at=06:11:54Z`，同 id 同 `created_at`；期间一次直查遇 `api.supabase.com` 间歇性 `ETIMEDOUT`，重试后恢复——属探针网络抖动，非产品结论）。
+- **清理过程的附加证据（重要）**：QA 定向 SQL 仅删本测试单 id（先落盘备份，关联 0 条；他人的 `__测单删/__测D2/__测E` 未动；回收站未清空）后云端 `tags 70→69`，但**应用随即把同 id 同 `created_at` 的行推回云端**（本地仅存态 → 合并回灌，`revision=2`）；面板当时仍显示该标签。QA 又走了一次 UI 删除（面板清、回收站 6），数分钟后云端行仍在。最终再次定向 SQL 清除单 id，刷新后面板无残留（截图 `-7-final.png`，云端模式、全部 73）。终态云端：cards 73 / tags 69 / rels 114；回滚快照 `scratch/tag-test-cleanup-backup-QA15-20260917.json`、`scratch/tag-test-cleanup-backup-QA15b-20260917.json`。
+- **结论：FAIL**（`43e3edb` 未达验收标准）。云端证据（以现有只读探针 `scratch/tag-delete-probe-20260917.mjs recenttags` 单语句为准）：`{"id":"bcb3185e-349e-4d38-b7bb-83d909fef2b2","name":"__QA15重验","created_at":"2026-09-17 06:09:41.146+00","updated_at":"2026-09-17 06:11:54.649229+00","revision":2}` —— UI 删除 + 30 秒 + 刷新后云端行仍在且面板复活。
+- **根因指向（QA 不定论，供 builder）**：建后即删场景下真删仍未落云端；且外部删除云端行后应用用同 id 回灌（本地合并优先于云端真值），说明删除路径与本地回灌路径存在竞态/守卫缺口，`43e3edb` 的写锁 + 3 次复核未覆盖本序列。UI 全程无「云端标签删除失败」吐司。
+- **证据**：`scratch/qa-real-device/2026-09-17-bug15-{1-created,2-delete,3-deleted,4-after-reload,5-final-clean,6-reclean,7-final}.png`。
