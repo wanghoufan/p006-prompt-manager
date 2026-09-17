@@ -172,6 +172,12 @@ export default function Home() {
   // 否则“本机新建 → 另一端事件到达 → 旧快照回读”会把尚未进入 effect 的新卡直接抹掉。
   const cloudCardsDirtyVersionRef = useRef(0)
   const cloudCardsSyncedVersionRef = useRef(0)
+  // 标签/关联同理：本机有未落云的标签改动时，禁止 Realtime 快照整体覆盖本机 state，
+  // 否则「本机删/改标签 → 快照回读」会让未落云的改动连同提示一起消失（静默失败）。
+  const cloudTagsDirtyVersionRef = useRef(0)
+  const cloudTagsSyncedVersionRef = useRef(0)
+  // 上一次「本机标签 id 集合」：用于识别「本机删掉的标签从未进入云端基线」这一异常分叉。
+  const localTagIdsRef = useRef<Set<string> | null>(null)
   const [cloudRetryTick, setCloudRetryTick] = useState(0)
   // connect() 序列化：后发起者胜出；旧运行在 await 恢复后检测到代次变化即自行作废，
   // 消除 auth 事件并发触发 connect 时「云端分支与 legacy 分支交错」的模式摇摆（BUG-11 根因）。
@@ -248,6 +254,14 @@ export default function Home() {
     return cloudCardsDirtyVersionRef.current !== cloudCardsSyncedVersionRef.current
   }, [])
 
+  const markTagsCloudDirty = useCallback(() => {
+    cloudTagsDirtyVersionRef.current += 1
+  }, [])
+
+  const hasPendingTagCloudWrite = useCallback(() => {
+    return cloudTagsDirtyVersionRef.current !== cloudTagsSyncedVersionRef.current
+  }, [])
+
   useEffect(() => {
     cardsRef.current = cards
   }, [cards])
@@ -321,9 +335,9 @@ export default function Home() {
       setHydrated(true)
     }
     const applyCloud = (next: PromptCloudSnapshot, options?: { force?: boolean }) => {
-      // 不用旧快照覆盖仍未落云的本机卡片；等待卡片写队列完成后由 Realtime 重新读取。
+      // 不用旧快照覆盖仍未落云的本机卡片/标签；等待写队列完成后由 Realtime 重新读取。
       // force 仅在云端基线尚未建立时使用（如重连后的首次快照）：此时不存在需要保护的写队列。
-      if (!options?.force && hasPendingCardCloudWrite()) return false
+      if (!options?.force && (hasPendingCardCloudWrite() || hasPendingTagCloudWrite())) return false
       // BUG-12：仅存本机的实体并入视图（基线仍取远端快照，使其成为待推送增量），
       // 避免云端写失败期间的本地编辑被快照覆盖。
       const merged = mergeLocalOnlyIntoRemoteSnapshot(next)
@@ -337,6 +351,10 @@ export default function Home() {
       cloudTagsRef.current = new Map(next.tags.map((tag) => [tag.id, JSON.stringify(tag)]))
       cloudPromptTagsRef.current = new Map(next.promptTags.map((relation) => [`${relation.prompt_id}\u0000${relation.tag_id}`, JSON.stringify(relation)]))
       cloudCardsSyncedVersionRef.current = cloudCardsDirtyVersionRef.current
+      // 标签基线建立/整体覆盖时对齐：此刻视图里的标签就是「本机已知集合」，
+      // 后续移除若不在云端基线中才判定为异常分叉。
+      cloudTagsSyncedVersionRef.current = cloudTagsDirtyVersionRef.current
+      localTagIdsRef.current = new Set(merged.tags.map((tag) => tag.id))
       if (merged.addedCards > 0 || merged.addedTags > 0 || merged.addedRelations > 0) {
         const parts = [
           merged.addedCards > 0 ? `卡片 ${merged.addedCards} 张` : null,
@@ -426,6 +444,9 @@ export default function Home() {
     cloudPromptTagsRef.current = null
     cloudCardsDirtyVersionRef.current = 0
     cloudCardsSyncedVersionRef.current = 0
+    cloudTagsDirtyVersionRef.current = 0
+    cloudTagsSyncedVersionRef.current = 0
+    localTagIdsRef.current = null
     const serverOk = await isServerAvailable()
     if (generation !== connectGenerationRef.current) return
     if (!serverOk) {
@@ -486,7 +507,7 @@ export default function Home() {
       setPromptTags(rpt)
     })
     markHydrated()
-  }, [hasPendingCardCloudWrite, notify, scheduleCloudReconnect])
+  }, [hasPendingCardCloudWrite, hasPendingTagCloudWrite, notify, scheduleCloudReconnect])
 
   useEffect(() => {
     // 延迟到计时器回调中执行，避免 effect 同步体内直接 setState（react-hooks/set-state-in-effect）
@@ -626,6 +647,12 @@ export default function Home() {
     if (!hydrated || !cloudMode) return
     const nextTags = new Map(tags.map((tag) => [tag.id, JSON.stringify(tag)]))
     const nextRelations = new Map(promptTags.map((relation) => [`${relation.prompt_id}\u0000${relation.tag_id}`, JSON.stringify(relation)]))
+    // 本机上一轮已知的标签 id 集合（本轮结束时就地更新）：用来识别「本机删掉了云端基线里
+    // 从没有过的标签」这种分叉，见下方删除前的防御检查。
+    const localTagIds = new Set(tags.map((tag) => tag.id))
+    const previousLocalTagIds = localTagIdsRef.current
+    localTagIdsRef.current = localTagIds
+    const writeVersion = cloudTagsDirtyVersionRef.current
     void enqueueCloudWrite(async () => {
       const previousTags = cloudTagsRef.current
       const previousRelations = cloudPromptTagsRef.current
@@ -674,6 +701,24 @@ export default function Home() {
         }
       }
       lastRelationErrorRef.current = null
+      // 防御（静默分叉）：本机本轮删掉的标签若不在云端基线里（基线被部分覆盖 / 写队列中断 /
+      // RLS 0 行成功等），云端是否仍有该行无法确认；这类删除绝不允许静默跳过——
+      // 明确提示 + 重试，且本轮不推进基线，避免把分叉固化成「本地已删、云端仍在」。
+      const unbaselinedDeletedIds =
+        previousLocalTagIds === null
+          ? []
+          : [...previousLocalTagIds].filter(
+              (tagId) => !localTagIds.has(tagId) && !previousTags.has(tagId),
+            )
+      if (unbaselinedDeletedIds.length > 0) {
+        notify(
+          `云端标签删除异常：本机删除的标签不在云端基线中，云端可能仍有残留（${unbaselinedDeletedIds
+            .map((tagId) => tagId.slice(0, 8))
+            .join('、')}），正在重试`,
+        )
+        retryCloudSync()
+        return
+      }
       for (const tagId of previousTags.keys()) {
         if (nextTags.has(tagId)) continue
         const result = await deletePromptTag(tagId)
@@ -685,6 +730,10 @@ export default function Home() {
       }
       cloudTagsRef.current = nextTags
       cloudPromptTagsRef.current = nextRelations
+      // 仅确认本轮开始前已经发生的本机标签改动；等待期间又改动时仍保持 dirty，避免放开快照覆盖。
+      if (cloudTagsDirtyVersionRef.current === writeVersion) {
+        cloudTagsSyncedVersionRef.current = writeVersion
+      }
     })
   }, [tags, promptTags, cloudMode, cloudRetryTick, enqueueCloudWrite, hydrated, notify, retryCloudSync])
 
@@ -914,6 +963,8 @@ export default function Home() {
 
   /** 标签集合原子落盘：更新 tags + promptTags 后，同步重建所有卡片的 Card.tags 冗余字段 */
   function applyTags(nextTags: Tag[], nextPromptTags: PromptTag[]) {
+    // 标签/关联有本机改动待落云：期间禁止 Realtime 快照整体覆盖本机 state。
+    markTagsCloudDirty()
     setTags(nextTags)
     setPromptTags(nextPromptTags)
     setCards((prev) => syncCardsToPromptTags(prev, nextTags, nextPromptTags))
@@ -1424,6 +1475,18 @@ export default function Home() {
       removed.add(id)
     }
     if (removed.size === 0) return
+    // 回收站：与单删对齐，先留快照（被删标签实体 + 被级联删掉的关联），
+    // 子标签按 self 语义上提一级、并未删除，不进站。
+    const removedIds = [...removed]
+    const removedTitle = tagPath(tags, removedIds[0])
+    pushTrash({
+      kind: 'tag',
+      id: newTrashId(),
+      deletedAt: nowIso(),
+      title: removedIds.length === 1 ? removedTitle : `${removedTitle} 等 ${removedIds.length} 个`,
+      tags: tags.filter((t) => removed.has(t.id)),
+      relations: promptTags.filter((rt) => removed.has(rt.tag_id)),
+    })
     applyTags(nextTags, nextPromptTags)
     setTagFilters((prev) => ({
       ...prev,

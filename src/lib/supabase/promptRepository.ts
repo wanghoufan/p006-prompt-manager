@@ -335,11 +335,31 @@ export async function deletePromptCard(cardId: string): Promise<PromptMutationRe
   return error ? failure(error) : { ok: true }
 }
 
+/**
+ * 删除标签实体，并用受影响行数自证删除真的发生。
+ *
+ * PostgREST 在 RLS 不匹配、行已被别处删除时会「0 行成功」（error 为 null）：只判断 error
+ * 就会把「本地已删、云端仍在」的分叉静默固化成成功，随后被 Realtime 回读复活。
+ * 因此 `.delete()` 后追加 `.select('id')` 回读受影响行，0 行一律按失败上报（含 tagId 短码）。
+ */
 export async function deletePromptTag(tagId: string): Promise<PromptMutationResult> {
   const supabase = getSupabaseBrowserClient()
   if (!supabase) return unavailable()
-  const { error } = await supabase.schema(PROMPT_MANAGER_SCHEMA).from('tags').delete().eq('id', tagId)
-  return error ? failure(error) : { ok: true }
+  const { data, error } = await supabase
+    .schema(PROMPT_MANAGER_SCHEMA)
+    .from('tags')
+    .delete()
+    .eq('id', tagId)
+    .select('id')
+  if (error) return failure(error)
+  if (!data || data.length === 0) {
+    return {
+      ok: false,
+      kind: 'error',
+      message: `云端标签未删除任何行（0 行受影响：可能被 RLS 拒绝或该行已不存在），tagId=${tagId.slice(0, 8)}`,
+    }
+  }
+  return { ok: true }
 }
 
 /**
