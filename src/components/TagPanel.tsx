@@ -54,10 +54,12 @@ function writeExpanded(set: Set<string>) {
   }
 }
 
-/** 左侧面板拖宽：默认 240（原 w-60），下限 0（拖多小都行），上限 480，持久化。 */
+/** 左侧面板拖宽：默认 240（原 w-60），下限 280，上限 480，持久化。 */
 const PANEL_WIDTH_KEY = 'pm:tag-panel-width'
 const PANEL_DEFAULT_W = 240
-const PANEL_MIN_W = 0
+// 下限不能是 0：容器宽度塌缩到 0 后，右缘 2px 拖拽手柄与双击区域都落在零宽容器内，
+// 用户再也抓不回宽度，形成死结（同右侧 PreviewPanel 的 MIN_W 处理）。
+const PANEL_MIN_W = 280
 const PANEL_MAX_W = 480
 
 function clampPanelWidth(w: number): number {
@@ -66,13 +68,19 @@ function clampPanelWidth(w: number): number {
 
 function readSavedPanelWidth(): number {
   if (typeof window === 'undefined') return PANEL_DEFAULT_W
+  const fallback = Math.min(PANEL_MAX_W, Math.max(PANEL_MIN_W, Math.round(PANEL_DEFAULT_W)))
   try {
-    const saved = Number(localStorage.getItem(PANEL_WIDTH_KEY))
+    const raw = localStorage.getItem(PANEL_WIDTH_KEY)
+    if (raw === null) return PANEL_DEFAULT_W
+    const saved = Number(raw)
     if (Number.isFinite(saved) && saved >= PANEL_MIN_W && saved <= PANEL_MAX_W) return saved
+    // 旧版本下限为 0，可能已存下 0 或小于 PANEL_MIN_W 的宽度（拖到底/首次读取 Number(null)=0）。
+    // 直接回退默认宽并回写，避免旧值反复把面板压成 0 宽。
+    localStorage.setItem(PANEL_WIDTH_KEY, String(fallback))
   } catch {
     // ignore
   }
-  return PANEL_DEFAULT_W
+  return fallback
 }
 
 /** 内联弹出菜单（重命名/移动/新建子标签/删除） */

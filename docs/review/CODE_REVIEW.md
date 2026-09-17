@@ -234,4 +234,28 @@
 - 【P3】自愈回写发生在 `useState` 初始化器（render 阶段副作用）：幂等写入，StrictMode 双调用无害，功能正确；仅从纯度角度备注，不要求改。
 - 【备注不动】`TagPanel.tsx:60/67–76` 同类问题仍在：`PANEL_MIN_W=0` + `Number(null)=0` 恰好通过 `>=0` 校验（首访即可能读到 0 宽）且无自愈回写。若左面板同样存在“0 宽抓不回”死结，建议另起一单对齐（下限>0 或照抄本轮自愈模式）；本轮只备注，不动。
 
+---
+
+## 七、P0 标签删除复活修复复核（2026-09-17，code-reviewer；工作区未提交）
+
+- **复核范围**：`src/app/page.tsx`（基线逐实体推进、tombstone 全链路 `pm:pending-tag-deletes`、Realtime 门禁补 tag 脏标记、`restoreTagSnapshot` 补脏标记）、`src/lib/tagTombstones.ts`（新增）、`src/lib/supabase/promptRepository.ts`（`deletePromptTag` 0 行回读复核）。只读代码与 diff，未改业务代码。树上另有旧改动（诊断横幅已回退、`TagPanel.tsx` 下限 280）在列，不属本轮复核对象，仅备注一致性。
+- **静态检查**：`npx tsc --noEmit` 0 error；`npm run lint` 0 error（仅 scratch 2 warnings，与本轮无关）。
+- **结论**：**PASS**（可合入；以下 P2/P3 不阻塞，但建议 builder 顺手修 P2-1）。
+
+### 通过项
+
+- **tombstone 不会永久隐藏正常标签**：清除路径齐全——云端删除确认成功逐实体 `clearTagDeletes`（`page.tsx` 删除循环内）、撤销整体回退 `restoreTagSnapshot` 清快照全部标签 id、回收站恢复清 `restoringIds`；崩溃残留可自愈（下轮写 effect 由“基线有、本机无”重新发起真删，`deletePromptTag` 0 行复核判成功后清除）。id 为 uuid 不复用，无“旧 tombstone 误杀新同名标签”问题。
+- **基线语义自洽**：基线刻意取未过滤 `next.tags`（云端真实行），tombstone 只过滤视图；待删标签因此仍留在基线里，下一轮由“基线有、本机无”自然发起真删除。保存循环逐实体推进基线（成功即 `set` 该 id），整轮失败不再回滚已确认部分，注释与代码一致。
+- **0 行复核无“RLS 拒绝误判成功”风险**：`delete` 0 行 → `select … maybeSingle()` 复核。行仍可见（确属本用户但删不掉）→ 按失败上报重试；行不可见（已删 / 非本用户 RLS select 同样看不到）→ 按成功处理——后者云端不可能再回填给本机（select 看不见 = Realtime/快照也看不见），判成功正确且避免无意义重试死循环。`recheckError` 按失败上报，`id` 为主键 `maybeSingle` 合法。
+- **Realtime 门禁**：`refresh` 等待条件补 `hasPendingTagCloudWrite()`，标签写队列未清空前不拉快照，避免半完成快照覆盖本地删除。
+- **`mergeTags`（合并）计入删除**：`markTagsDeleted([sourceId])` 在快照之后、校验冲突之后，顺序正确；撤销经 `restoreTagSnapshot` 清除对应 tombstone。
+- **诊断横幅已干净回退**：`syncDiag` state 与渲染横幅、`setSyncDiag` 调用已全量移除，无残留。
+
+### 问题列表（均不阻塞）
+
+- 【P2-1】陈旧 tombstone 会污染 legacy（未登录）派生兜底：`markTagsDeleted` 仅云端模式记录，但 `activeTagData` 派生兜底过滤（`page.tsx:800` 起）与 `mergeLocalOnlyIntoRemoteSnapshot` 的 `deadTagIds` 参数不分云端/legacy。若用户云端删标签后登出，残留 tombstone（删除尚未确认成功时）在 legacy 视图下仍剔除同 id 派生标签。建议过滤时加 `cloudMode` 守卫，或登出/切换 legacy 时清空 tombstone（`clearTagDeletes(deadTagIds())` 或直接 `writePendingTagDeletes(new Set())`）。
+- 【P3-1】`writePendingTagDeletes` 配额满时静默丢弃：后果是复活（删除意图丢失），不是隐藏，方向安全；仅备注。若要更稳，可在丢弃时 `notify` 一句“本机待删标记保存失败”。
+- 【P3-2】`clearTagDeletes` 清的是快照**全部**标签 id（`restoreTagSnapshot`），而非仅被删 id：语义是“凡在快照里出现即视为已还原”，当前撤销即整体回退快照，正确；仅备注，若将来改为增量撤销需收窄。
+- 【备注不动】`TagPanel.tsx` 本轮 diff（`PANEL_MIN_W 0→280` + 旧值自愈回写）与 §六 PreviewPanel 修复同模式、下限 280 与上限 480 自洽，不属本轮 P0 范围，仅确认无冲突，不另开问题。
+
 (End of file)

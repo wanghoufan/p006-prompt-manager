@@ -340,26 +340,31 @@ export async function deletePromptCard(cardId: string): Promise<PromptMutationRe
  *
  * PostgREST 在 RLS 不匹配、行已被别处删除时会「0 行成功」（error 为 null）：只判断 error
  * 就会把「本地已删、云端仍在」的分叉静默固化成成功，随后被 Realtime 回读复活。
- * 因此 `.delete()` 后追加 `.select('id')` 回读受影响行，0 行一律按失败上报（含 tagId 短码）。
+ * 因此 `.delete()` 后追加 `.select('id')` 回读受影响行；0 行再回读一次复核：
+ * - 复核读不到该行 → 「行已不存在」或「该行不属于当前用户（RLS select 同样看不到）」，
+ *   两种情况云端都不会把这一行回填给本机，按删除成功（ok:true）处理，避免无意义的重试死循环；
+ * - 复核仍能读到该行 → 该行确属本用户但删除未生效（删除被拒绝），按失败上报（含 tagId 短码）。
  */
 export async function deletePromptTag(tagId: string): Promise<PromptMutationResult> {
   const supabase = getSupabaseBrowserClient()
   if (!supabase) return unavailable()
-  const { data, error } = await supabase
-    .schema(PROMPT_MANAGER_SCHEMA)
-    .from('tags')
-    .delete()
-    .eq('id', tagId)
-    .select('id')
+  const database = supabase.schema(PROMPT_MANAGER_SCHEMA)
+  const { data, error } = await database.from('tags').delete().eq('id', tagId).select('id')
   if (error) return failure(error)
-  if (!data || data.length === 0) {
-    return {
-      ok: false,
-      kind: 'error',
-      message: `云端标签未删除任何行（0 行受影响：可能被 RLS 拒绝或该行已不存在），tagId=${tagId.slice(0, 8)}`,
-    }
+  if (data && data.length > 0) return { ok: true }
+
+  const { data: recheck, error: recheckError } = await database
+    .from('tags')
+    .select('id')
+    .eq('id', tagId)
+    .maybeSingle()
+  if (recheckError) return failure(recheckError)
+  if (!recheck) return { ok: true }
+  return {
+    ok: false,
+    kind: 'error',
+    message: `云端标签未能删除（该行仍存在，删除被拒绝），tagId=${tagId.slice(0, 8)}`,
   }
-  return { ok: true }
 }
 
 /**
