@@ -40,7 +40,9 @@ interface PreviewPanelProps {
 }
 
 const WIDTH_KEY = 'pm:preview-width'
-const MIN_W = 0
+// 下限不能是 0：容器宽度塌缩到 0 后，左侧 2px 拖拽手柄（absolute left-0）与双击区域
+// 都落在零宽容器内，用户再也抓不回宽度，形成死结。
+const MIN_W = 280
 const MAX_W = 720
 
 function clampWidth(w: number): number {
@@ -49,13 +51,19 @@ function clampWidth(w: number): number {
 
 function readSavedWidth(defaultWidth: number): number {
   if (typeof window === 'undefined') return defaultWidth
+  const fallback = Math.min(MAX_W, Math.max(MIN_W, Math.round(defaultWidth)))
   try {
-    const saved = Number(localStorage.getItem(WIDTH_KEY))
+    const raw = localStorage.getItem(WIDTH_KEY)
+    if (raw === null) return defaultWidth
+    const saved = Number(raw)
     if (Number.isFinite(saved) && saved >= MIN_W && saved <= MAX_W) return saved
+    // 旧版本下限为 0，可能已存下 0 或小于 MIN_W 的宽度（拖到底/首次读取 Number(null)=0）。
+    // 直接回退默认宽并回写，避免旧值反复把面板压成 0 宽。
+    localStorage.setItem(WIDTH_KEY, String(fallback))
   } catch {
     // ignore
   }
-  return defaultWidth
+  return fallback
 }
 
 export function PreviewPanel({
