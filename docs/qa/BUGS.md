@@ -1139,3 +1139,19 @@ P0-H 当前实现 **PASS**，无新增 Bug；建议进入后续客户端真实 M
 - 根因：`prompt_tags`两条FK均为复合`(id,owner_user_id)`；旧写入upsert只带`{prompt_id,tag_id}`且卡/标签父行与关联分属两个effect无序，父行未到即FK挂。
 - 修复（`989e321`已上线）：`promptRepository.ts`取uid+预检父行+显式`owner_user_id`；缺父行回可读“稍后重试”，调用方标脏卡片下轮先补父行。
 - 真机（生产`http://192.168.31.60:3100`，Chrome，Vision+Computer Use）：新建卡+新标签，旧FK裸错0出现，新友好提示出现1次后重试收敛，`fkfix2`计数0→1，删卡级联回0；测试卡+4个测试标签已清，71张归位。截图`scratch/qa-real-device/qa-{before,tag-added,after-reload,final-clean}.png`。状态：FIXED。
+
+## BUG-15 标签删除云端未落定（2026-09-17，真机 FAIL；247e9ce 已上线但未达预期）
+
+- **结论：FAIL**（P0 标签删除复活修复未达验收标准，打回 builder）。
+- **验收目标**：删除 `__QA复活验证` → 等写队列落定 → 刷新 → 云端行消失且面板不复活。
+- **真机过程**（生产 `http://192.168.31.60:3100`，Chrome，Orca Vision+Computer Use；预检 PASS：list-apps/get-app-state/click/截图全通）：
+  1. 初始态：已登录 `wanghoufan13@gmail.com`，云端模式，全部 73 张，`__QA复活验证`（0 关联）在列。截图 `2026-09-17-revive-1-initial.png`。
+  2. 点「更多操作」→「删除标签」→ 确认框「删除『__QA复活验证』？当前有 0 条提示词使用此标签」→ 点「删除标签」。截图 `-2-menu.png`/`-3-confirm.png`。
+  3. 吐司「已删除标签『__QA复活验证』（提示词未受影响）」+ 撤销；标签即时从面板消失；回收站 4→5。截图 `-4-deleted-toast.png`。
+  4. 等 20s 后云端直查：`tags` 行仍在（revision=1，updated_at=创建时间，未被触碰）。**此前一次多语句查询只回了最后一个结果集，险些误判为 0 行——已用单语句复核纠正。**
+  5. 点浏览器重载 → 面板仍无该标签（tombstone 本地遮蔽），全部 73，云端模式。截图 `-5-final-73-norevive.png`。
+  6. 删后约 15 分钟云端复查：行仍在，revision=1 未变；UI 全程无「云端标签删除失败」吐司。
+- **根因指向（QA 不定论，供 builder）**：`handleDeleteTag`（`page.tsx:1475`）只改本机 state + 落 tombstone + pushTrash，真删依赖标签写 effect（`page.tsx:697-781`）的「基线有、本机无」diff 发 `deletePromptTag`。本轮该真删 15 分钟未落云端且无失败提示；tombstone 让本机（含刷新后）看起来已删——属于“静默未删 + 本地遮蔽”，比可见复活更隐蔽。待查：写队列是否被更早的未决写入卡住（`enqueueCloudWrite` 串行），或基线/版本守卫跳过了本轮。
+- **清理**：测试标签云端残留行已按 `scratch/tag-test-cleanup-20260917.mjs` 模式定向清除（仅 `__QA复活验证` 单 id，先落盘 `scratch/tag-test-cleanup-backup-QArevive-20260917.json` 再删关联 0 条 + 本体；他人的 `__测单删/__测D2/__测E` 未动；回收站未清空——内有用户 4 项自有内容 + 本次 1 条 tag 删除记录，清空会销毁用户数据）。清后云端：cards 73 / tags 69 / rels 114。
+- **证据**：`scratch/qa-real-device/2026-09-17-revive-{1-initial,2-menu,3-confirm,4-deleted-toast,5-final-73-norevive}.png`（注：同目录下 `revive-01-baseline.png`/`revive-02-created.png` 为本轮之前另一会话残留，非本轮产物）。
+- **复测建议**：删标签后以云端单语句直查为准（不要只看面板/刷新），观察 1–2 分钟；若复现，先查写队列是否停摆再定根因。

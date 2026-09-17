@@ -259,3 +259,12 @@
 - 【备注不动】`TagPanel.tsx` 本轮 diff（`PANEL_MIN_W 0→280` + 旧值自愈回写）与 §六 PreviewPanel 修复同模式、下限 280 与上限 480 自洽，不属本轮 P0 范围，仅确认无冲突，不另开问题。
 
 (End of file)
+## 2026-09-17 Code Review：withTagWriteLock / savePromptTag / deletePromptTag（同id串行链）
+
+- 范围：src/lib/supabase/promptRepository.ts L309-L406（withTagWriteLock、savePromptTag经由revisionedSave、deletePromptTag重试复核）。结论：PASS。
+- 同id串行/死锁：`previous.then(task, task)` 使前任reject仍放行后任；`tail=run.then(()=>{},()=>{})` 恒resolve，链尾永不卡死；`return run` 把原始resolve/reject原样交还调用方，无吞错。key按tagId隔离，不存在跨id串错；同id的建/删/改按调用先后排队，与注释“删持有整删过程锁、排在先建之后”一致。
+- 异常路径放行链尾：已覆盖（rejection双分支+tail吞错）。run若调用方不await会有unhandledRejection风险，但save/delete均return run由调用方处理，本文件内无漏。
+- 3次重试语义：`DELETE_TAG_ATTEMPTS=3` + `attempt<ATTEMPTS`才delay，总附加延迟≤2×150ms，与注释一致；FK/RLS delete error与recheck error均立即failure不重试，正确；仅“recheck仍可见”时重试，终态仍可见才报错并带8位tagId，正确。
+- RLS不可见按成功：recheck miss→ok:true。单用户owner模型下可接受（否则delete 0行+recheck不可见会重试死循环）；代价是跨用户/策略误配的真失败会被当成功掩盖，建议仅记为已知权衡，不判FAIL。
+- Map链尾回收：`tail.then(()=>{get===tail才delete})` 防止后写被先链尾误删；tail恒settled故无永久残留，标签量级下无泄漏。极端：进程崩溃/页面卸载时内存Map随堆消失，无需持久化。
+- 未发现P0/P1问题，不建议改动。

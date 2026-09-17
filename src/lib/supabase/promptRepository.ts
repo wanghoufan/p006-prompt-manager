@@ -298,8 +298,30 @@ export function savePromptCard(card: Card): Promise<PromptMutationResult> {
   })
 }
 
+/**
+ * 同 id 标签写操作的串行链：把「保存」和「删除」按调用先后排队，等价于让云端落库顺序
+ * 与本机操作顺序一致。
+ *
+ * 需要它的场景是「建后即删」：若建的请求还在路上，删可能先到云端（删 0 行 → 复核通过 →
+ * 清 tombstone），建的 upsert 随后落库，被删的标签就复活且全程无错误提示。
+ * 删除排队在建之后执行，删就具备对未落定的建的最终权威。
+ */
+const tagWriteTails = new Map<string, Promise<unknown>>()
+
+function withTagWriteLock<T>(tagId: string, task: () => Promise<T>): Promise<T> {
+  const previous = tagWriteTails.get(tagId) ?? Promise.resolve()
+  const run = previous.then(task, task)
+  const tail = run.then(() => {}, () => {})
+  tagWriteTails.set(tagId, tail)
+  void tail.then(() => {
+    // 链尾未被后续写替换时才回收，避免 map 随标签数无限增长。
+    if (tagWriteTails.get(tagId) === tail) tagWriteTails.delete(tagId)
+  })
+  return run
+}
+
 export function savePromptTag(tag: Tag): Promise<PromptMutationResult> {
-  return revisionedSave('tags', 'id', tag.id, {
+  return withTagWriteLock(tag.id, () => revisionedSave('tags', 'id', tag.id, {
     id: tag.id,
     name: tag.name,
     parent_id: tag.parent_id,
@@ -308,7 +330,7 @@ export function savePromptTag(tag: Tag): Promise<PromptMutationResult> {
     sort_order: tag.sort_order,
     created_at: tag.created_at,
     updated_at: tag.updated_at,
-  })
+  }))
 }
 
 /** `aiApiKey` 不属于云端 payload；调用者传入的本机密钥会被忽略。 */
@@ -335,36 +357,52 @@ export async function deletePromptCard(cardId: string): Promise<PromptMutationRe
   return error ? failure(error) : { ok: true }
 }
 
+/** 删除后复核到行仍在时的重试上限与间隔（总附加延迟 ≤ 2 个间隔）。 */
+const DELETE_TAG_ATTEMPTS = 3
+const DELETE_TAG_RETRY_DELAY_MS = 150
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 /**
- * 删除标签实体，并用受影响行数自证删除真的发生。
+ * 删除标签实体，并用回读复核自证删除真的发生；复核不过则重试删除，直到行真的消失。
  *
  * PostgREST 在 RLS 不匹配、行已被别处删除时会「0 行成功」（error 为 null）：只判断 error
  * 就会把「本地已删、云端仍在」的分叉静默固化成成功，随后被 Realtime 回读复活。
- * 因此 `.delete()` 后追加 `.select('id')` 回读受影响行；0 行再回读一次复核：
+ * 因此每次 `.delete()` 后都回读复核该行是否真的不在了：
  * - 复核读不到该行 → 「行已不存在」或「该行不属于当前用户（RLS select 同样看不到）」，
  *   两种情况云端都不会把这一行回填给本机，按删除成功（ok:true）处理，避免无意义的重试死循环；
- * - 复核仍能读到该行 → 该行确属本用户但删除未生效（删除被拒绝），按失败上报（含 tagId 短码）。
+ * - 复核仍能读到该行 → 可能是删除被拒（FK/RLS），也可能是同 id 的建刚落在本次删除之后；
+ *   两者从单次响应里分不开，故短暂间隔后重删，直到行消失或达到重试上限，仍存在才上报失败。
+ *
+ * 整个删除过程持有同 id 写锁：排在先发出的建之后执行，删因而是对该 id 最后生效的一次写。
  */
 export async function deletePromptTag(tagId: string): Promise<PromptMutationResult> {
   const supabase = getSupabaseBrowserClient()
   if (!supabase) return unavailable()
-  const database = supabase.schema(PROMPT_MANAGER_SCHEMA)
-  const { data, error } = await database.from('tags').delete().eq('id', tagId).select('id')
-  if (error) return failure(error)
-  if (data && data.length > 0) return { ok: true }
+  return withTagWriteLock(tagId, async () => {
+    const database = supabase.schema(PROMPT_MANAGER_SCHEMA)
+    for (let attempt = 1; attempt <= DELETE_TAG_ATTEMPTS; attempt += 1) {
+      const { error } = await database.from('tags').delete().eq('id', tagId).select('id')
+      if (error) return failure(error)
 
-  const { data: recheck, error: recheckError } = await database
-    .from('tags')
-    .select('id')
-    .eq('id', tagId)
-    .maybeSingle()
-  if (recheckError) return failure(recheckError)
-  if (!recheck) return { ok: true }
-  return {
-    ok: false,
-    kind: 'error',
-    message: `云端标签未能删除（该行仍存在，删除被拒绝），tagId=${tagId.slice(0, 8)}`,
-  }
+      const { data: recheck, error: recheckError } = await database
+        .from('tags')
+        .select('id')
+        .eq('id', tagId)
+        .maybeSingle()
+      if (recheckError) return failure(recheckError)
+      if (!recheck) return { ok: true }
+
+      if (attempt < DELETE_TAG_ATTEMPTS) await delay(DELETE_TAG_RETRY_DELAY_MS)
+    }
+    return {
+      ok: false,
+      kind: 'error',
+      message: `云端标签未能删除（该行仍存在，删除被拒绝），tagId=${tagId.slice(0, 8)}`,
+    }
+  })
 }
 
 /**
