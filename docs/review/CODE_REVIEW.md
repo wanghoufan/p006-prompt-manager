@@ -213,4 +213,25 @@
 
 > **本轮结论**：**存在 1 个 P0 阻断性 Lint 错误（Ref 渲染期赋值），须修复后方可交付**。其余 P1 为功能体验缺陷，建议同步修复；P2/P3 可按优先级排期。
 
+---
+
+## 六、PreviewPanel 拖宽下限修复复核（2026-09-17，code-reviewer；已提交 `7f0c9ed`）
+
+- **复核范围**：`src/components/PreviewPanel.tsx`（`MIN_W 0→280` + `readSavedWidth` 旧值自愈回写）；复核时为未提交 diff，同日已提交为 `7f0c9ed`（工作区 `src/` 现为干净）。只读代码与 diff，未改业务代码。
+- **静态检查**：`npx tsc --noEmit` 0 error；`npm run lint` 0 error（仅 scratch 2 warnings，与本轮无关）。
+- **结论**：**PASS**（可合入；下限 280 合理，自愈逻辑无阻断性漏洞；以下均为 P2/P3 备注，不阻塞）。
+
+### 通过项
+
+- 下限 280 合理：默认 `defaultWidth=320`（注：任务描述称默认 420，实测代码 77 行为 320；280<320<720 无论按哪个默认值都成立），上限 720 不变；280 保证正文/标题/备注可编辑区可用，同时根除“0 宽后面板内 2px 拖拽手柄与双击区不可达”的死结。注释（43–44 行）把原因写清。
+- `clampWidth`（48–50 行）与 `handleDragMove`（220–230 行）一致：拖拽经 `clampWidth` 后 `setWidth` + 持久化已钳制值，拖不到 0。
+- 自愈逻辑（52–67 行）覆盖全部脏旧值：`0` / `<MIN_W` / `>MAX_W` / `NaN` / `Infinity` / `''`（`Number('')=0` 落入自愈分支）一律回退 clamped `fallback` 并回写 `localStorage`，旧 0 值不会反复压扁面板；`try/catch` 保留，隐私模式等异常路径仍回退可用宽度。
+
+### 问题列表（均不阻塞，仅备注）
+
+- 【P2】`resetWidth`（250–258 行）写回的是原始 `defaultWidth` 而非钳制值：当前调用方默认 320 在界内无影响；若将来有调用方传入越界 `defaultWidth`，state 与存储将违背钳制契约。建议 `setWidth(clampWidth(defaultWidth))` + 存钳制值（改动一行，builder 顺手修即可）。
+- 【P3】`raw === null` 首访路径（57 行）返回原始 `defaultWidth`，而脏值路径返回 clamped `fallback`，两者不一致（同一切入点：越界 defaultWidth 才分叉，当前无影响）。可统一为 `fallback`。
+- 【P3】自愈回写发生在 `useState` 初始化器（render 阶段副作用）：幂等写入，StrictMode 双调用无害，功能正确；仅从纯度角度备注，不要求改。
+- 【备注不动】`TagPanel.tsx:60/67–76` 同类问题仍在：`PANEL_MIN_W=0` + `Number(null)=0` 恰好通过 `>=0` 校验（首访即可能读到 0 宽）且无自愈回写。若左面板同样存在“0 宽抓不回”死结，建议另起一单对齐（下限>0 或照抄本轮自愈模式）；本轮只备注，不动。
+
 (End of file)
