@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { Settings } from '@/lib/types'
-import type { AIProvider } from '@/lib/ai/types'
+import { AI_MODEL_PRESETS, type AIProvider } from '@/lib/ai/types'
 import { AiError } from '@/lib/ai/adapter'
 import { DEFAULT_THINKING_PROMPT } from '@/lib/prompts'
 import { useModalFocus } from '@/hooks/useModalFocus'
@@ -36,7 +36,7 @@ const AI_SERVICES: {
   provider: AIProvider
   label: string
   available: boolean
-  models: string[]
+  models: readonly string[]
   defaultBaseUrl: string
   docsUrl: string
 }[] = [
@@ -44,7 +44,7 @@ const AI_SERVICES: {
     provider: 'deepseek',
     label: 'DeepSeek',
     available: true,
-    models: ['deepseek-v4-flash'],
+    models: AI_MODEL_PRESETS.deepseek,
     defaultBaseUrl: 'https://api.deepseek.com',
     docsUrl: 'https://api-docs.deepseek.com/zh-cn/',
   },
@@ -52,7 +52,7 @@ const AI_SERVICES: {
     provider: 'openrouter',
     label: 'OpenRouter',
     available: true,
-    models: ['auto'],
+    models: AI_MODEL_PRESETS.openrouter,
     defaultBaseUrl: 'https://openrouter.ai/api/v1',
     docsUrl: 'https://openrouter.ai/docs',
   },
@@ -60,7 +60,7 @@ const AI_SERVICES: {
     provider: 'opencode',
     label: 'OpenCode Zen',
     available: true,
-    models: ['glm-5.3-flash'],
+    models: AI_MODEL_PRESETS.opencode,
     defaultBaseUrl: 'https://opencode.ai/zen/v1',
     docsUrl: 'https://opencode.ai/docs/zh-cn/zen',
   },
@@ -68,7 +68,7 @@ const AI_SERVICES: {
     provider: 'opencode-go',
     label: 'OpenCode Go（$10/月）',
     available: true,
-    models: ['deepseek-v4-flash', 'glm-5.3-flash'],
+    models: AI_MODEL_PRESETS['opencode-go'],
     defaultBaseUrl: 'https://opencode.ai/zen/go/v1',
     docsUrl: 'https://opencode.ai/docs/zh-cn/go',
   },
@@ -95,8 +95,6 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
   const aiSaveTimer = useRef<number | null>(null)
   const aiService = AI_SERVICES.find((service) => service.provider === settings.aiProvider)
   const aiModels = aiService?.models ?? []
-  const isOpenRouter = settings.aiProvider === 'openrouter'
-  const isOpenRouterCustomModel = isOpenRouter && settings.aiModel !== 'auto'
 
   // OPT-NEW-2：复用 CardDetail 的 useModalFocus（打开聚焦 / Tab 循环 / 关闭归还 / Esc 关闭）
   useModalFocus(panelRef, true, onClose)
@@ -363,42 +361,20 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
             <label htmlFor="settings-ai-model" className="mt-3 block text-xs text-muted">
               模型
             </label>
-            {isOpenRouter ? (
-              <>
-                <select
-                  id="settings-ai-model"
-                  className="field mt-1"
-                  value={isOpenRouterCustomModel ? 'custom' : 'auto'}
-                  onChange={(e) => saveAi({ aiModel: e.target.value === 'auto' ? 'auto' : '' })}
-                >
-                  <option value="auto">auto</option>
-                  <option value="custom">自定义模型</option>
-                </select>
-                {isOpenRouterCustomModel && (
-                  <input
-                    id="settings-ai-model-custom"
-                    className="field mt-2"
-                    value={settings.aiModel}
-                    onChange={(e) => saveAi({ aiModel: e.target.value })}
-                    placeholder="输入 OpenRouter 模型名称"
-                    autoComplete="off"
-                  />
-                )}
-              </>
-            ) : (
-              <select
-                id="settings-ai-model"
-                className="field mt-1"
-                value={aiModels.includes(settings.aiModel) ? settings.aiModel : aiModels[0] ?? ''}
-                onChange={(e) => saveAi({ aiModel: e.target.value })}
-              >
-                {aiModels.map((model) => (
-                  <option key={model} value={model}>
-                    {model}
-                  </option>
-                ))}
-              </select>
-            )}
+            <input
+              id="settings-ai-model"
+              className="field mt-1"
+              list="settings-ai-model-presets"
+              value={settings.aiModel}
+              onChange={(e) => saveAi({ aiModel: e.target.value })}
+              placeholder={aiModels[0] ?? '输入模型名称'}
+              autoComplete="off"
+            />
+            <datalist id="settings-ai-model-presets">
+              {aiModels.map((model) => (
+                <option key={model} value={model} />
+              ))}
+            </datalist>
             {settings.aiProvider === 'opencode' && (
               <p className="mt-1.5 text-xs leading-relaxed text-muted">
                 <a

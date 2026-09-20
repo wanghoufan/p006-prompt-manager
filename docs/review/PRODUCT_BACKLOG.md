@@ -121,6 +121,20 @@
   3. 新建父校验提示：`handleCreateTag:516-518` `!tags.some(t=>t.id===parentId)`→`父标签不存在`（非环检测），与重命名/移动校验区分
 - 结论：Fix 3项已验证通过，BUG-NEW-1保持CLOSED，Vision必选通过；无新增P1，阻断项：无
 
+## P0 用户反馈（最高优先级 · 2026-09-17 新增，用户口述+截图）
+
+> 规则：此 P0 段为**最高优先级**，高于一切 P1/P2/P3；后续新增用户反馈均置顶于此，进入当前 PLAN 即时排期。
+
+### P0-C DeepSeek模型改名+模型允许手填（2026-09-17 用户口述+截图）
+
+- 问题：`src/lib/ai/types.ts` 的 `AI_PROVIDERS` 与 `SettingsModal.tsx` 的 `AI_SERVICES` 把 DeepSeek 模型写死为 `deepseek-v4-flash`；官方 2026-09-17 定价页现行名已是 `deepseek-flash`（V4.1-Flash）与 `deepseek-v4-pro`，旧 `deepseek-v4-flash` 退役仅兼容。且模型只能下拉选，不能手填，后续再改名又得改代码。
+- 用户场景：“DeepSeek模型名字变了，不要只给默认，先查最新预置好；另外允许用户自己填写，后续模型变了用户自己填，而不是固定死。”
+- 为什么是问题：预置过期调旧模型；写死下拉维护成本高。
+- 建议方案：预置更新为 `deepseek-flash`（默认）+ `deepseek-v4-pro`；模型字段改下拉+手填兼容（datalist 或 select+自定义输入），`normalizeSettings`/factory 透传任意字符串；三处同源（types/SettingsModal/factory）同步。
+- 预期收益：跟上官方命名，用户自助应对改名。
+- 实现成本：低
+- 优先级：P0（用户反馈最高）
+
 ## P0 用户反馈（最高优先级 · 2026-09-17 新增，用户口述）
 
 > 规则：此 P0 段为**最高优先级**，高于一切 P1/P2/P3；后续新增用户反馈均置顶于此，进入当前 PLAN 即时排期。

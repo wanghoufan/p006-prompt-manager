@@ -1,6 +1,6 @@
 import { createAIAdapter } from '@/lib/ai/factory'
 import { AiError } from '@/lib/ai/adapter'
-import { AI_PROVIDERS, type AIConfig, type AIProvider, type ChatMessage, type ChatOptions } from '@/lib/ai/types'
+import { AI_PROVIDERS, normalizeAiModel, type AIConfig, type AIProvider, type ChatMessage, type ChatOptions } from '@/lib/ai/types'
 import { DEFAULT_THINKING_PROMPT, META_PROMPT } from '@/lib/prompts'
 import { normalizeTags } from '@/lib/cards'
 import { getState } from '@/lib/serverStore'
@@ -55,14 +55,15 @@ export async function resolveAIConfig(override?: Partial<AIConfig>): Promise<AIC
       : 'deepseek'
   const storedKey = typeof st.aiApiKey === 'string' && st.aiApiKey.trim() ? st.aiApiKey.trim() : ''
   const env = resolveEnvFallbacks(provider, envProvider)
+  const model =
+    typeof override?.model === 'string' && override.model.trim()
+      ? override.model.trim()
+      : typeof st.aiModel === 'string' && st.aiModel.trim()
+        ? st.aiModel.trim()
+        : env.model
   return {
     provider,
-    model:
-      typeof override?.model === 'string' && override.model.trim()
-        ? override.model.trim()
-        : typeof st.aiModel === 'string' && st.aiModel.trim()
-          ? st.aiModel.trim()
-          : env.model,
+    model: normalizeAiModel(provider, model),
     apiKey:
       typeof override?.apiKey === 'string' && override.apiKey.trim()
         ? override.apiKey.trim()

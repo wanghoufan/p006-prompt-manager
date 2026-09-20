@@ -7,6 +7,7 @@ import { deletePromptCard, deletePromptTag, getPromptCloudSessionUser, getPrompt
 import { createCard, normalizeBody, parseTags, rollbackToVersion, saveBodyOnly, saveBodyWithVersion } from '@/lib/cards'
 import { DEMO_CARDS } from '@/lib/demo'
 import { nowIso } from '@/lib/util'
+import { DEFAULT_AI_MODEL, DEFAULT_AI_PROVIDER } from '@/lib/ai/types'
 import { TopBar } from '@/components/TopBar'
 import type { ViewMode } from '@/components/DemoMenu'
 import { TagPanel } from '@/components/TagPanel'
@@ -157,8 +158,8 @@ export default function Home() {
     bodyAlignment: 'left',
     composerAddMode: 'auto',
     hoverPreview: false,
-    aiProvider: 'deepseek',
-    aiModel: 'deepseek-v4-flash',
+    aiProvider: DEFAULT_AI_PROVIDER,
+    aiModel: DEFAULT_AI_MODEL,
     aiApiKey: '',
     aiBaseUrl: '',
   }))

@@ -1,5 +1,5 @@
 import type { Card, Settings, Version, Tag, PromptTag } from '@/lib/types'
-import { AI_PROVIDERS } from '@/lib/ai/types'
+import { AI_PROVIDERS, DEFAULT_AI_MODEL, DEFAULT_AI_PROVIDER, normalizeAiModel } from '@/lib/ai/types'
 import { nowIso, uid } from '@/lib/util'
 import { normalizeBody } from '@/lib/cards'
 import { isTag, isPromptTag, normalizeTag } from '@/lib/tags'
@@ -102,8 +102,8 @@ const DEFAULT_SETTINGS: Settings = {
   bodyAlignment: 'left',
   composerAddMode: 'auto',
   hoverPreview: false,
-  aiProvider: 'deepseek',
-  aiModel: 'deepseek-v4-flash',
+  aiProvider: DEFAULT_AI_PROVIDER,
+  aiModel: DEFAULT_AI_MODEL,
   aiApiKey: '',
   aiBaseUrl: '',
 }
@@ -120,8 +120,8 @@ function normalizeSettings(v: unknown): Settings {
   const composerAddMode = s.composerAddMode === 'manual' ? 'manual' : 'auto'
   const aiProvider = AI_PROVIDERS_SET.includes(s.aiProvider ?? '')
     ? (s.aiProvider as Settings['aiProvider'])
-    : 'deepseek'
-  const aiModel = typeof s.aiModel === 'string' && s.aiModel.trim() ? s.aiModel : 'deepseek-v4-flash'
+    : DEFAULT_AI_PROVIDER
+  const aiModel = normalizeAiModel(aiProvider, s.aiModel)
   return {
     thinkingSummaryPrompt: typeof s.thinkingSummaryPrompt === 'string' ? s.thinkingSummaryPrompt : '',
     confirmDelete: typeof s.confirmDelete === 'boolean' ? s.confirmDelete : true,

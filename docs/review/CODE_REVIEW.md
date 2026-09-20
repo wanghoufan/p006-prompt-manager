@@ -291,6 +291,29 @@
 ## 2026-09-17 Code Review：TreeNode 整行切换返修复核
 
 - 范围：`src/components/TagPanel.tsx:231-233` 行容器 onClick、`292-297` 名称按钮分支、`264/275/317` 三处 stopPropagation。结论：PASS。
-- 整行切换：行容器 `onClick selectable→onToggleSelect`，批量下整行可点；非批量无操作，筛选仍走名称按钮。
-- 单次触发：名称按钮 `if (!selectable) onSelectTag`，批量下由整行统一处理，无冒泡双切。
-- 事件隔离：checkbox(264)/展开箭头(275)/更多菜单(317)三处 `stopPropagation` 完好，不误触行切换。
+ - 整行切换：行容器 `onClick selectable→onToggleSelect`，批量下整行可点；非批量无操作，筛选仍走名称按钮。
+ - 单次触发：名称按钮 `if (!selectable) onSelectTag`，批量下由整行统一处理，无冒泡双切。
+ - 事件隔离：checkbox(264)/展开箭头(275)/更多菜单(317)三处 `stopPropagation` 完好，不误触行切换。
+
+---
+
+# CODE REVIEW
+
+- Task: P0-C DeepSeek 模型改名 + 模型手填（Requirement=`docs/review/PRODUCT_BACKLOG.md` P0-C 节）
+- Commit: 未提交（工作区 diff，`src/lib/ai/types.ts` + `SettingsModal.tsx` + `storage.ts` + `promptRepository.ts` + `deepseek.ts` + `page.tsx`）
+- Reviewer: code-reviewer（2026-09-20，只读复核，未改业务代码）
+- Result: 过（PASS；无 P0/P1；P2/P3 备注各 1，不阻塞合入）
+- 静态检查：`npx tsc --noEmit` 0 error；`npm run lint` 0 error（仅 scratch 2 warnings，与本轮无关）
+
+## P0 / P1 Findings
+
+- 无。逐项核对结论如下：
+- 迁移范围正确：`LEGACY_DEEPSEEK_MODEL_MAP` 只在 `normalizeAiModel` 内 `provider === 'deepseek'` 时生效（`types.ts:31`）；`opencode-go` 预置仍保留 `deepseek-v4-flash`（`types.ts:15`）且走 `raw` 原样分支，不被误迁移。`storage.ts:124` 与 `promptRepository.ts:127` 均把 provider 透传给 `normalizeAiModel`，通道区分正确。
+- 手填透传：`SettingsModal` 下拉已改为 `input + datalist`（`:364-376`），任意字符串可输入保存（`onChange saveAi({aiModel: e.target.value})`）；`normalizeAiModel` 非空即透传、无白名单（`:32`）；服务端 `resolveAIConfig`（`src/lib/ai.ts:60-65`）同样无白名单直传。旧 openrouter `auto/custom` 双控件分支已删除，无残留。
+- 三处同源：`AI_PROVIDERS`（`types.ts:6`，4 项）＝ `AI_SERVICES` 4 项（`SettingsModal.tsx:43-73`，models 全部改为引用 `AI_MODEL_PRESETS`，无硬编码分叉）＝ `factory.ts` switch 4 分支（`:8-15`）。注释“改三处”契约（`types.ts:5`）依然成立。
+- 默认值常量：`DEFAULT_AI_PROVIDER/MODEL`（`types.ts:18-19`）已用于 `page.tsx:161-162`、`storage.ts:105-106/123-124`、`deepseek.ts:4`；空模型回退取本服务商首个预置（再不济全局默认），`storage` 与 `promptRepository` 归一化一致。
+
+## P2 / P3 Backlog Findings
+
+- 【P2】服务端直读旁路迁移：`resolveAIConfig`（`src/lib/ai.ts`）读 `serverStore` 原始值，不调 `normalizeAiModel`；deepseek 通道旧名 `deepseek-v4-flash` 在客户端下次 `normalizeSettings` 落盘前仍以旧名发往官方（官方称仅兼容期）。建议在 `resolveAIConfig` 返回前对 `model` 加一行 `normalizeAiModel(provider, model)`（纯透传语义不变，仅补迁移），builder 顺手修。
+- 【P3】`deepseek-flash` 是否为官方现行有效模型名无法从本仓库验证（预置即产品断言，P0-C 称来自 2026-09-17 定价页；手填透传已保证即便名不准用户仍可自填，不阻塞）。

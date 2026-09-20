@@ -1,7 +1,8 @@
 import { BaseAIAdapter } from './adapter'
+import { DEFAULT_AI_MODEL } from './types'
 import type { AIConfig } from './types'
 
-export const DEEPSEEK_DEFAULT_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash'
+export const DEEPSEEK_DEFAULT_MODEL = process.env.DEEPSEEK_MODEL || DEFAULT_AI_MODEL
 export const DEEPSEEK_DEFAULT_BASE_URL = (process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com').replace(
   /\/+$/,
   '',

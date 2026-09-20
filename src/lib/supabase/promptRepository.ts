@@ -2,6 +2,7 @@
 
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import type { Card, PromptTag, Settings, Tag, Version } from '@/lib/types'
+import { normalizeAiModel } from '@/lib/ai/types'
 import { getSupabaseBrowserClient } from './browser'
 import { PROMPT_MANAGER_SCHEMA } from './config'
 
@@ -123,7 +124,7 @@ function toSettings(row: SettingsRow, localAiApiKey: string): Settings {
     composerAddMode: row.composer_add_mode,
     hoverPreview: row.hover_preview,
     aiProvider: row.ai_provider,
-    aiModel: row.ai_model,
+    aiModel: normalizeAiModel(row.ai_provider, row.ai_model),
     // 密钥从不落入 Supabase：只保留当前浏览器已有的本地值。
     aiApiKey: localAiApiKey,
     aiBaseUrl: row.ai_base_url,
