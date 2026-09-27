@@ -51,7 +51,7 @@ export function CardItem({ card, selected, readonly = false, query = '', onSelec
   const match = query.replace(/^@/, '').trim()
   return (
     <article
-      onClick={onSelect}
+      onClick={bulkActive ? (e) => { e.stopPropagation(); onBulkToggle?.(card.id) } : onSelect}
       onDoubleClick={onOpen}
       className={`group relative flex cursor-pointer flex-col gap-2.5 rounded-lg border p-3.5 transition-colors ${
         selected ? 'border-gold/60 bg-ink-850' : 'border-line bg-ink-900 hover:border-ink-700'
