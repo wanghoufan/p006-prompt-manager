@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from 'react'
 import type { Tag, PromptTag, TagFilters } from '@/lib/types'
 import { childrenOf, collectDescendantIds, directCount, totalCount, tagPath } from '@/lib/tags'
+import { useConfirm } from '@/lib/useConfirm'
 
 export interface TagPanelProps {
   tags: Tag[]
@@ -27,7 +28,7 @@ export interface TagPanelProps {
   onMergeTag?: (sourceId: string, targetId: string) => { ok: boolean; error?: string }
   /** 批量删除标签（仅删关系+标签实体，不删提示词）；未传则不显示批量入口 */
   onBulkDeleteTags?: (ids: string[]) => void
-  /** 批量删除前是否需要 window.confirm 二次确认（沿用卡片批量删除的设置项） */
+  /** 批量删除前是否需要二次确认（沿用卡片批量删除的设置项） */
   confirmDelete?: boolean
 }
 
@@ -403,6 +404,8 @@ export function TagPanel({
   // 左侧面板宽度：右缘拖拽条调整（方向与右侧预览条镜像），双击恢复默认。
   const [panelWidth, setPanelWidth] = useState<number>(() => readSavedPanelWidth())
   const panelDragState = useRef<{ startX: number; startW: number } | null>(null)
+  // 跟随鼠标焦点的确认弹窗（替代浏览器原生 confirm）
+  const { confirm: askConfirm, dialog: confirmDialog } = useConfirm()
 
   function handlePanelDragStart(e: React.PointerEvent<HTMLDivElement>) {
     e.preventDefault()
@@ -499,7 +502,7 @@ export function TagPanel({
     }
   }
 
-  function handleRename(tag: Tag) {
+  async function handleRename(tag: Tag) {
     if (!onRenameTag) return
     const name = promptForName(`重命名标签「${tag.name}」为：`, tag.name)
     if (name === null) return
@@ -515,13 +518,15 @@ export function TagPanel({
       const useCount = totalCount(promptTags, new Set([tag.id, ...collectDescendantIds(tags, tag.id)]))
       const dupCount = totalCount(promptTags, new Set([duplicate.id, ...collectDescendantIds(tags, duplicate.id)]))
       if (
-        window.confirm(
-          `同级下已存在标签「${trimmed}」。\n\n` +
+        await askConfirm({
+          title: `同级下已存在标签「${trimmed}」。`,
+          description:
             `· 当前标签「${tag.name}」关联 ${useCount} 条提示词\n` +
             `· 目标标签「${duplicate.name}」关联 ${dupCount} 条提示词\n\n` +
             `点击「确定」将两标签合并（关联 + 子标签全部转移到「${duplicate.name}」，当前标签删除）\n` +
             `点击「取消」取消操作`,
-        )
+          danger: true,
+        })
       ) {
         const r = onMergeTag(tag.id, duplicate.id)
         if (!r.ok) {
@@ -540,7 +545,7 @@ export function TagPanel({
     setError(null)
   }
 
-  function handleMerge(tag: Tag) {
+  async function handleMerge(tag: Tag) {
     if (!onMergeTag) return
     const descendantIds = collectDescendantIds(tags, tag.id)
     const candidates = tags.filter((candidate) => candidate.id !== tag.id && !descendantIds.has(candidate.id))
@@ -575,11 +580,13 @@ export function TagPanel({
       new Set([target.id, ...collectDescendantIds(tags, target.id)]),
     )
     if (
-      !window.confirm(
-        `确认将「${tagPath(tags, tag.id)}」合并到「${tagPath(tags, target.id)}」？\n\n` +
+      !(await askConfirm({
+        title: `确认将「${tagPath(tags, tag.id)}」合并到「${tagPath(tags, target.id)}」？`,
+        description:
           `源标签关联 ${sourceCount} 条提示词，目标标签关联 ${targetCount} 条提示词。\n` +
           '源标签的关联会迁移并自动去重，源标签将被删除；提示词不会被删除。',
-      )
+        danger: true,
+      }))
     ) {
       return
     }
@@ -671,13 +678,17 @@ export function TagPanel({
     setBulkSelected(new Set())
   }
 
-  function handleBulkDelete() {
+  async function handleBulkDelete() {
     if (!onBulkDeleteTags) return
     const ids = [...bulkSelected].filter((id) => tags.some((t) => t.id === id))
     if (ids.length === 0) return
     if (
       confirmBeforeDelete &&
-      !window.confirm(`确定删除选中的 ${ids.length} 个标签？\n\n标签及其关联会被移除，提示词本身不会被删除；操作后 10 秒内可一键撤销。`)
+      !(await askConfirm({
+        title: `确定删除选中的 ${ids.length} 个标签？`,
+        description: '标签及其关联会被移除，提示词本身不会被删除；操作后 10 秒内可一键撤销。',
+        danger: true,
+      }))
     ) {
       return
     }
@@ -796,10 +807,14 @@ export function TagPanel({
           ) : (
             <button
               type="button"
-              className="w-full rounded-md border border-line px-2 py-1 text-[11px] text-muted transition-colors hover:bg-ink-800 hover:text-gold-bright"
+              className="btn w-full justify-center text-xs"
               onClick={enterBulkMode}
             >
-              批量管理
+              <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <rect x="2.5" y="2.5" width="11" height="11" rx="2" />
+                <path d="m5.5 8.2 1.7 1.7 3.3-3.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              批量管理标签
             </button>
           )}
         </div>
@@ -951,6 +966,7 @@ export function TagPanel({
           </div>
         )
       })()}
+      {confirmDialog}
       <div className="border-t border-line px-4 py-3 text-[11px] leading-relaxed text-muted">
         {offline
           ? syncMode === 'cloud'

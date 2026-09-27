@@ -19,6 +19,7 @@ import { CardDetail } from '@/components/CardDetail'
 import { SettingsModal } from '@/components/SettingsModal'
 import { TrashModal } from '@/components/TrashModal'
 import { Toast } from '@/components/Toast'
+import { useConfirm } from '@/lib/useConfirm'
 import { newTrashId, readTrash, writeTrash, type TrashEntry } from '@/lib/trash'
 import { readPendingTagDeletes, writePendingTagDeletes } from '@/lib/tagTombstones'
 import {
@@ -226,6 +227,10 @@ export default function Home() {
   const hydratedOnceRef = useRef(false)
   // P2-11 批量多选：选中卡片 id 集合（demo 视图不启用）
   const [bulkIds, setBulkIds] = useState<ReadonlySet<string>>(new Set())
+  // 多选模式：由 SortBar「批量删除卡片」显式进入；未选中任何卡片时也可处于多选模式
+  const [bulkMode, setBulkMode] = useState(false)
+  // 跟随鼠标焦点的确认弹窗（替代浏览器原生 confirm）
+  const { confirm: askConfirm, dialog: confirmDialog } = useConfirm()
   const undoRef = useRef<(() => void) | null>(null)
   // 标签关联失败去重：同一错误重试期间静默（仍 retryCloudSync），仅在 message 变化时再吐司。
   const lastRelationErrorRef = useRef<string | null>(null)
@@ -1080,7 +1085,7 @@ export default function Home() {
     setTagFilters(snap.tagFilters)
   }
 
-  function handleCreate(body: string, title: string, aiTags: string[]): string | null {
+  async function handleCreate(body: string, title: string, aiTags: string[]): Promise<string | null> {
     // P0-3 重复内容去重：normalizeBody 全等比对（大小写敏感、空白归一后），命中首个提示二次确认；
     // 空内容（bodyNorm 为空）不触发
     const bodyNorm = normalizeBody(body.trim())
@@ -1088,7 +1093,9 @@ export default function Home() {
       const existing = cards.find((c) => normalizeBody(c.body.trim()) === bodyNorm)
       if (
         existing &&
-        !window.confirm(`检测到内容已存在（标题「${existing.title}」），是否仍要添加？`)
+        !(await askConfirm({
+          title: `检测到内容已存在（标题「${existing.title}」），是否仍要添加？`,
+        }))
       ) {
         return null
       }
@@ -1125,8 +1132,14 @@ export default function Home() {
     handleUpdateMeta(id, nextTitle, nextTagNames)
   }
 
-  function handleLoadDemo() {
-    if (cards.length > 0 && !window.confirm(`载入示例将【替换】当前 ${cards.length} 张卡片（非追加），确定继续？`)) {
+  async function handleLoadDemo() {
+    if (
+      cards.length > 0 &&
+      !(await askConfirm({
+        title: `载入示例将【替换】当前 ${cards.length} 张卡片（非追加），确定继续？`,
+        danger: true,
+      }))
+    ) {
       return
     }
     // P2-5：缓存替换前快照，10s 内可撤销回退
@@ -1144,7 +1157,7 @@ export default function Home() {
     resetTagFilters()
     setSelectedId(null)
     setDetailId(null)
-    clearBulk()
+    exitBulkMode()
     notifyWithUndo(`已载入 ${DEMO_CARDS.length} 张示例卡片`, () => {
       markCardsCloudDirty()
       setCards(snapshotCards)
@@ -1153,12 +1166,18 @@ export default function Home() {
     })
   }
 
-  function handleClearRepo() {
+  async function handleClearRepo() {
     if (cards.length === 0) {
       notify('仓库已经是空的')
       return
     }
-    if (!window.confirm(`确定清空我的仓库（共 ${cards.length} 张卡片）？此操作不可撤销。`)) {
+    if (
+      !(await askConfirm({
+        title: `确定清空我的仓库（共 ${cards.length} 张卡片）？`,
+        description: '此操作不可撤销。',
+        danger: true,
+      }))
+    ) {
       return
     }
     // P2-5：缓存清空前快照，10s 内可撤销回退
@@ -1171,7 +1190,7 @@ export default function Home() {
     resetTagFilters()
     setSelectedId(null)
     setDetailId(null)
-    clearBulk()
+    exitBulkMode()
     notifyWithUndo('仓库已清空', () => {
       markCardsCloudDirty()
       setCards(snapshotCards)
@@ -1184,7 +1203,7 @@ export default function Home() {
     resetTagFilters()
     setSelectedId(null)
     setDetailId(null)
-    clearBulk()
+    exitBulkMode()
   }
 
   function resetTagFilters() {
@@ -1375,10 +1394,18 @@ export default function Home() {
 
   // P0-4：删除入口统一（网格直删 / PreviewPanel / CardDetail 共用）；
   // settings.confirmDelete=true 时二次确认（默认），关闭后直接删
-  function handleDeleteCard(id: string) {
+  async function handleDeleteCard(id: string) {
     const card = cards.find((c) => c.id === id)
     if (!card) return
-    if (settings.confirmDelete && !window.confirm(`确定删除「${card.title}」？可在回收站恢复。`)) return
+    if (
+      settings.confirmDelete &&
+      !(await askConfirm({
+        title: `确定删除「${card.title}」？`,
+        description: '可在回收站恢复。',
+        danger: true,
+      }))
+    )
+      return
     // 回收站：先留快照（卡片 + 其标签关联），再走原流程
     pushTrash({
       kind: 'card',
@@ -1688,6 +1715,23 @@ export default function Home() {
     setBulkIds(new Set())
   }
 
+  /** 退出多选模式：清空选中并收起 SortBar 的多选提示区 */
+  function exitBulkMode() {
+    setBulkMode(false)
+    setBulkIds(new Set())
+  }
+
+  /** 进入/退出多选模式（退出时一并清空选中） */
+  function handleBulkModeChange(next: boolean) {
+    if (next) setBulkMode(true)
+    else exitBulkMode()
+  }
+
+  /** 全选当前视图（标签筛选 + 搜索 + 排序后）的卡片 */
+  function selectAllVisibleCards() {
+    setBulkIds(new Set(visibleCards.map((card) => card.id)))
+  }
+
   function toggleBulk(id: string) {
     setBulkIds((prev) => {
       const next = new Set(prev)
@@ -1698,11 +1742,15 @@ export default function Home() {
   }
 
   // 批量删除：confirm + 复用 P2-5 撤销栈（10s 内一键恢复）
-  function handleBulkDelete() {
+  async function handleBulkDelete() {
     if (bulkIds.size === 0) return
     if (
       settings.confirmDelete &&
-      !window.confirm(`确定删除选中的 ${bulkIds.size} 张卡片？可在回收站恢复。`)
+      !(await askConfirm({
+        title: `确定删除选中的 ${bulkIds.size} 张卡片？`,
+        description: '可在回收站恢复。',
+        danger: true,
+      }))
     ) {
       return
     }
@@ -1854,13 +1902,19 @@ export default function Home() {
 
   function handleImportFile(file: File) {
     const reader = new FileReader()
-    reader.onload = () => {
+    reader.onload = async () => {
       const result = parseImport(String(reader.result ?? ''))
       if (!result.ok) {
         notify(`导入失败：${result.error}`)
         return
       }
-      if (!window.confirm(`导入将覆盖当前全部 ${cards.length} 张卡片，确定继续？`)) return
+      if (
+        !(await askConfirm({
+          title: `导入将覆盖当前全部 ${cards.length} 张卡片，确定继续？`,
+          danger: true,
+        }))
+      )
+        return
       // P2-5：缓存覆盖前快照（卡片 + 设置 + 标签），10s 内可撤销回退
       const snapshotCards = cards
       const snapshotSettings = settings
@@ -1877,7 +1931,7 @@ export default function Home() {
       resetTagFilters()
       setSelectedId(null)
       setDetailId(null)
-      clearBulk()
+      exitBulkMode()
       // P3-5 + P2-5 合并：导入结果带详情列表 + 10s 撤销
       {
         const skipped = result.skipped ?? []
@@ -1929,6 +1983,18 @@ export default function Home() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [view, detailCard, selectedId, cards, handleRate, detailId, showSettings, showTrash])
+
+  // 多选模式：Esc 退出并清空选中（确认弹窗开启时由弹窗自己在捕获阶段拦下 Esc，不会误退）
+  useEffect(() => {
+    if (!bulkMode) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      setBulkMode(false)
+      setBulkIds(new Set())
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [bulkMode])
 
   return (
     <div className="flex h-dvh flex-col">
@@ -1991,6 +2057,9 @@ export default function Home() {
               onHasCodeOnlyChange={setHasCodeOnly}
               tagFilterSummary={tagFilterSummary}
               onClearTagFilters={resetTagFilters}
+              bulkMode={bulkMode}
+              onBulkModeChange={isDemoView ? undefined : handleBulkModeChange}
+              onBulkSelectAll={selectAllVisibleCards}
             />
             {isDemoView ? (
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gold/30 bg-gold/5 px-3.5 py-2.5">
@@ -2109,7 +2178,7 @@ export default function Home() {
                     onRate={(r) => handleRate(card.id, r)}
                     onDelete={isDemoView ? undefined : handleDeleteCard}
                     bulkSelected={bulkIds.has(card.id)}
-                    bulkActive={bulkIds.size > 0}
+                    bulkActive={bulkMode || bulkIds.size > 0}
                     onBulkToggle={isDemoView ? undefined : toggleBulk}
                     hoverPreview={settings.hoverPreview}
                   />
@@ -2184,6 +2253,7 @@ export default function Home() {
           onNotify={notify}
         />
       )}
+      {confirmDialog}
       <Toast
         message={toast?.msg ?? null}
         detail={toast?.detail ?? null}

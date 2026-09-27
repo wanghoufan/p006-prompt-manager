@@ -2,6 +2,7 @@
 
 import { formatTime } from '@/lib/util'
 import type { TrashEntry } from '@/lib/trash'
+import { useConfirm } from '@/lib/useConfirm'
 
 interface TrashModalProps {
   entries: TrashEntry[]
@@ -19,6 +20,7 @@ function entryDetail(entry: TrashEntry): string {
 }
 
 export function TrashModal({ entries, onRestore, onEmpty, onClose }: TrashModalProps) {
+  const { confirm: askConfirm, dialog: confirmDialog } = useConfirm()
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
@@ -41,8 +43,14 @@ export function TrashModal({ entries, onRestore, onEmpty, onClose }: TrashModalP
               <button
                 type="button"
                 className="btn-ghost text-xs text-rust hover:bg-rust/10"
-                onClick={() => {
-                  if (window.confirm(`确定清空回收站？共 ${entries.length} 项，清空后无法恢复。`)) {
+                onClick={async () => {
+                  if (
+                    await askConfirm({
+                      title: '确定清空回收站？',
+                      description: `共 ${entries.length} 项，清空后无法恢复。`,
+                      danger: true,
+                    })
+                  ) {
                     onEmpty()
                   }
                 }}
@@ -95,6 +103,7 @@ export function TrashModal({ entries, onRestore, onEmpty, onClose }: TrashModalP
         <p className="border-t border-line px-4 py-2 text-[10px] leading-relaxed text-muted/70">
           回收站只保存在本机浏览器；恢复的内容会重新同步到云端。
         </p>
+        {confirmDialog}
       </div>
     </div>
   )

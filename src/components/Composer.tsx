@@ -8,7 +8,7 @@ interface ComposerProps {
   addMode: 'auto' | 'manual'
   autoFormatBody: boolean
   bodyAlignment: 'left' | 'center' | 'right'
-  onCreate: (body: string, title: string, tags: string[]) => string | null
+  onCreate: (body: string, title: string, tags: string[]) => Promise<string | null>
   onApplyGeneratedMeta: (id: string, title: string, tags: string[], generateTitle: boolean, generateTags: boolean) => void
   notify: (msg: string) => void
 }
@@ -127,7 +127,7 @@ export function Composer({ existingTags, addMode, autoFormatBody, bodyAlignment,
     }
     const generateTitle = autoGenerateTitle
     const generateTags = autoGenerateTags
-    const id = onCreate(body, '', [])
+    const id = await onCreate(body, '', [])
     if (!id) { setSubmitting(false); return }
     setText('')
     notify('已创建卡片')
