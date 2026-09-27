@@ -6,6 +6,8 @@ import { aiRequestHeaders } from '@/lib/aiClient'
 interface ComposerProps {
   existingTags: string[]
   addMode: 'auto' | 'manual'
+  autoFormatBody: boolean
+  bodyAlignment: 'left' | 'center' | 'right'
   onCreate: (body: string, title: string, tags: string[]) => string | null
   onApplyGeneratedMeta: (id: string, title: string, tags: string[], generateTitle: boolean, generateTags: boolean) => void
   notify: (msg: string) => void
@@ -15,10 +17,11 @@ function Corner({ position }: { position: string }) {
   return <span aria-hidden className={`pointer-events-none absolute h-3 w-3 border-gold/70 ${position}`} />
 }
 
-export function Composer({ existingTags, addMode, onCreate, onApplyGeneratedMeta, notify }: ComposerProps) {
+export function Composer({ existingTags, addMode, autoFormatBody, bodyAlignment, onCreate, onApplyGeneratedMeta, notify }: ComposerProps) {
   const [text, setText] = useState('')
   const [autoGenerateTags, setAutoGenerateTags] = useState(true)
   const [autoGenerateTitle, setAutoGenerateTitle] = useState(true)
+  const [autoFormat, setAutoFormat] = useState(autoFormatBody)
   const [generationStatus, setGenerationStatus] = useState<'idle' | 'generating' | 'complete'>('idle')
   const [generationLabel, setGenerationLabel] = useState('标题与标签')
   const abortControllersRef = useRef(new Set<AbortController>())
@@ -101,9 +104,24 @@ export function Composer({ existingTags, addMode, onCreate, onApplyGeneratedMeta
     }
   }
 
-  function createCard(source: string) {
-    const body = source.trim()
-    if (!body) return
+  async function createCard(source: string) {
+    const raw = source.trim()
+    if (!raw) return
+    let body = raw
+    if (autoFormat) {
+      try {
+        const res = await fetch('/api/ai/format-body', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...aiRequestHeaders() },
+          body: JSON.stringify({ body: raw, alignment: bodyAlignment }),
+        })
+        const data: { body?: string; error?: string } = await res.json()
+        if (!res.ok) throw new Error(data.error || '格式整理失败')
+        if (typeof data.body === 'string' && data.body.trim()) body = data.body.trim()
+      } catch (e) {
+        notify(`自动格式整理失败，已使用原文：${e instanceof Error ? e.message : '未知错误'}`)
+      }
+    }
     const generateTitle = autoGenerateTitle
     const generateTags = autoGenerateTags
     const id = onCreate(body, '', [])
@@ -166,6 +184,15 @@ export function Composer({ existingTags, addMode, onCreate, onApplyGeneratedMeta
               className="accent-gold"
             />
             自动生成标题
+          </label>
+          <label className="flex cursor-pointer items-center gap-1.5 text-paper-dim">
+            <input
+              type="checkbox"
+              checked={autoFormat}
+              onChange={(e) => setAutoFormat(e.target.checked)}
+              className="accent-gold"
+            />
+            自动格式整理
           </label>
         </div>
         <button

@@ -2005,6 +2005,8 @@ export default function Home() {
               <Composer
                 existingTags={existingTags}
                 addMode={settings.composerAddMode}
+                autoFormatBody={settings.autoFormatBody}
+                bodyAlignment={settings.bodyAlignment}
                 onCreate={handleCreate}
                 onApplyGeneratedMeta={handleApplyGeneratedMeta}
                 notify={notify}
