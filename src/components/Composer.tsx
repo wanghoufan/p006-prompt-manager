@@ -22,6 +22,7 @@ export function Composer({ existingTags, addMode, autoFormatBody, bodyAlignment,
   const [autoGenerateTags, setAutoGenerateTags] = useState(true)
   const [autoGenerateTitle, setAutoGenerateTitle] = useState(true)
   const [autoFormat, setAutoFormat] = useState(autoFormatBody)
+  const [submitting, setSubmitting] = useState(false)
   const [generationStatus, setGenerationStatus] = useState<'idle' | 'generating' | 'complete'>('idle')
   const [generationLabel, setGenerationLabel] = useState('标题与标签')
   const abortControllersRef = useRef(new Set<AbortController>())
@@ -105,8 +106,10 @@ export function Composer({ existingTags, addMode, autoFormatBody, bodyAlignment,
   }
 
   async function createCard(source: string) {
+    if (submitting) return
     const raw = source.trim()
     if (!raw) return
+    setSubmitting(true)
     let body = raw
     if (autoFormat) {
       try {
@@ -125,10 +128,11 @@ export function Composer({ existingTags, addMode, autoFormatBody, bodyAlignment,
     const generateTitle = autoGenerateTitle
     const generateTags = autoGenerateTags
     const id = onCreate(body, '', [])
-    if (!id) return
+    if (!id) { setSubmitting(false); return }
     setText('')
     notify('已创建卡片')
     void enrichCard(id, body, generateTitle, generateTags)
+    setSubmitting(false)
   }
 
   function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
@@ -198,10 +202,10 @@ export function Composer({ existingTags, addMode, autoFormatBody, bodyAlignment,
         <button
           type="button"
           className="btn-gold px-2.5 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={!text.trim()}
+          disabled={!text.trim() || submitting}
           onClick={() => createCard(text)}
         >
-          生成卡片 (Enter)
+          {submitting ? '生成中…' : '生成卡片 (Enter)'}
         </button>
       </div>
       {generationStatus !== 'idle' && (
