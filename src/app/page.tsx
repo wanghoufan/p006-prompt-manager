@@ -568,21 +568,13 @@ export default function Home() {
         setPromptTags(sanitizePromptTags(localPromptTags, local, localTags))
       }
     } else {
-      // BUG-12：仅存本机的实体并入视图后再落盘，legacy 写失败期间的本地编辑不再被快照抹掉。
-      // tombstone 同 applyCloud：待删标签的远端行与关系两侧都剔除，免得删除确认前回填复活。
-      const merged = mergeLocalOnlyIntoRemoteSnapshot(remote, deadTagIds())
-      setCards(merged.cards)
+      // 本地 SQLite 模式：服务器是唯一事实来源，直接用服务器数据覆盖 localStorage 残留。
+      // （旧 mergeLocalOnlyIntoRemoteSnapshot 在 Supabase→SQLite 迁移时会把旧 UUID 卡片并入导致重复）
+      const dead = deadTagIds()
+      setCards(remote.cards)
       setSettings(remote.settings)
-      setTags(merged.tags)
-      setPromptTags(merged.promptTags)
-      if (merged.addedCards > 0 || merged.addedTags > 0 || merged.addedRelations > 0) {
-        const parts = [
-          merged.addedCards > 0 ? `卡片 ${merged.addedCards} 张` : null,
-          merged.addedTags > 0 ? `标签 ${merged.addedTags} 个` : null,
-          merged.addedRelations > 0 ? `标签关联 ${merged.addedRelations} 条` : null,
-        ].filter(Boolean)
-        notify(`已找回仅存本机的数据：${parts.join('、')}`)
-      }
+      setTags(remote.tags.filter((tag) => !dead.has(tag.id)))
+      setPromptTags(remote.promptTags.filter((relation) => !dead.has(relation.tag_id)))
     }
     // 订阅实时同步：另一台电脑改动时自动拉取最新数据
     syncUnsubRef.current = subscribeSync((rc, rs, rt, rpt) => {
