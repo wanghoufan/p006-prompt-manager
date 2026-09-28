@@ -65,7 +65,7 @@ export function McpCloudAccess() {
     try {
       const { token, info } = await createMcpAccessToken(label)
       const env = buildMcpEnvText(token)
-      if (!env) throw new Error('Supabase 公共配置尚未完成')
+      if (!env) throw new Error('无法确定本机服务地址')
       setOneTimeEnv(env)
       setTokens((current) => [info, ...current])
       setStatus('已生成。请立即复制下方内容；关闭或刷新后不会再显示令牌。')
@@ -103,9 +103,10 @@ export function McpCloudAccess() {
 
   return (
     <div className="rounded-lg border border-line bg-ink-900 px-3.5 py-3">
-      <p className="text-sm text-paper">MCP 云端访问</p>
+      <p className="text-sm text-paper">MCP 本机访问</p>
       <p className="mt-0.5 text-xs leading-relaxed text-muted">
-        为每台使用 MCP 的电脑生成一枚独立令牌。令牌可单独撤销，MCP 只可调取你的云端提示词，不使用 Supabase 管理员密钥。
+        为每台使用 MCP 的电脑生成一枚独立令牌，令牌可单独撤销。MCP 通过本机 HTTP 服务调取提示词库，
+        不依赖云端；原始令牌仅在生成时显示一次。
       </p>
       <label htmlFor="mcp-device-label" className="mt-3 block text-xs text-muted">设备名称</label>
       <div className="mt-1 flex gap-2">

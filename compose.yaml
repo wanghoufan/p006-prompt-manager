@@ -6,10 +6,11 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        # NEXT_PUBLIC_* 在构建时写入浏览器 bundle；只能传公开配置。
-        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:?请在 .env.local 填写 NEXT_PUBLIC_SUPABASE_URL}
-        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:?请在 .env.local 填写 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}
-        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:?请在 .env.local 填写 NEXT_PUBLIC_APP_URL}
+        # NEXT_PUBLIC_* 在构建时写入浏览器 bundle；SQLite 本地模式可为空，
+        # 留空即不启用云端登录（回退路径需要时再填 Supabase 公开配置）。
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-}
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-}
     env_file:
       # 仅在 Services/prompt-manager 的部署副本中保存；不可提交 Git。
       - path: .env.local
@@ -21,8 +22,8 @@ services:
     ports:
       - "${PROMPT_MANAGER_PORT:-3100}:3100"
     volumes:
-      # 保留旧 JSON/SSE 兼容链路的数据；云端主数据仍在 Supabase。
-      # create_host_path: false 防止 compose 静默创建错误位置的持久化目录。
+      # SQLite 主库（prompt-manager.db）与旧 JSON 兼容副本共用此宿主机目录，
+      # bind mount 保证容器重建后数据仍在；create_host_path: false 防 compose 静默创建。
       - type: bind
         source: ${PROMPT_MANAGER_DATA_DIR:?请在 .env.local 填写 PROMPT_MANAGER_DATA_DIR}
         target: /app/data

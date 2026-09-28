@@ -210,6 +210,28 @@ export type ImportResult =
   | { ok: true; cards: Card[]; settings: Settings | null; skipped?: SkippedCard[] }
   | { ok: false; error: string }
 
+const META_KEYS = new Set(['标签', '调取码', '来源链接', '评分', '复制次数', '创建时间', '更新时间'])
+
+/**
+ * 判定 `## N. 标题` 行是否为「真实卡片边界」而非正文内嵌小节标题。
+ * 真实卡（buildMarkdownExport 输出）标题行后必跟一组 meta 行（- 标签/调取码/评分等 ≥2 个键）；
+ * 正文内嵌的 `## N.` 小节后是普通正文行，不满足 meta 特征。
+ */
+function isCardBoundary(lines: string[], index: number): boolean {
+  const keys = new Set<string>()
+  for (let j = index + 1; j < Math.min(lines.length, index + 10); j += 1) {
+    const trimmed = lines[j].trim()
+    if (!trimmed || trimmed === '---') continue
+    if (/^#{2,4}\s/.test(trimmed)) break
+    const meta = /^-\s+([^:：]+)[:：]\s*/.exec(trimmed)
+    if (meta && META_KEYS.has(meta[1].trim())) {
+      keys.add(meta[1].trim())
+      if (keys.size >= 2) return true
+    } else break
+  }
+  return false
+}
+
 function parseMarkdownImport(raw: string): ImportResult | null {
   const lines = raw.split(/\r?\n/)
   if (!lines[0]?.trim().startsWith('# 提示词库备份')) return null
@@ -262,9 +284,10 @@ function parseMarkdownImport(raw: string): ImportResult | null {
     section = null
   }
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i]
     const cardMatch = /^##\s+\d+\.\s+(.+)$/.exec(line)
-    if (cardMatch) {
+    if (cardMatch && isCardBoundary(lines, i)) {
       flush()
       current = {
         title: cardMatch[1].trim(),
@@ -286,8 +309,19 @@ function parseMarkdownImport(raw: string): ImportResult | null {
     const h3 = /^###\s+(.+)$/.exec(line)
     if (h3) {
       const name = h3[1].trim()
+      if (name === '正文') {
+        section = 'body'
+        continue
+      }
+      // body 阶段未知 h3（如 ### Step 1）视为正文内容，防止正文被小节标题切断
+      if (section === 'body') {
+        if (name === '备注') { section = 'notes'; continue }
+        if (name === '思维总结') { section = 'summary'; continue }
+        if (name === '版本历史') { section = 'versions'; continue }
+        current.body.push(line)
+        continue
+      }
       section =
-        name === '正文' ? 'body' :
         name === '思维总结' ? 'summary' :
         name === '备注' ? 'notes' :
         name === '版本历史' ? 'versions' : null

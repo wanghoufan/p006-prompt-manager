@@ -1,6 +1,6 @@
 # 提示词管理工具（Prompt Manager）
 
-> 一个本地网页端的**提示词知识库 + Agent 接口**：把常用提示词沉淀成可检索的卡片，复制即统计，支持跨设备实时同步，并可通过 **MCP** 让 WorkBuddy 等 AI Agent 用「调取码」一键把任意卡片注入为系统提示词直接执行。
+> 一个本地网页端的**提示词知识库 + Agent 接口**：把常用提示词沉淀成可检索的卡片，复制即统计，数据存储在本地 SQLite，并可通过 **MCP** 让 WorkBuddy 等 AI Agent 用「调取码」一键把任意卡片注入为系统提示词直接执行。
 
 ![首页截图](docs/screenshots/home.png)
 > 截图为 2026-08-28 前版本（搜索框/标签×/网格悬浮胶囊/高亮文字可读等新增 UI 以实际页面为准）。
@@ -34,7 +34,7 @@
 | 示例知识库 | 内置 12 张示例卡片（自带调取码），覆盖全部功能形态，一键载入本地仓库 |
 | 复制统计 | 卡片「复制」写入剪贴板并累计次数；**MCP 调取同样计入**；支持清零 |
 | 调取码（code） | 用户自定义短码（英文/数字/短横线，≤12 字符，大小写不敏感，可选填），供 MCP 调取；输入时标题 `x/20`、调取码 `x/12` 实时计数，非法字符即时过滤并提示「仅支持英文/数字/短横线」 |
-| MCP 集成 | 子包 `mcp/prompt-server/`，工具 `prompt_manager_activate_prompt(code)`：通过独立、可撤销令牌从共享 Supabase 调取卡片并立即将其正文作为新的系统提示词注入会话 |
+| MCP 集成 | 子包 `mcp/prompt-server/`，工具 `prompt_manager_activate_prompt(code)`：通过独立、可撤销令牌从本机 HTTP API 调取卡片并立即将其正文作为新的系统提示词注入会话 |
 | 全局搜索 | SortBar 搜索框（300ms 防抖，纯前端过滤），范围标题/正文/标签/调取码/备注（大小写不敏感）+ `@code` 直达（仅按调取码匹配）+ `<mark>` 纯文本高亮（XSS 免疫）+ 「命中 x / 共 y」计数 + 空态引导；**搜索激活时按相关度排序（标题 4 > 调取码/标签 3 > 备注 2 > 正文 1，同分再按更新/复制/评分二级排序；`@code` 隔离保持原排序）**；搜索词不持久化（刷新即清） |
 | 星级评分 | 点击 `1`~`5` 打星、`0` 清除 |
 | 标签筛选 | 左侧标签面板单选筛选（再点取消），按数量排序；筛选态下新建卡片默认携带当前选中标签（强制首位，其余 AI 标签去重补充，最多 3 个；「全部」与 demo 视图不强制） |
@@ -76,9 +76,9 @@
 
 ### 先决条件
 
-- **Node.js** ≥ 18（推荐 20+）
+- **Node.js** ≥ 24（推荐 24+，内置 `node:sqlite`）
 - **AI API Key**（3 家选 1：DeepSeek 官方 / OpenRouter / OpenCode（Zen 免费版或 Go 付费版），当前默认 `opencode-go`：https://opencode.ai/zen/go/v1）
-- **Supabase 账号**（共享项目 `yacgnikzvutbpoqvokth`，publishable key 可公开；登录后云端为主数据源）
+- **Supabase 账号**（可选，用于多端同步；不填则纯本地 SQLite 单机模式）
 
 ### 安装与运行
 
@@ -89,7 +89,7 @@ npm install
 # 2. 配置密钥
 cp .env.local.example .env.local
 #   编辑 .env.local，填入 AI_API_KEY=sk-xxx（或 AI_PROVIDER/AI_MODEL/AI_BASE_URL 组合）
-#   云端同步需同时填 NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+#   多端同步可选填 NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY（留空=本地单机）
 
 # 3. 启动开发服务
 npm run dev
@@ -102,7 +102,7 @@ npm run dev
 ./dev-server.sh stop         # 停止
 ```
 
-> 已登录后主数据在 Supabase 云端（Realtime 同步，`revision` 冲突提示）；未登录时才走 `localStorage`/`data/store.json` 兼容兜底。
+> 本地 SQLite 为唯一主存储（`data/prompt-manager.db`，WAL 模式）；配置了 Supabase 时可多端同步，否则纯本地单机。
 
 ### 生产部署（Docker / Mac Mini）
 
@@ -112,8 +112,8 @@ npm run dev
 PC / 其他 Mac 浏览器
         ↓  http://192.168.31.60:3100（已核验，勿用 localhost/.local）
 Mac Mini Docker：Prompt Manager Web 服务（0.0.0.0:3100 单容器）
-        ↓  Supabase Realtime（cards/card_versions/tags/prompt_tags/settings）
-Supabase：Auth（Magic Link + Google PKCE）+ prompt_manager 云端主数据（RLS + revision）
+        ↓  SQLite（/app/data/prompt-manager.db，bind mount 到 DockerData）
+DockerData/prompt-manager/legacy-store（宿主机磁盘持久化）
 ```
 
 Docker 配置文件位于项目根目录的 `Dockerfile`、`compose.yaml` 与 `.dockerignore`。它们是部署模板，**不是**在开发目录直接运行正式服务的授权：正式代码须先从开发源码区通过 Git 部署流程更新到：
@@ -134,7 +134,7 @@ PROMPT_MANAGER_DATA_DIR=/Users/zzymima0000/DockerData/prompt-manager/legacy-stor
 PROMPT_MANAGER_PORT=3100
 ```
 
-`NEXT_PUBLIC_SUPABASE_URL` 与 `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` 也必须保留；它们是公开浏览器配置。`DEEPSEEK_API_KEY`、MCP 令牌及所有 Secret 仍只能留在 `.env.local`，不得放进 Dockerfile、compose 文件或 Git。
+`NEXT_PUBLIC_SUPABASE_URL` 与 `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` 可选（留空=本地单机模式）；它们是公开浏览器配置。`DEEPSEEK_API_KEY`、MCP 令牌及所有 Secret 仍只能留在 `.env.local`，不得放进 Dockerfile、compose 文件或 Git。
 
 在创建好上述业务持久化目录后，从 `Services/prompt-manager` 运行：
 
@@ -145,21 +145,21 @@ docker compose ps
 
 访问地址固定为：`http://Mac-mini.local:3100`。只在局域网内使用，不要在路由器上配置端口转发。若要让其他设备登录，Supabase Auth 的 **Site URL** 与 Redirect URLs 都应加入这个精确地址；Google Cloud 的 Authorized JavaScript origin 也应加入该地址，但 Google 的 Authorized redirect URI 仍只能是 Supabase 显示的 `/auth/v1/callback`，不是 3100 端口。
 
-> Docker 不会运行 Supabase 数据库，也不会创建数据库 Volume。云端 Supabase 是主数据源；`DockerData/prompt-manager/legacy-store` 只保存尚未下线的 `data/store.json` 兼容副本。备份产物统一放在 `/Users/zzymima0000/DockerBackups/prompt-manager/`，并且不能提交 Git。
+> Docker 不会运行 Supabase 数据库，也不会创建数据库 Volume。SQLite 是唯一主数据源（`/app/data/prompt-manager.db`，bind mount 到 `DockerData/prompt-manager/legacy-store` 宿主机持久化）；备份用 `bash scripts/backup-sqlite.sh backup`，产物统一放在 `/Users/zzymima0000/DockerBackups/prompt-manager/`，不能提交 Git。
 
-> 端口统一为 **3100**（`package.json` 的 dev/start 与 `dev-server.sh` 的 `PORT`）。MCP 已直接使用 Supabase 云端 RPC，不再依赖本机端口或 `data/store.json`。
+> 端口统一为 **3100**（`package.json` 的 dev/start 与 `dev-server.sh` 的 `PORT`）。MCP 通过本机 HTTP API（`/api/mcp/activate`）调取卡片，不再直连 Supabase。
 
-## 云端实时同步
+## 数据存储
 
-- **主数据源为 Supabase `prompt_manager` Schema**（Postgres + RLS + 记录级 `revision` 条件更新，`owner_user_id` 归属），已获 `APPROVED_FOR_EXECUTION`（2026-09-03，Migration 5/5 已发布）。
-- 认证：Supabase Auth（Magic Link + Google OAuth PKCE）；固定访问地址 `http://192.168.31.60:3100`（`localhost`/`.local` 可能因白名单/代理被劫持，统一用裸 IP）。
-- 同步：Supabase Realtime 订阅 `cards/card_versions/tags/prompt_tags/settings` 5 表（`wss://…/realtime/v1/websocket`），任意端增删改约 3 秒内互推；记录级 `revision` 保证并发冲突明确提示而非静默覆盖。
-- 兼容兜底：未登录时走 `data/store.json` + `/api/sync` + `localStorage` + SSE（`http://*:3100` 局域网共享），曾提交 `410 Gone` 限期退场草稿（`docs/review/独立变更申请丨legacy-sync退场丨prompt_manager丨2026-09-03.md`），**已于 2026-09-04 经用户最终裁定取消、长期保留只读**。
-- Docker 自托管：`0.0.0.0:3100` 单容器 `prompt-manager-prompt-manager-1`，`DockerData/prompt-manager/legacy-store` 仅作兼容副本，备份统一在 `/Users/zzymima0000/DockerBackups/prompt-manager/`（不进 Git）。
+- **主数据源为本地 SQLite**（`data/prompt-manager.db`，WAL 模式 + FK + busy_timeout=5000），2026-09-28 从 Supabase 迁移到本地，降低对网络和第三方的依赖。
+- Migration 版本化（`db/migrations/`），首次启动自动建表；备份用 `bash scripts/backup-sqlite.sh backup`（VACUUM INTO 在线热备），恢复用 `bash scripts/backup-sqlite.sh restore <file>`。
+- 可选多端同步：配置 `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` 后启用 Supabase Realtime（cards/card_versions/tags/prompt_tags/settings 5 表），未配置则纯本地单机。
+- 认证（可选）：Supabase Auth（Magic Link + Google OAuth PKCE）；固定访问地址 `http://192.168.31.60:3100`。
+- Docker 自托管：`0.0.0.0:3100` 单容器，SQLite 数据库 bind mount 到 `DockerData/prompt-manager/legacy-store`（宿主机磁盘持久化），备份统一在 `/Users/zzymima0000/DockerBackups/prompt-manager/`（不进 Git）。
 
 ## MCP 接入（WorkBuddy / 其他支持 MCP 的 Agent）
 
-1. 在提示词管理器登录云端，打开「设置 → MCP 云端访问」，为这台电脑生成令牌；复制一次性内容并保存到 `mcp/prompt-server/.env.local`（参考 `.env.example`）。
+1. 在提示词管理器打开「设置 → MCP 本机访问」，为这台电脑生成令牌；复制一次性内容并保存到 `mcp/prompt-server/.env.local`（参考 `.env.example`）。
 
 2. 构建 MCP server：
 
@@ -175,7 +175,7 @@ docker compose ps
        "prompt-manager": {
          "command": "node",
          "args": ["<项目根>/mcp/prompt-server/dist/index.js"],
-         "description": "共享云端提示词库：通过调取码（code）返回卡片正文"
+          "description": "本机提示词库：通过调取码（code）返回卡片正文"
        }
      }
    }

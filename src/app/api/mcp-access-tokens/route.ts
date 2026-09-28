@@ -1,24 +1,25 @@
-import { createHash, randomBytes } from 'node:crypto'
-import { createClient } from '@supabase/supabase-js'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { NextResponse } from 'next/server'
-import { getSupabasePublicConfig, PROMPT_MANAGER_SCHEMA } from '@/lib/supabase/config'
+import { getDb } from '@/lib/db/sqlite'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 const noStoreHeaders = { 'Cache-Control': 'no-store' }
 
-type CreateTokenRequest = { label?: unknown }
+/**
+ * MCP 设备访问令牌（SQLite 本地版）。
+ *
+ * - GET  → 列出全部令牌（不含 token_hash，永不回显原始令牌）；
+ * - POST {label}                        → 创建，返回一次性明文令牌 + info；
+ * - POST {id, action: "revoke"}         → 撤销。
+ *
+ * 与 /api/sync 同理：局域网信任模型，无账号体系；MCP 调取时由
+ * /api/mcp/activate 单独校验令牌哈希。数据库只存 SHA-256 哈希。
+ */
 
 function responseError(error: string, status: number) {
   return NextResponse.json({ error }, { status, headers: noStoreHeaders })
-}
-
-function readBearerToken(request: Request): string | null {
-  const value = request.headers.get('authorization')
-  if (!value?.startsWith('Bearer ')) return null
-  const token = value.slice('Bearer '.length).trim()
-  return token || null
 }
 
 function createAccessToken(): string {
@@ -26,52 +27,65 @@ function createAccessToken(): string {
   return `pmat_${randomBytes(32).toString('hex')}`
 }
 
-export async function POST(request: Request) {
-  const accessToken = readBearerToken(request)
-  if (!accessToken) return responseError('请先登录云端', 401)
+type TokenRow = {
+  id: string
+  label: string
+  created_at: string
+  last_used_at: string | null
+  revoked_at: string | null
+}
 
-  let label: string
+function rowToInfo(row: TokenRow) {
+  return {
+    id: row.id,
+    label: row.label,
+    createdAt: row.created_at,
+    lastUsedAt: row.last_used_at,
+    revokedAt: row.revoked_at,
+  }
+}
+
+export async function GET() {
+  const rows = getDb()
+    .prepare('SELECT id, label, created_at, last_used_at, revoked_at FROM mcp_access_tokens ORDER BY created_at DESC')
+    .all() as unknown as TokenRow[]
+  return NextResponse.json(rows.map(rowToInfo), { headers: noStoreHeaders })
+}
+
+export async function POST(request: Request) {
+  let body: { label?: unknown; id?: unknown; action?: unknown }
   try {
-    const body = (await request.json()) as CreateTokenRequest
-    label = typeof body.label === 'string' ? body.label.trim().slice(0, 80) : ''
+    body = (await request.json()) as typeof body
   } catch {
     return responseError('请求格式错误', 400)
   }
+
+  if (body.action === 'revoke') {
+    const id = typeof body.id === 'string' ? body.id : ''
+    if (!id) return responseError('缺少令牌 id', 400)
+    const result = getDb()
+      .prepare('UPDATE mcp_access_tokens SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL')
+      .run(new Date().toISOString(), id)
+    if (result.changes === 0) return responseError('令牌不存在或已撤销', 404)
+    return NextResponse.json({ ok: true }, { headers: noStoreHeaders })
+  }
+
+  // 默认动作：创建
+  const label = typeof body.label === 'string' ? body.label.trim().slice(0, 80) : ''
   if (!label) return responseError('请填写这台设备的名称', 400)
-
-  const config = getSupabasePublicConfig()
-  if (!config) return responseError('Supabase 尚未配置', 503)
-
-  // getUser(jwt) 会向 Auth 服务校验来访 JWT；不能信任客户端自行声明的用户信息。
-  const authClient = createClient(config.url, config.publishableKey, {
-    auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
-  })
-  const { data: auth, error: authError } = await authClient.auth.getUser(accessToken)
-  if (authError || !auth.user) return responseError('登录已失效，请重新登录云端', 401)
 
   const token = createAccessToken()
   const tokenHash = createHash('sha256').update(token).digest('hex')
-  // 以经 Auth 校验的用户 JWT 写入，继续受现有 RLS 与 owner_user_id 默认值约束；不使用 service_role。
-  const userClient = createClient(config.url, config.publishableKey, {
-    db: { schema: PROMPT_MANAGER_SCHEMA },
-    accessToken: async () => accessToken,
-  })
-  const { data, error } = await userClient
-    .from('mcp_access_tokens')
-    .insert({ label, token_hash: tokenHash })
-    .select('id,label,created_at,last_used_at,revoked_at')
-    .single()
-
-  if (error || !data) return responseError(error?.message ?? '创建 MCP 访问令牌失败', 500)
+  const now = new Date().toISOString()
+  const id = randomUUID()
+  getDb()
+    .prepare(
+      'INSERT INTO mcp_access_tokens (id, label, token_hash, created_at, last_used_at, revoked_at) VALUES (?, ?, ?, ?, NULL, NULL)',
+    )
+    .run(id, label, tokenHash, now)
 
   return NextResponse.json({
     token,
-    info: {
-      id: data.id,
-      label: data.label,
-      createdAt: data.created_at,
-      lastUsedAt: data.last_used_at,
-      revokedAt: data.revoked_at,
-    },
+    info: rowToInfo({ id, label, created_at: now, last_used_at: null, revoked_at: null }),
   }, { headers: noStoreHeaders })
 }

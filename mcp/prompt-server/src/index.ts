@@ -2,8 +2,9 @@
 /**
  * Prompt Manager MCP Server
  *
- * 通过受限的 Supabase RPC 按调取码返回提示词卡片，同时原子增加复制次数。
- * 它绝不读取任一设备的 data/store.json，也不持有 Supabase service_role。
+ * 通过本机 HTTP API（POST { 服务地址 }/api/mcp/activate）按调取码返回提示词卡片，
+ * 同时由服务端 SQLite 原子增加复制次数。不再直连 Supabase。
+ * 它绝不读取任一设备的 data/store.json，也不持有任何数据库凭据。
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
@@ -17,9 +18,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 // dist/index.js 的父目录就是 mcp/prompt-server；此文件只保存本机 MCP 令牌。
 const DEFAULT_ENV_FILE = path.resolve(__dirname, '..', '.env.local')
 
-type CloudConfig = {
+type ServerConfig = {
   url: string
-  publishableKey: string
   accessToken: string
 }
 
@@ -54,43 +54,35 @@ function readLocalEnv(): Record<string, string> {
   }
 }
 
-function getCloudConfig(): CloudConfig | null {
+function getServerConfig(): ServerConfig | null {
   const local = readLocalEnv()
   const value = (name: string) => process.env[name]?.trim() || local[name]?.trim() || ''
-  const url = value('PROMPT_MANAGER_SUPABASE_URL').replace(/\/$/, '')
-  const publishableKey = value('PROMPT_MANAGER_SUPABASE_PUBLISHABLE_KEY')
+  const url = value('PROMPT_MANAGER_URL').replace(/\/$/, '')
   const accessToken = value('PROMPT_MANAGER_ACCESS_TOKEN')
-  if (!url || !publishableKey || !accessToken) return null
-  return { url, publishableKey, accessToken }
+  if (!url || !accessToken) return null
+  return { url, accessToken }
 }
 
-async function activateFromCloud(code: string): Promise<ActivatedPrompt | null> {
-  const config = getCloudConfig()
+async function activateFromServer(code: string): Promise<ActivatedPrompt | null> {
+  const config = getServerConfig()
   if (!config) {
     throw new Error(
-      `MCP 云端访问尚未配置。请在 ${DEFAULT_ENV_FILE} 填入 Supabase URL、publishable key 和 MCP 访问令牌。`,
+      `MCP 本机访问尚未配置。请在 ${DEFAULT_ENV_FILE} 填入 PROMPT_MANAGER_URL 和 PROMPT_MANAGER_ACCESS_TOKEN。`,
     )
   }
 
-  const response = await fetch(`${config.url}/rest/v1/rpc/activate_prompt`, {
+  const response = await fetch(`${config.url}/api/mcp/activate`, {
     method: 'POST',
-    headers: {
-      apikey: config.publishableKey,
-      Authorization: `Bearer ${config.publishableKey}`,
-      'Content-Type': 'application/json',
-      'Content-Profile': 'prompt_manager',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ p_token: config.accessToken, p_code: code }),
   })
   if (!response.ok) {
     // 不把远端响应或令牌内容回显给 MCP 客户端，避免把敏感配置写入聊天记录。
-    throw new Error(`云端请求失败（HTTP ${response.status}）`)
+    throw new Error(`本机服务请求失败（HTTP ${response.status}）`)
   }
   const data: unknown = await response.json()
-  if (!Array.isArray(data) || data.length === 0) return null
-  const row = data[0]
-  if (!row || typeof row !== 'object') return null
-  const item = row as Partial<ActivatedPrompt>
+  if (!data || typeof data !== 'object') return null
+  const item = data as Partial<ActivatedPrompt>
   if (typeof item.title !== 'string' || typeof item.body !== 'string') return null
   return {
     code: typeof item.code === 'string' ? item.code : null,
@@ -140,7 +132,7 @@ server.registerTool(
     const key = code.trim().toLowerCase()
     if (!key) return { isError: true, content: [{ type: 'text', text: '调取码不能为空' }] }
     try {
-      const hit = await activateFromCloud(key)
+      const hit = await activateFromServer(key)
       if (!hit) {
         return {
           isError: true,
@@ -171,7 +163,7 @@ server.registerTool(
         isError: true,
         content: [{
           type: 'text',
-          text: `读取云端提示词库失败：${error instanceof Error ? error.message : '未知错误'}`,
+          text: `读取提示词库失败：${error instanceof Error ? error.message : '未知错误'}`,
         }],
       }
     }

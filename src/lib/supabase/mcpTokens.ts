@@ -1,7 +1,9 @@
 'use client'
 
-import { getSupabaseBrowserClient } from './browser'
-import { getSupabasePublicConfig, PROMPT_MANAGER_SCHEMA } from './config'
+/**
+ * MCP 设备访问令牌（SQLite 本地版）：全部走本机服务端 API `/api/mcp-access-tokens`。
+ * 浏览器永不接触 token_hash；原始令牌仅在创建时返回一次。
+ */
 
 export type McpAccessTokenInfo = {
   id: string
@@ -9,24 +11,6 @@ export type McpAccessTokenInfo = {
   createdAt: string
   lastUsedAt: string | null
   revokedAt: string | null
-}
-
-type McpAccessTokenRow = {
-  id: string
-  label: string
-  created_at: string
-  last_used_at: string | null
-  revoked_at: string | null
-}
-
-function toInfo(row: McpAccessTokenRow): McpAccessTokenInfo {
-  return {
-    id: row.id,
-    label: row.label,
-    createdAt: row.created_at,
-    lastUsedAt: row.last_used_at,
-    revokedAt: row.revoked_at,
-  }
 }
 
 function isMcpAccessTokenInfo(value: unknown): value is McpAccessTokenInfo {
@@ -39,51 +23,40 @@ function isMcpAccessTokenInfo(value: unknown): value is McpAccessTokenInfo {
     && (typeof info.revokedAt === 'string' || info.revokedAt === null)
 }
 
+async function parseError(response: Response, fallback: string): Promise<never> {
+  const payload: unknown = await response.json().catch(() => null)
+  const error = (payload as { error?: unknown } | null)?.error
+  throw new Error(typeof error === 'string' ? error : fallback)
+}
+
+/** 生成供 mcp/prompt-server/.env.local 填写的两行环境变量。 */
 export function buildMcpEnvText(accessToken: string): string | null {
-  const config = getSupabasePublicConfig()
-  if (!config) return null
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  if (!origin) return null
   return [
-    `PROMPT_MANAGER_SUPABASE_URL=${config.url}`,
-    `PROMPT_MANAGER_SUPABASE_PUBLISHABLE_KEY=${config.publishableKey}`,
+    `PROMPT_MANAGER_URL=${origin}`,
     `PROMPT_MANAGER_ACCESS_TOKEN=${accessToken}`,
   ].join('\n')
 }
 
 export async function listMcpAccessTokens(): Promise<McpAccessTokenInfo[]> {
-  const supabase = getSupabaseBrowserClient()
-  if (!supabase) throw new Error('Supabase 尚未配置')
-  const { data, error } = await supabase
-    .schema(PROMPT_MANAGER_SCHEMA)
-    .from('mcp_access_tokens')
-    .select('id,label,created_at,last_used_at,revoked_at')
-    .order('created_at', { ascending: false })
-  if (error) throw new Error(error.message)
-  return ((data ?? []) as McpAccessTokenRow[]).map(toInfo)
+  const response = await fetch('/api/mcp-access-tokens', { cache: 'no-store' })
+  if (!response.ok) return parseError(response, '无法读取 MCP 访问令牌')
+  const data: unknown = await response.json()
+  if (!Array.isArray(data)) throw new Error('无法读取 MCP 访问令牌')
+  return data
 }
 
 /** 返回一次性明文令牌；数据库只保存 SHA-256 哈希，明文不会再被读取。 */
 export async function createMcpAccessToken(label: string): Promise<{ token: string; info: McpAccessTokenInfo }> {
-  const normalizedLabel = label.trim().slice(0, 80)
-  if (!normalizedLabel) throw new Error('请填写这台设备的名称')
-  const supabase = getSupabaseBrowserClient()
-  if (!supabase) throw new Error('Supabase 尚未配置')
-  const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
-  const accessToken = sessionData.session?.access_token
-  if (sessionError || !accessToken) throw new Error('请先登录云端')
-
   const response = await fetch('/api/mcp-access-tokens', {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ label: normalizedLabel }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ label }),
   })
   const payload: unknown = await response.json().catch(() => null)
   const result = payload as { error?: unknown; token?: unknown; info?: unknown }
-  if (!response.ok) {
-    throw new Error(typeof result?.error === 'string' ? result.error : '创建 MCP 访问令牌失败')
-  }
+  if (!response.ok) return parseError(response, '创建 MCP 访问令牌失败')
   if (typeof result?.token !== 'string' || !isMcpAccessTokenInfo(result.info)) {
     throw new Error('创建 MCP 访问令牌失败')
   }
@@ -91,13 +64,10 @@ export async function createMcpAccessToken(label: string): Promise<{ token: stri
 }
 
 export async function revokeMcpAccessToken(id: string): Promise<void> {
-  const supabase = getSupabaseBrowserClient()
-  if (!supabase) throw new Error('Supabase 尚未配置')
-  const { error } = await supabase
-    .schema(PROMPT_MANAGER_SCHEMA)
-    .from('mcp_access_tokens')
-    .update({ revoked_at: new Date().toISOString() })
-    .eq('id', id)
-    .is('revoked_at', null)
-  if (error) throw new Error(error.message)
+  const response = await fetch('/api/mcp-access-tokens', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, action: 'revoke' }),
+  })
+  if (!response.ok) return parseError(response, '撤销 MCP 访问令牌失败')
 }
