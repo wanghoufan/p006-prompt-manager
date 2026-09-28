@@ -1225,3 +1225,11 @@ P0-H 当前实现 **PASS**，无新增 Bug；建议进入后续客户端真实 M
 - **清理**：无需 SQL 定向清除——云端无本测试残留行；他人的 `__测单删/__测D2/__测E` 未动；回收站未清空（内有用户内容 + 本轮 1 条 tag 删除记录）。
 - **结论：PASS**（对照轮达成：建先落定 revision=1 → 删后 60 秒云端行消失 → 刷新无复活。补上了第五轮诚实备注要求的对照证据：删除请求真实到达过云端行，而非建从未上云的“净零”）。
 - **证据**：`scratch/qa-real-device/2026-09-17-bug15-round6-{1-created,2-confirm,3-deleted,4-after-reload}.png`。
+
+## BUG-16 Composer 建卡三开关不持久化（2026-09-28；状态：FIXED——`d25d881` 已上线，API 层验证 PASS）
+
+- **现象**（用户真机报告 + 截图）：Composer 输入框下「自动生成标签 / 自动生成标题 / 自动格式整理」三个开关，勾选状态刷新后即回默认（勾了格式整理、取消了标签，刷新全丢）。
+- **根因**：三开关为 `Composer.tsx` 组件内本地 `useState`（`autoGenerateTags`/`autoGenerateTitle` 初始 true；`autoFormat` 仅以 `settings.autoFormatBody` 初始化一次后分叉），从不写入任何持久层，刷新必丢。与 SQLite 迁移无关——Supabase 时代即如此（迁移审查 §4.2 P2-3 已预警"空 title 静默降级"同属 Composer 链，本 bug 为独立缺陷）。
+- **修复**（`d25d881`，8 文件）：三开关升级为 `Settings` 正式字段（`composerAutoTags`/`composerAutoTitle` 新增，`autoFormatBody` 复用既有列）；Composer 改受控 props + `onComposerOptionsChange` → `setSettings` → 既有 settings effect 自动 localStorage + `/api/sync` 持久化。新增 `db/migrations/0002_composer_auto_flags.sql`（settings 表加 `composer_auto_tags`/`composer_auto_title` 两列，NOT NULL DEFAULT 1）。Supabase 回退分支 `toSettings` 补默认值 true。
+- **验证**：tsc/lint 0 错误、build 过；本地空库→migration 自动应用→POST 非默认值→SQLite 行 `0|0|1`→GET 读回一致→改回亦一致；线上（`d56d450880f0`）`/api/sync` 已输出新字段且生产库 migration 1+2 应用、其余设置未动。UI 级复测待用户真机顺手确认。
+- **附注**：输入框「自动格式整理」与设置弹窗同名开关自本修复起实时联动（同一 settings 字段），历史两处状态分叉问题一并消除。

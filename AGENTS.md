@@ -121,8 +121,8 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 ## 一、项目档案
 
 - 项目名称：提示词管理工具（Prompt Manager）
-- 项目类型：Next.js 应用 + 共享 Supabase 云端存储 + Docker 自托管 + MCP 子包
-- 当前阶段：Supabase 云端多端同步已完成并获 APPROVED_FOR_EXECUTION（2026-09-03 15:00 裁定放行），Migration 7/7 已发布（含 2026-09-04 BUG-13 `tags.revision` 修复）；剩余待办已于 2026-09-04 经用户最终裁定全部取消；**2026-09-10 完成 AI 服务商从 8 厂商收敛为 3 家（4 选项）并已上线生产（`1b569a5`）**；项目处于现状运行期（Mini 单设备，日常使用与被动故障响应）。**2026-09-13**：P0 标签 FK 修复（`989e321`）+ 吐司刷屏返修（`0ea4339`，同 job 补推父行 + 吐司去重）已上线，BUG-14 FIXED。**2026-09-16**：左右面板自由拖宽（`1d4d589`）+ 回收站/标签`父/子`全路径显示（`2d49adf`，真机 QA PASS，73 卡归位）已上线
+- 项目类型：Next.js 应用 + 本地 SQLite 主存储（Supabase 云端为回退路径，用户 2026-09-28 裁定保留）+ Docker 自托管 + MCP 子包
+- 当前阶段：Supabase 云端多端同步已完成并获 APPROVED_FOR_EXECUTION（2026-09-03 15:00 裁定放行），Migration 7/7 已发布（含 2026-09-04 BUG-13 `tags.revision` 修复）；剩余待办已于 2026-09-04 经用户最终裁定全部取消；**2026-09-10 完成 AI 服务商从 8 厂商收敛为 3 家（4 选项）并已上线生产（`1b569a5`）**；项目处于现状运行期（Mini 单设备，日常使用与被动故障响应）。**2026-09-13**：P0 标签 FK 修复（`989e321`）+ 吐司刷屏返修（`0ea4339`，同 job 补推父行 + 吐司去重）已上线，BUG-14 FIXED。**2026-09-16**：左右面板自由拖宽（`1d4d589`）+ 回收站/标签`父/子`全路径显示（`2d49adf`，真机 QA PASS，73 卡归位）已上线。**2026-09-28**：存储从 Supabase 迁移为本地 SQLite（`1ba17df`，db/migrations 机制，DockerData bind mount）+ 全库代码审查（无 P0）+ 卡片重复修复（`b1bf1af`）+ Composer 三开关持久化修复（`d25d881`）均已上线；Supabase 回退路径保留（用户裁定），局域网信任模型维持现状（用户裁定）
 - 主要目标：管理、编辑与测试提示词
 - 主要用户：使用 GPT 等大模型、需要集中管理 Prompt 的个人 / 团队
 
@@ -130,11 +130,11 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 - 前端：Next.js 16（App Router）+ React 19 + TypeScript 5
 - 服务端：Next.js Route Handler（AI 代理、`/api/mcp-access-tokens` MCP 令牌服务端生成）
-- 共享存储：Supabase `prompt_manager` Schema（Postgres + RLS + Realtime，记录级 `revision` 条件更新，`owner_user_id` 归属）为主；`/api/sync` + `data/store.json` + localStorage 为未登录/离线兼容兜底（已获 APPROVED_FOR_EXECUTION；限期退场草稿已于 2026-09-04 经用户最终裁定取消、长期保留）
-- 实时同步：Supabase Realtime（cards/card_versions/tags/prompt_tags/settings 5 表，`wss://…/realtime/v1/websocket`）；旧 SSE 链路仅作兼容保留
-- 认证：Supabase Auth（Magic Link + Google OAuth PKCE），`http://192.168.31.60:3100` 为已核验访问地址（`localhost`/`.local` 不在白名单/被代理劫持）
-- MCP：`mcp/prompt-server/`（`@modelcontextprotocol/sdk` + zod，stdio，v0.2.0 直连 Supabase RPC），工具 `prompt_manager_activate_prompt`（`prompt_manager.activate_prompt` RPC，能力令牌 SHA-256 哈希，`SECURITY DEFINER` 已裁定接受，2 WARN 存档）
-- 部署：Docker 自托管（`prompt-manager-prompt-manager-1` 绑定 `0.0.0.0:3100`；正式部署副本 `Developer/coding/docker/prompt-manager/`（GitHub 克隆，规范 V1.1），一键部署 `bash scripts/deploy.sh`（前提：已 push master）；`DockerData/prompt-manager/legacy-store` bind mount，`DockerBackups/prompt-manager/` 备份不进 Git）
+- 主存储：本地 SQLite（`data/prompt-manager.db`，node:sqlite + WAL；结构变更走 `db/migrations/*.sql`，访问集中在 `src/lib/serverStore.ts` + `src/lib/db/sqlite.ts`；全量快照 + baseVersion 乐观并发）；Supabase 回退分支保留（`src/lib/supabase/promptRepository.ts`，`NEXT_PUBLIC_SUPABASE_*` 留空即自动降级本地模式）
+- 实时同步：服务端 SSE（`/api/sync/stream` 版本号广播）；Supabase Realtime 仅回退模式使用
+- 认证：本地模式无需登录；Supabase Auth（Magic Link + Google OAuth PKCE）仅回退模式，`http://192.168.31.60:3100` 为已核验访问地址
+- MCP：`mcp/prompt-server/`（`@modelcontextprotocol/sdk` + zod，stdio，v0.2.0 走 `/api/mcp/activate` 直连本地 SQLite），工具 `prompt_manager_activate_prompt`（能力令牌 SHA-256 哈希存 `mcp_access_tokens` 表）
+- 部署：Docker 自托管（`prompt-manager-prompt-manager-1` 绑定 `0.0.0.0:3100`；正式部署副本 `Developer/coding/docker/prompt-manager/`（GitHub 克隆，规范 V1.1），一键部署 `bash scripts/deploy.sh`（前提：已 push master；注意 PATH 避坑见 §十一）；SQLite 主库 bind mount 至 `DockerData/prompt-manager/`，`DockerBackups/prompt-manager/` 备份不进 Git）
 - AI 调用：通用 `AI_PROVIDER/AI_MODEL/AI_BASE_URL/AI_API_KEY`；**2026-09-10 从 8 厂商收敛为 3 家服务商 / 4 个选项 / 5 个模型**：`deepseek`（官方，`deepseek-v4-flash`）、`openrouter`（模型用户自填）、`opencode`（Zen，`glm-5.3-flash`）、`opencode-go`（`deepseek-v4-flash` + `glm-5.3-flash`）。**清单唯一来源 = `src/lib/ai/types.ts` 的 `AI_PROVIDERS`，须与 `SettingsModal.tsx` 的 `AI_SERVICES`、`factory.ts` 的 switch 分支三处同源**；历史配置指向已移除厂商时由 `normalizeSettings` 回退 `deepseek`。`docker/env.template` 为模板（env 回退仅在同厂商同源时生效），部署副本 `.env.local`（600 权限，不进 Git）
 - 样式方案：Tailwind CSS v4
 - 代码检查：ESLint 9（eslint-config-next）

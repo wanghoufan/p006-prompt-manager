@@ -1,58 +1,43 @@
 # HANDOFF｜交接（暂停/恢复用，先读我）
 
-> 2026-09-27 更新。旧交接全文备份为 `HANDOFF.md.旧版-2026-09-13`（1900+ 行，§16.28补4 现役入口），历史不断，断会话靠它接续。
+> 2026-09-28 更新。旧交接全文备份为 `HANDOFF.md.旧版-2026-09-13`（1900+ 行，§16.28补4 现役入口），历史不断，断会话靠它接续。
 
-- Captured at（YYYY-MM-DD HH:MM）：2026-09-27 18:30
-- PROJECT_PHASE：DEVELOP（现状运行期；Mini 单设备，日常使用与被动故障响应）
+- Captured at（YYYY-MM-DD HH:MM）：2026-09-28 15:10
+- PROJECT_PHASE：DEVELOP（现状运行期；存储已切本地 SQLite，Mini 单设备 + 局域网多端浏览器访问）
 - PLAN_VERSION：（无）
 - PLAN_READINESS_SCORE：（无）
 - PLAN_GATE：（N/A，非 PLAN 链）
-- DEV_BASELINE：STATUS-QUO-2026-09-27（本轮 4 次提交已上线：`7e6ff51` 格式整理去竖杠 → `94e5806` 自动格式整理复选框 → `7d286d8` 防重复提交+清理 ┃ → `b07e616` 多选模式点击卡片任意位置选中）
+- DEV_BASELINE：STATUS-QUO-2026-09-28（SQLite 迁移轮 6 次提交已上线，HEAD `d25d881`）
 - CHANGE_REQUEST：NONE
-- Stage ID（本阶段叫什么）：现状运行期
-- 剩 P0（没完的才列，多一条都不行）：
-  - 10 个非 `__` 前缀疑似测试标签去留待用户定（部分带真实卡关联）
-- 当前 Task（正干到哪）：本轮格式整理 + 多选优化已完成并上线，无开发中 Task
+- Stage ID（本阶段叫什么）：现状运行期（SQLite 本地化后）
+- 剩 P0（没完的才列，多一条都不行）：无
+- 当前 Task（正干到哪）：SQLite 迁移 + 审查 + 修复全部完成上线，无开发中 Task
 - 执行链/Session：—
-- 未闭环评审意见：无
-- docs 落盘清单：本文件（HANDOFF.md）
-- 下一步（Next Single Action）：
-  1. **删除确认弹窗替换**：用户要求不用浏览器原生 `window.confirm`，改为跟随鼠标焦点的自定义确认弹窗。涉及 `page.tsx`（单删/批量删/清空仓库/导入覆盖/载入示例/内容重复）、`TagPanel.tsx`（标签删除/批量删除）、`TrashModal.tsx`（清空回收站）共 10 处 `window.confirm`。
-  2. **多选模式入口**：用户反馈找不到多选入口。当前多选只能从卡片右上角勾选框开始，需在 SortBar 或工具栏添加明显的"多选"按钮进入多选模式。
-  3. 用户定 10 个疑似标签去留
-- 人要拍什么板：无
+- 未闭环评审意见：CODE_REVIEW.md §四 3 个决策项已由用户拍板（回退保留/局域网现状/文档对齐），其余 P1/P2 见 §4.3 待择机处理
+- docs 落盘清单：本文件（HANDOFF.md）、CODE_REVIEW.md §四、BUGS.md（BUG-16）、AGENTS.md（§一技术栈对齐 + §十一踩坑经验）
+- 下一步（Next Single Action）：无强制下一步；候选见下方「待择机处理」
+- 人要拍什么板：10 个非 `__` 前缀疑似测试标签去留（沿用未定）
 - permission_request：无
-- 收尾记一笔：本轮 4 次提交均已部署上线（HTTP 200 验证通过）
+- 收尾记一笔：2026-09-28 洁癖收尾完成（残留清理 + 文档对齐 + 治理文件入库）
 
-## 本轮已上线改动（2026-09-27）
+## 本轮已上线改动（2026-09-28，SQLite 迁移轮）
 
-| 提交 | 改动 | 文件 |
+| 提交 | 改动 | 备注 |
 |---|---|---|
-| `7e6ff51` | 格式整理 prompt 新增清理竖杠 `|` | `src/lib/ai.ts` |
-| `94e5806` | Composer 新增"自动格式整理"复选框 | `src/components/Composer.tsx`、`src/app/page.tsx` |
-| `7d286d8` | 防重复提交 + 清理 `┃` 字符 | `src/components/Composer.tsx`、`src/lib/ai.ts` |
-| `b07e616` | 多选模式点击卡片任意位置选中 | `src/components/CardItem.tsx` |
+| `1ba17df` | 存储从 Supabase 切换为本地 SQLite（唯一主存储） | db/migrations 机制；DockerData bind mount |
+| `900857b` | .gitignore 例外 + MCP .env.example 入仓 | |
+| `ec2dada` | 治理收尾（HANDOFF 精简重写 + 角色表） | 旧版已备份 |
+| `cbfd02b` | 全库审查报告落盘（无 P0；3 P1/5 P2/3 P3）+ 复审 | docs/review/CODE_REVIEW.md §四 |
+| `b1bf1af` | 卡片重复修复（本地模式服务器覆盖 localStorage，240→120） | |
+| `d25d881` | BUG-16：Composer 三开关持久化到 settings（migration 0002） | API 层验证 PASS；UI 待用户顺手复核 |
 
-## 待办改动详情
+> 2026-09-27 轮 5 次提交（`7e6ff51`~`88f4d85`，含自定义确认弹窗替换 10 处 `window.confirm`、多选入口）均已上线，详情见 git log，此处不再重复。
 
-### 1. 删除确认弹窗替换（P1）
+## 待择机处理（非 P0，按需启动）
 
-**需求**：不用浏览器原生 `window.confirm`，改为跟随鼠标焦点的自定义确认弹窗。
-
-**涉及文件与行号**：
-- `src/app/page.tsx`：1091（内容重复）、1129（载入示例）、1161（清空仓库）、1381（单删）、1705（批量删）、1863（导入覆盖）
-- `src/components/TagPanel.tsx`：518、578、680
-- `src/components/TrashModal.tsx`：45
-
-**实现建议**：创建 `ConfirmPopover` 组件，定位在鼠标位置，确认/取消按钮，自动消失。
-
-### 2. 多选模式入口（P1）
-
-**需求**：用户找不到多选模式入口，需要明显按钮进入多选模式。
-
-**当前状态**：多选只能从卡片右上角勾选框开始（hover 才显示），无全局入口。
-
-**实现建议**：在 SortBar 或 Composer 附近添加"多选"按钮，点击进入多选模式（bulkActive=true），再点卡片即选中。
+- CODE_REVIEW.md §4.3 三个 P1（backup-sqlite.sh 恢复需先停容器、导入脚本并发、局域网信任模型已裁定维持现状）——使用侧注意事项，非代码急修
+- CODE_REVIEW.md §四 5 个 P2（全量覆写性能模型、revision 死字段、空 title 静默降级、MCP 版本号不一致等）
+- 10 个非 `__` 前缀疑似测试标签去留待用户定
 
 ## 恢复读盘（全体系唯一顺序，别乱）
 
