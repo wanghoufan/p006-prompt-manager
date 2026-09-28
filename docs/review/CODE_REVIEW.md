@@ -1,6 +1,6 @@
 # 代码审查报告 · 提示词管理工具
 
-- **审查时间**：2026-08-26（基线）｜ **2026-09-04 增补**：Supabase 云端迁移 + MCP RPC + Realtime + 写队列 30s 超时 + BUG-13 `tags.revision` 已另行经 `docs/handoff/HANDOFF.md` §16.20.1、`docs/qa/BUGS.md` 真机验收与收口材料 `L0` 门禁覆盖；本报告所列 P0/P1/P2 均为 08-26 前旧基线，已全部闭环或被新链路替代，保留作历史基线。
+- **审查时间**：2026-08-26（基线）｜ **2026-09-04 增补**：Supabase 云端迁移 + MCP RPC + Realtime + 写队列 30s 超时 + BUG-13 `tags.revision` 已另行经 `docs/handoff/HANDOFF.md` §16.20.1、`docs/qa/BUGS.md` 真机验收与收口材料 `L0` 门禁覆盖；本报告所列 P0/P1/P2 均为 08-26 前旧基线，已全部闭环或被新链路替代，保留作历史基线。｜ **2026-09-28 增补**：SQLite 本地存储迁移专项审查（commit `1ba17df`，见文末「四、SQLite 本地存储迁移专项审查（2026-09-28）」）
 - **审查范围**：`src/` 全部源码（lib / app / components）+ `mcp/prompt-server/`（08-26 时点：`serverStore` + `data/store.json` + SSE 链路；09-04 后主链路为 Supabase `prompt_manager` + Realtime 7/7）
 - **审查性质**：第三轮审查（备注字段 + 自动保存 + 治理规整后）+ **09-04 洁癖收尾标注**（不重做全量审查，仅明确基线时效）
 - **静态检查**：2026-08-26 时 `tsc --noEmit` 通过；`npm run lint` **失败**（2 处 React Hooks 违规，08-27 已修复）｜ 2026-09-04 复核 `tsc --noEmit` 0 error、`npm run lint` 0 error（仅 scratch 2 warnings）
@@ -317,3 +317,74 @@
 
 - 【P2】服务端直读旁路迁移：`resolveAIConfig`（`src/lib/ai.ts`）读 `serverStore` 原始值，不调 `normalizeAiModel`；deepseek 通道旧名 `deepseek-v4-flash` 在客户端下次 `normalizeSettings` 落盘前仍以旧名发往官方（官方称仅兼容期）。建议在 `resolveAIConfig` 返回前对 `model` 加一行 `normalizeAiModel(provider, model)`（纯透传语义不变，仅补迁移），builder 顺手修。
 - 【P3】`deepseek-flash` 是否为官方现行有效模型名无法从本仓库验证（预置即产品断言，P0-C 称来自 2026-09-17 定价页；手填透传已保证即便名不准用户仍可自填，不阻塞）。
+
+---
+
+# 四、SQLite 本地存储迁移专项审查（2026-09-28）
+
+- **审查对象**：commit `1ba17df`「SQLite 本地存储迁移：从 Supabase 云端切到本地 SQLite 作为唯一主存储」（19 文件，+1329/-282），及其与既有双模式（Supabase 云端 / 局域网同步）代码的交互。
+- **审查方法**：全量通读迁移涉及文件（`src/lib/db/sqlite.ts`、`db/migrations/0001_init.sql`、`src/lib/serverStore.ts`、`src/lib/storage.ts`、`/api/sync`、`/api/sync/stream`、`/api/sync/increment-copy`、`/api/mcp/activate`、`/api/mcp-access-tokens`、`src/lib/supabase/mcpTokens.ts`、`mcp/prompt-server/src/index.ts`、`scripts/import-export-sqlite.mjs`、`scripts/backup-sqlite.sh`、`Dockerfile`、`compose.yaml`、`docker/env.template`、`McpCloudAccess.tsx`、`SupabaseAuthControl.tsx`、`page.tsx` 双模式判定）+ Grep 排查 Supabase 残留引用。
+- **静态验证**：`npx tsc --noEmit` 0 error；`npm run lint` 0 error（9 warnings，集中在 `scratch/` 与治理脚本，迁移代码仅 1 条 `Unused eslint-disable`，见 P2-4）；`npm run build` 成功（11 routes，standalone 产物正常）。**未做真机运行验证**（迁移完成时间早于本次审查，生产容器状态未知，避免审查动作干扰运行数据）。
+- **结论**：**无 P0 阻断项**。迁移核心链路（建库/Migration、快照读写、SSE、MCP 令牌与激活、双模式降级、部署配套、.gitignore）实现正确且自洽；发现 **3 个 P1**（运维脚本与安全模型）、**5 个 P2**、**3 个 P3**。
+
+## 4.1 迁移正确性确认（已验证通过的点）
+
+1. **Schema 约束完整自洽**（[0001_init.sql](file:///Users/zzymima0000/Developer/coding/1.Active/006-ing-提示词管理器/db/migrations/0001_init.sql)）：cards CHECK（title 非空 / rating 0-5 / code 小写字母数字连字符）+ partial unique index（`code IS NOT NULL`）、tags 同父重名唯一（`COALESCE(parent_id,'')`）、card_versions / prompt_tags `ON DELETE CASCADE`、tags 自引用 `ON DELETE RESTRICT`。`setState` 全量覆写的删除顺序（先删关系与版本 → `UPDATE tags SET parent_id = NULL` → 再删 tags）正确绕开了自引用 RESTRICT。
+2. **Migration 机制可靠**（[sqlite.ts](file:///Users/zzymima0000/Developer/coding/1.Active/006-ing-提示词管理器/src/lib/db/sqlite.ts)）：版本表 + 事务内执行 + 失败回滚；`db/migrations` 打进 Docker 镜像（`COPY --from=builder /app/db ./db`）；PRAGMA（WAL / foreign_keys / busy_timeout）在连接时统一施加；`VACUUM INTO` 在线热备。
+3. **密钥不落库双向闭环**：服务端 `sanitizeSettings` 剥离 `aiApiKey`（写入前 + GET 快照双保险），settings 表无该列；客户端 `loadFromServer` 取回后从本机 localStorage 补回 Key；`settingsForServer` 推送前再剥一次。
+4. **MCP 链路完整**：令牌仅存 SHA-256 哈希（64 位 CHECK）、明文一次性返回、`revoked_at IS NULL` 过滤；`/api/mcp/activate` 校验→`activatePromptByCode` 原子 +1（copy_count/revision/updated_at）→EventEmitter 广播→SSE→前端实时刷新；`prompt-server` 走 HTTP 后不再依赖 `node:sqlite`（engines >=18 仍成立）。
+5. **运行时验证接口齐全**：`checkIntegrity()`（integrity_check + foreign_key_check + schema 版本）与导入脚本尾部的核对输出，为运维提供了健康检查抓手。
+6. **.gitignore 正确屏蔽** `/data/`、`*.db`、`*.db-wal`、`*.db-shm`，真实库不会进 Git。
+7. **双模式保留是刻意设计而非迁移遗漏**：Supabase env 留空时 `getSupabasePublicConfig()` 返回 null → `getPromptCloudSessionUser()` 返回 `signedIn:false` → page.tsx 自动走 `/api/sync` 本地链路；`SupabaseAuthControl` 在未配置时 `return null` 不渲染。旧 Supabase 代码是可选回退路径，非死代码（是否清理见 §4.3 决策点）。
+8. **并发安全（单进程内）**：`getDb()` 同步初始化；`setState`/`incrementCopy`/`activatePromptByCode` 从读快照到 COMMIT 全程同步无 `await`，JS 单线程下不会出现读到一半被其他请求交叉的版本竞态；`BEGIN IMMEDIATE` 保证对 SQLite 的写锁。
+
+## 4.2 发现的问题
+
+### P1（应修 / 需拍板）
+
+- **P1-1 · 备份恢复脚本可在运行中的库上直接覆盖，存在数据损坏风险**
+  位置：[backup-sqlite.sh](file:///Users/zzymima0000/Developer/coding/1.Active/006-ing-提示词管理器/scripts/backup-sqlite.sh#L60-L89)
+  `restore` 分支直接 `cp "$backup_file" "$db"` 并删除 `-wal/-shm`。若容器正在运行：① 运行进程仍持有旧文件句柄与 WAL，恢复后新写可能进已被删除的 WAL，或与新库内容交叉，造成数据错乱；② 恢复前的自动安全备份只 `cp` 主 .db 文件，**不含 -wal 中尚未 checkpoint 的数据**，该"安全备份"可能不完整。
+  建议：脚本开头检测容器运行状态（或至少输出醒目提示）要求先 `docker compose stop`；pre-restore 备份改用 `sqlite3 "$db" "VACUUM INTO ..."` 替代 `cp`。
+
+- **P1-2 · 导入脚本与运行中服务并发会打乱版本号状态**
+  位置：[import-export-sqlite.mjs](file:///Users/zzymima0000/Developer/coding/1.Active/006-ing-提示词管理器/scripts/import-export-sqlite.mjs#L340)（`meta.version` 重置为 1）+ 全量覆写。
+  若在应用运行时执行导入：库内 version 回退到 1，而已连接客户端 `knownVersion` 处于高位 → SSE 永远判"不更新"（`version <= knownVersion` 跳过）、POST `baseVersion` 恒冲突；WAL 模式下双进程并发写还可能触发 busy 超时。脚本注释只提示"执行前建议先备份"，未提示"先停服务"。
+  建议：脚本头部加醒目前置条件说明（先 `docker compose stop`）；有条件时检测 3100 端口占用即拒绝执行。此为一次性脚本，风险窗口小，但一旦踩中排查成本高。
+
+- **P1-3 · 局域网安全模型相对 Supabase 明确弱化，需用户知情拍板**
+  位置：[sync/route.ts](file:///Users/zzymima0000/Developer/coding/1.Active/006-ing-提示词管理器/src/app/api/sync/route.ts#L21-L40)（`baseVersion` 缺省时**完全不做版本校验**，局域网内任意设备可整体覆写/清空库）、[mcp-access-tokens/route.ts](file:///Users/zzymima0000/Developer/coding/1.Active/006-ing-提示词管理器/src/app/api/mcp-access-tokens/route.ts)（GET/POST 管理 API 无任何认证）。
+  旧链路有 Supabase RLS + 记录级 revision 保护；本地模式退化为纯局域网信任（代码注释已自述"局域网信任模型"）。家用单网段场景通常可接受，但服务绑定 `0.0.0.0:3100`，同网段任意设备可写。**这不是迁移引入的 bug，而是架构决策**：请用户确认接受，或选择轻量加固（如 `/api/sync` 写操作强制要求 baseVersion、或给管理端点加简单令牌）。
+
+### P2（一般问题）
+
+- **P2-1 · 全量覆写 + 全量序列化 diff 的性能模型**（[serverStore.ts](file:///Users/zzymima0000/Developer/coding/1.Active/006-ing-提示词管理器/src/lib/serverStore.ts#L178-L211)）：每次 `setState` 先把当前库全读出、两次 `JSON.stringify` 全量比较、再 DELETE 全表 + 全量 INSERT。当前 73 卡规模无感；卡片/版本数增长到千级后，每次小改动（如复制计数走的是独立轻量路径不受影响，但任意正文/设置保存）都会全库重写。属旧 JSON 存储模式的直迁遗留。建议：数据量显著增长前保持现状；后续可演进为按实体增量 upsert（接口协议不变）。
+- **P2-2 · `revision` 字段语义残留**：`cards.revision`、`settings.revision` 在 schema 中保留，但普通写入恒为 1（只有 MCP activate 才对单卡 +1），前端真正的乐观并发控制是 `meta.version`（knownVersion/baseVersion）。若不打算恢复记录级条件更新，建议在后续 migration 中去掉这两列或在 [0001_init.sql](file:///Users/zzymima0000/Developer/coding/1.Active/006-ing-提示词管理器/db/migrations/0001_init.sql) 头注注明"仅 MCP 链路使用，非并发控制依据"，避免后来者误读。
+- **P2-3 · 空 title 可穿透前端校验并导致整批写入失败**：`isCard` 只验 `isString(x.title)`，空字符串可通过；服务端 INSERT 触发 `CHECK(length(trim(title))>0)` 失败 → **整个 setState 事务回滚** → 客户端 `serverMode=false` 静默降级本机缓存，每次重试都失败。UI 正常操作不会产生空 title，但导入/异常输入路径可能触发，且失败表现（同步静默失效）难以自查。建议：`isCard` 增加 `x.title.trim()` 非空，或 `setState` 写入前对非法卡片整体拒绝并返回明确错误。
+- **P2-4 · 死代码与版本号不一致（清理项，可打包一次处理）**：① [import-export-sqlite.mjs:199-208](file:///Users/zzymima0000/Developer/coding/1.Active/006-ing-提示词管理器/scripts/import-export-sqlite.mjs#L199-L208) `const taggedCards = 0` + `void taggedCards` + 失效的 eslint-disable（lint 警告来源）；② 同脚本 [末尾](file:///Users/zzymima0000/Developer/coding/1.Active/006-ing-提示词管理器/scripts/import-export-sqlite.mjs#L371) `existsSync(options.input)` 在 `readFileSync` 之后恒为 false，属死检查；③ [mcpTokens.ts](file:///Users/zzymima0000/Developer/coding/1.Active/006-ing-提示词管理器/src/lib/supabase/mcpTokens.ts) 已是纯本地 API 客户端，仍留在 `src/lib/supabase/` 目录（命名误导，若保留 Supabase 回退路径则至少加注说明）；④ `mcp/prompt-server/package.json` version `0.1.0` 与 `index.ts` McpServer version `0.2.0` 不一致。
+- **P2-5 · 交接与档案缺口（治理项）**：`docs/handoff/HANDOFF.md` 无本次迁移的交接记录；AGENTS.md「项目档案/技术栈」仍写"共享存储：Supabase … 为主"，与"SQLite 唯一主存储"的新事实冲突（按全局工作原则 9 应修正文档）。迁移的运维约定（备份命令、恢复前提、导入前提）也无处落档。
+
+### P3（建议）
+
+- **P3-1 · WAL 例行维护缺失**：长跑容器 WAL 文件会缓慢增长（默认 auto-checkpoint 1000 页可缓解但主库 -wal 常驻）；可在 `backup-sqlite.sh` 的 backup 分支顺手执行 `PRAGMA wal_checkpoint(TRUNCATE)`。
+- **P3-2 · compose 无 healthcheck**：`deploy.sh` 已有 HTTP 验证兜底，可选为容器加 `healthcheck`（GET /api/sync 200 即健康），便于 `restart: unless-stopped` 之外的异常感知。
+- **P3-3 · 长期演进**：若未来恢复多端使用，P2-1 的增量写 + P1-3 的鉴权是两个前置改造项；单机场景无需启动。
+
+## 4.3 交由用户决策的事项（2026-09-28 用户已裁定）
+
+1. **Supabase 回退路径去留**：保留（现状，env 留空即本地模式，代码含双模式约千行）vs 彻底拆除（删 `src/lib/supabase/{browser,server,config,promptRepository}.ts`、`SupabaseAuthControl.tsx`、`@supabase/*` 依赖及 page.tsx 云端分支，显著瘦身）。彻底拆除后若再要云端需重新实现；保留则需接受双模式维护成本。→ **【已裁定】保留双模式。**
+2. **P1-3 局域网信任模型**：接受现状（家用单网段）或做轻量加固（写操作强制 baseVersion / 管理 API 加令牌）。→ **【已裁定】接受现状，不加鉴权。**
+3. **P2-5 文档补齐**：是否授权将 AGENTS.md 技术栈描述、HANDOFF 交接记录按新事实更新（涉及修改 AGENTS.md，按规矩需用户点头）。→ 待办。
+
+## 4.4 复审记录：卡片重复修复（2026-09-28 第二轮）
+
+- **复审对象**：commit `b1bf1af`「修复：本地模式下用服务器数据覆盖 localStorage，避免旧 UUID 残留导致卡片重复（240=120×2）」，改动仅 [page.tsx](file:///Users/zzymima0000/Developer/coding/1.Active/006-ing-提示词管理器/src/app/page.tsx#L570-L578)（本地模式连接成功分支，-13/+7 行）。
+- **修复背景确认**：SQLite 库经导入脚本重建为 `randomUUID` 新 id，浏览器 localStorage 仍留 Supabase 时代旧 UUID 卡片；旧 `mergeLocalOnlyIntoRemoteSnapshot` 把"服务器没有的本地卡片"（实为旧 UUID 残留）并入视图 → 120×2=240。修复改为本地模式下服务器为唯一事实来源，直接覆盖。
+- **静态验证**：`npx tsc --noEmit` 0 error；`npm run lint` 0 error（8 warnings，均在 scratch/治理脚本）；`npm run build` 成功。
+- **复审结论：修复正确，无新增 P0/P1。** 核查通过的关键点：
+  1. **BUG-12 兜底保留**：覆盖前仍调用 `backupLocalSnapshot()`（page.tsx:556），localStorage 四键滚动备份在位，误覆盖可从 `preconnect-backup` 找回。
+  2. **空库首次上传分支未被误伤**：`remote.cards.length === 0 && local.length > 0` 时仍会把本机数据推上服务器（page.tsx:558-569），"服务器空库 + 本地有数据"不会误清。
+  3. **持久化闭环**：`setCards(remote.cards)` 触发既有 saveCards effect，localStorage 旧 UUID 残留随后被服务器权威数据覆写清除，不会下次连接再复发。
+  4. **`mergeLocalOnlyIntoRemoteSnapshot` 非死代码**：云端 Supabase 分支（page.tsx:425）仍在调用，仅从本地分支移除。
+  5. **tombstone 过滤一致**：覆盖分支对 tags/promptTags 保留 `deadTagIds()` 过滤，与 SSE 回调（page.tsx:580-587）口径一致。
+- **有意的行为回归（trade-off，需知情）**：本地模式下，离线期间仅存于本机的卡片/标签不再被自动合并找回——重连或刷新后将被服务器快照覆盖（可从 `preconnect-backup` 手动恢复）。当前 Mini 单设备使用模式下无实际影响；若未来恢复多设备使用，需重新评估此取舍（与 §4.3-1 Supabase 回退路径去留一并决策）。
