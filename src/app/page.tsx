@@ -158,6 +158,8 @@ export default function Home() {
     autoFormatBody: false,
     bodyAlignment: 'left',
     composerAddMode: 'auto',
+    composerAutoTags: true,
+    composerAutoTitle: true,
     hoverPreview: false,
     aiProvider: DEFAULT_AI_PROVIDER,
     aiModel: DEFAULT_AI_MODEL,
@@ -1124,6 +1126,16 @@ export default function Home() {
     handleUpdateMeta(id, nextTitle, nextTagNames)
   }
 
+  /** Composer 三个开关写入全局 settings（经 settings effect 自动持久化到 localStorage + 服务器）。 */
+  function handleComposerOptionsChange(patch: { autoTags?: boolean; autoTitle?: boolean; autoFormat?: boolean }) {
+    setSettings((prev) => ({
+      ...prev,
+      ...(patch.autoTags !== undefined ? { composerAutoTags: patch.autoTags } : null),
+      ...(patch.autoTitle !== undefined ? { composerAutoTitle: patch.autoTitle } : null),
+      ...(patch.autoFormat !== undefined ? { autoFormatBody: patch.autoFormat } : null),
+    }))
+  }
+
   async function handleLoadDemo() {
     if (
       cards.length > 0 &&
@@ -2067,7 +2079,10 @@ export default function Home() {
                 existingTags={existingTags}
                 addMode={settings.composerAddMode}
                 autoFormatBody={settings.autoFormatBody}
+                composerAutoTags={settings.composerAutoTags}
+                composerAutoTitle={settings.composerAutoTitle}
                 bodyAlignment={settings.bodyAlignment}
+                onComposerOptionsChange={handleComposerOptionsChange}
                 onCreate={handleCreate}
                 onApplyGeneratedMeta={handleApplyGeneratedMeta}
                 notify={notify}

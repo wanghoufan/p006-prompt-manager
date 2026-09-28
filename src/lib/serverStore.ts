@@ -66,6 +66,9 @@ function toSettings(row: Record<string, unknown>): Settings {
       ? (row.body_alignment as Settings['bodyAlignment'])
       : 'left',
     composerAddMode: row.composer_add_mode === 'manual' ? 'manual' : 'auto',
+    // 缺列（异常库）时视为 true，与历史默认行为一致
+    composerAutoTags: row.composer_auto_tags !== 0,
+    composerAutoTitle: row.composer_auto_title !== 0,
     hoverPreview: Boolean(row.hover_preview),
     aiProvider: typeof row.ai_provider === 'string' ? (row.ai_provider as Settings['aiProvider']) : 'deepseek',
     aiModel: typeof row.ai_model === 'string' ? row.ai_model : 'deepseek-v4-flash',
@@ -263,8 +266,9 @@ export async function setState(next: {
       db.prepare(
         `INSERT INTO settings (
            id, thinking_summary_prompt, confirm_delete, theme, auto_format_body, body_alignment,
-           composer_add_mode, hover_preview, ai_provider, ai_model, ai_base_url, revision, created_at, updated_at
-         ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+           composer_add_mode, composer_auto_tags, composer_auto_title, hover_preview,
+           ai_provider, ai_model, ai_base_url, revision, created_at, updated_at
+         ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
       ).run(
         row.thinking_summary_prompt,
         row.confirm_delete ? 1 : 0,
@@ -272,6 +276,8 @@ export async function setState(next: {
         row.auto_format_body ? 1 : 0,
         row.body_alignment,
         row.composer_add_mode,
+        row.composer_auto_tags ? 1 : 0,
+        row.composer_auto_title ? 1 : 0,
         row.hover_preview ? 1 : 0,
         row.ai_provider,
         row.ai_model,
@@ -300,6 +306,8 @@ function settingsToRow(settings: unknown): {
   auto_format_body: boolean
   body_alignment: string
   composer_add_mode: string
+  composer_auto_tags: boolean
+  composer_auto_title: boolean
   hover_preview: boolean
   ai_provider: string
   ai_model: string
@@ -319,6 +327,8 @@ function settingsToRow(settings: unknown): {
       ? (s.bodyAlignment as string)
       : 'left',
     composer_add_mode: s.composerAddMode === 'manual' ? 'manual' : 'auto',
+    composer_auto_tags: s.composerAutoTags !== false,
+    composer_auto_title: s.composerAutoTitle !== false,
     hover_preview: s.hoverPreview === true,
     ai_provider: typeof s.aiProvider === 'string' ? s.aiProvider : 'deepseek',
     ai_model: typeof s.aiModel === 'string' ? s.aiModel : 'deepseek-v4-flash',

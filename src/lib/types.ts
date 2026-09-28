@@ -37,6 +37,10 @@ export interface Settings {
   bodyAlignment: 'left' | 'center' | 'right'
   /** Composer 粘贴正文后的建卡方式；auto 立即建卡，manual 等待用户确认。 */
   composerAddMode: 'auto' | 'manual'
+  /** Composer 建卡后是否自动生成标签（默认开启，持久化）。 */
+  composerAutoTags: boolean
+  /** Composer 建卡后是否自动生成标题（默认开启，持久化）。 */
+  composerAutoTitle: boolean
   /** 是否在鼠标停留卡片正文时显示浏览器全文预览（默认关闭）。 */
   hoverPreview: boolean
   /** 通用AI接口：服务商（deepseek 等，见 AIProvider）。 */

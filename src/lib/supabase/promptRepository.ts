@@ -122,6 +122,9 @@ function toSettings(row: SettingsRow, localAiApiKey: string): Settings {
     autoFormatBody: row.auto_format_body,
     bodyAlignment: row.body_alignment,
     composerAddMode: row.composer_add_mode,
+    // Supabase 回退库无 composer_auto_* 列：回退默认开启（仅影响回退模式下的持久化）。
+    composerAutoTags: true,
+    composerAutoTitle: true,
     hoverPreview: row.hover_preview,
     aiProvider: row.ai_provider,
     aiModel: normalizeAiModel(row.ai_provider, row.ai_model),

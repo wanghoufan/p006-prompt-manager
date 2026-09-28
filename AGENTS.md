@@ -347,3 +347,11 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - 是否存在重复、过时、冲突的 Markdown 文档
 
 普通 commit、小 Bug、小样式改动无需执行完整 neat-freak。
+
+---
+
+## 十一、踩坑经验
+
+> 项目级踩坑条目统一归此节，集中存放，便于日后统一整理、升级为用户级经验文档。格式：日期 + 场景 + 现象 + 原因 + 解法，一条一行。
+
+- **2026-09-28 ｜ Docker 部署 ｜ 凭据助手 PATH 缺失**：终端手动跑 `deploy.sh` 报 `error getting credentials - err: exec: "docker-credential-desktop": executable file not found in $PATH`，构建失败（容器仍跑旧版）。原因：本机 `which docker` 指向 `~/.local/bin/docker`，PATH 里没有 Docker Desktop 的凭据助手目录，BuildKit 拉取 syntax 镜像时凭据失败。解法：`export PATH="/Applications/Docker.app/Contents/Resources/bin:$PATH"` 后重跑 `deploy.sh` 即成功（已验证）。非脚本问题，脚本无需改。

@@ -7,7 +7,11 @@ interface ComposerProps {
   existingTags: string[]
   addMode: 'auto' | 'manual'
   autoFormatBody: boolean
+  composerAutoTags: boolean
+  composerAutoTitle: boolean
   bodyAlignment: 'left' | 'center' | 'right'
+  /** 开关变更回调：写入全局 settings 走持久化（autoTags→composerAutoTags、autoTitle→composerAutoTitle、autoFormat→autoFormatBody）。 */
+  onComposerOptionsChange: (patch: { autoTags?: boolean; autoTitle?: boolean; autoFormat?: boolean }) => void
   onCreate: (body: string, title: string, tags: string[]) => Promise<string | null>
   onApplyGeneratedMeta: (id: string, title: string, tags: string[], generateTitle: boolean, generateTags: boolean) => void
   notify: (msg: string) => void
@@ -17,11 +21,12 @@ function Corner({ position }: { position: string }) {
   return <span aria-hidden className={`pointer-events-none absolute h-3 w-3 border-gold/70 ${position}`} />
 }
 
-export function Composer({ existingTags, addMode, autoFormatBody, bodyAlignment, onCreate, onApplyGeneratedMeta, notify }: ComposerProps) {
+export function Composer({ existingTags, addMode, autoFormatBody, composerAutoTags, composerAutoTitle, bodyAlignment, onComposerOptionsChange, onCreate, onApplyGeneratedMeta, notify }: ComposerProps) {
   const [text, setText] = useState('')
-  const [autoGenerateTags, setAutoGenerateTags] = useState(true)
-  const [autoGenerateTitle, setAutoGenerateTitle] = useState(true)
-  const [autoFormat, setAutoFormat] = useState(autoFormatBody)
+  // 三个开关均为全局 settings 的受控视图（持久化见 onComposerOptionsChange），不再持有本地 state
+  const autoGenerateTags = composerAutoTags
+  const autoGenerateTitle = composerAutoTitle
+  const autoFormat = autoFormatBody
   const [submitting, setSubmitting] = useState(false)
   const [generationStatus, setGenerationStatus] = useState<'idle' | 'generating' | 'complete'>('idle')
   const [generationLabel, setGenerationLabel] = useState('标题与标签')
@@ -175,7 +180,7 @@ export function Composer({ existingTags, addMode, autoFormatBody, bodyAlignment,
             <input
               type="checkbox"
               checked={autoGenerateTags}
-              onChange={(e) => setAutoGenerateTags(e.target.checked)}
+              onChange={(e) => onComposerOptionsChange({ autoTags: e.target.checked })}
               className="accent-gold"
             />
             自动生成标签
@@ -184,7 +189,7 @@ export function Composer({ existingTags, addMode, autoFormatBody, bodyAlignment,
             <input
               type="checkbox"
               checked={autoGenerateTitle}
-              onChange={(e) => setAutoGenerateTitle(e.target.checked)}
+              onChange={(e) => onComposerOptionsChange({ autoTitle: e.target.checked })}
               className="accent-gold"
             />
             自动生成标题
@@ -193,7 +198,7 @@ export function Composer({ existingTags, addMode, autoFormatBody, bodyAlignment,
             <input
               type="checkbox"
               checked={autoFormat}
-              onChange={(e) => setAutoFormat(e.target.checked)}
+              onChange={(e) => onComposerOptionsChange({ autoFormat: e.target.checked })}
               className="accent-gold"
             />
             自动格式整理
