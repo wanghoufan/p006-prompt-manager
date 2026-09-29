@@ -134,6 +134,16 @@ export function PreviewPanel({
   const mobileDragStartY = useRef<number | null>(null)
   const mobileCloseTimer = useRef<number | null>(null)
   const firstSync = useRef(true)
+  // P1-a：本组件是否有「用户改过、尚未落库」的编辑。双挂载同一张卡（列表双击进详情 = 本侧栏
+  // 与 CardDetail 弹窗同时挂载）时，未编辑的一侧若也在 [card] effect 里 commitSave，会拿自己
+  // 那份旧草稿把对方刚写入的值写回，触发对手方再写回 → 2~70 次振荡，最终 DB 留旧值（标题静默丢失）。
+  // 只有真正改过本组件输入框（dirty）时才在 card 变化时 flush。
+  const dirtyRef = useRef(false)
+  /** 改草稿即标记 dirty：只有 dirty 的组件才会在 card 变化时 flush（见下方 [card] effect）。 */
+  function setDraftEdited(next: CardDraft | ((prev: CardDraft) => CardDraft)) {
+    dirtyRef.current = true
+    setDraft(next)
+  }
   // RISK-3：AI 请求取消控制器（新请求前 abort 上一个，卸载时 abort）
   const metaAbortRef = useRef<AbortController | null>(null)
   const summaryAbortRef = useRef<AbortController | null>(null)
@@ -157,6 +167,7 @@ export function PreviewPanel({
   function setSourceUrlDraft(sourceUrl: string) {
     const next = { ...draftRef.current, sourceUrl }
     draftRef.current = next
+    dirtyRef.current = true
     setDraft(next)
   }
 
@@ -278,9 +289,14 @@ export function PreviewPanel({
       return
     }
     // P2-4：外部数据更新（SSE / 回滚 / 保存回写）覆盖草稿前，先清理备注定时器并 flush 未落库修改，
-    // 避免多设备同步或回滚时把正在输入的备注直接覆盖丢失
+    // 避免多设备同步或回滚时把正在输入的备注直接覆盖丢失。
+    // P1-a：仅在「本组件确实有未落库编辑」时 flush；未编辑的一侧只同步草稿、不写回，
+    // 否则双挂载同卡时两侧互写会振荡并把对方的修改覆盖掉。有编辑时仍照常 flush，防丢语义不变。
     if (notesTimer.current) window.clearTimeout(notesTimer.current)
-    commitSave(true)
+    if (dirtyRef.current) {
+      commitSave(true)
+      dirtyRef.current = false
+    }
     const timer = window.setTimeout(() => setDraft(cardDraftFrom(card)), 0)
     return () => window.clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -400,7 +416,7 @@ export function PreviewPanel({
   // P3-1：调取码输入即时过滤非法字符（仅英文/数字/短横线），并短暂提示
   function handleCodeInput(v: string) {
     const filtered = v.replace(/[^a-zA-Z0-9-]/g, '')
-    setDraft((d) => ({ ...d, code: filtered }))
+    setDraftEdited((d) => ({ ...d, code: filtered }))
     if (filtered !== v) {
       setCodeFiltered(true)
       if (codeTipTimer.current) window.clearTimeout(codeTipTimer.current)
@@ -429,7 +445,7 @@ export function PreviewPanel({
       const newTitle = data.title?.trim() || card.title
       const newTags = data.tags ?? []
       onUpdateMeta(card.id, newTitle, newTags)
-      setDraft((d) => ({ ...d, title: newTitle, tagsText: newTags.join('、') }))
+      setDraftEdited((d) => ({ ...d, title: newTitle, tagsText: newTags.join('、') }))
       setMetaFeedback('success')
       metaFeedbackTimer.current = window.setTimeout(() => setMetaFeedback(null), 2000)
       notify('已重新生成标签与标题')
@@ -495,7 +511,7 @@ export function PreviewPanel({
       if (bodyTextareaRef.current?.value !== source) return
       const formatted = typeof data.body === 'string' ? normalizeBody(data.body) : ''
       if (!formatted) throw new Error('AI 未返回可用正文')
-      setDraft((d) => ({ ...d, body: formatted }))
+      setDraftEdited((d) => ({ ...d, body: formatted }))
       draftRef.current = { ...draftRef.current, body: formatted }
       bodyDirtyRef.current = false
       onSaveBody(c.id, formatted, !automatic)
@@ -687,7 +703,7 @@ export function PreviewPanel({
                   className="field w-full border-transparent bg-transparent px-0 py-0.5 pr-8 font-serif text-xl font-semibold text-paper focus:border-transparent"
                   value={draft.title}
                   maxLength={20}
-                  onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
+                  onChange={(e) => setDraftEdited((d) => ({ ...d, title: e.target.value }))}
                   onBlur={() => commitSave(true)}
                   placeholder="一句话总结"
                 />
@@ -742,7 +758,7 @@ export function PreviewPanel({
               className="field mt-2 resize-none overflow-hidden text-[12px] leading-relaxed"
               value={draft.notes}
               onChange={(e) => {
-                setDraft((d) => ({ ...d, notes: e.target.value }))
+                setDraftEdited((d) => ({ ...d, notes: e.target.value }))
                 resizeNotesTextarea(e.currentTarget)
                 scheduleNotesSave()
               }}
@@ -809,7 +825,7 @@ export function PreviewPanel({
                 existingTags={existingTags}
                 inputId="preview-tags"
                 onChange={(nextTags) => {
-                  setDraft((d) => ({ ...d, tagsText: nextTags.join('、') }))
+                  setDraftEdited((d) => ({ ...d, tagsText: nextTags.join('、') }))
                   onUpdateMeta(card.id, draftRef.current.title.trim() || card.title, nextTags)
                 }}
               />
@@ -823,7 +839,7 @@ export function PreviewPanel({
               style={{ textAlign: bodyAlignment }}
               value={draft.body}
               onChange={(e) => {
-                setDraft((d) => ({ ...d, body: e.target.value }))
+                setDraftEdited((d) => ({ ...d, body: e.target.value }))
                 bodyDirtyRef.current = true
               }}
               onBlur={() => commitSave(true)}
@@ -950,7 +966,7 @@ export function PreviewPanel({
               <Stars
                 rating={draft.rating}
                 onChange={(r) => {
-                  setDraft((d) => ({ ...d, rating: r }))
+                  setDraftEdited((d) => ({ ...d, rating: r }))
                   onRate(r)
                 }}
               />

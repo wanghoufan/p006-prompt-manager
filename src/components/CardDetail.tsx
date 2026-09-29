@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Card, Version } from '@/lib/types'
 import { cardDraftChanges, cardDraftFrom, isValidSourceUrl, normalizeBody, normalizeCode, normalizeSourceUrl, parseSourceLink, parseTags } from '@/lib/cards'
+import type { CardDraft } from '@/lib/cards'
 import { Stars } from '@/components/Stars'
 import { Spinner } from '@/components/Spinner'
 import { TagEditor } from '@/components/TagEditor'
@@ -58,6 +59,16 @@ export function CardDetail(props: CardDetailProps) {
   const [expandedVersionId, setExpandedVersionId] = useState<string | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const firstSync = useRef(true)
+  // P1-a：本组件是否有「用户改过、尚未落库」的编辑。双挂载同一张卡（列表双击进详情 = 侧栏
+  // 与本弹窗同时挂载）时，未编辑的一侧若也在 [card] effect 里 commitSave，会拿自己那份旧草稿
+  // 把对方刚写入的值写回，触发对手方再写回 → 2~70 次振荡，最终 DB 留旧值（标题静默丢失）。
+  // 只有真正改过本组件输入框（dirty）时才在 card 变化时 flush。
+  const dirtyRef = useRef(false)
+  /** 改草稿即标记 dirty：只有 dirty 的组件才会在 card 变化时 flush（见下方 [card] effect）。 */
+  function setDraftEdited(next: CardDraft | ((prev: CardDraft) => CardDraft)) {
+    dirtyRef.current = true
+    setDraft(next)
+  }
   // RISK-3：AI 请求取消控制器（新请求前 abort 上一个，卸载时 abort）
   const metaAbortRef = useRef<AbortController | null>(null)
   const summaryAbortRef = useRef<AbortController | null>(null)
@@ -81,6 +92,7 @@ export function CardDetail(props: CardDetailProps) {
   function setSourceUrlDraft(sourceUrl: string) {
     const next = { ...draftRef.current, sourceUrl }
     draftRef.current = next
+    dirtyRef.current = true
     setDraft(next)
   }
 
@@ -150,9 +162,14 @@ export function CardDetail(props: CardDetailProps) {
       return
     }
     // P2-4：外部数据更新（SSE / 回滚 / 弹窗内切换卡片）覆盖草稿前，先清理备注定时器并 flush 未落库修改，
-    // 避免覆盖正在输入的备注造成丢失
+    // 避免覆盖正在输入的备注造成丢失。
+    // P1-a：仅在「本组件确实有未落库编辑」时 flush；未编辑的一侧只同步草稿、不写回，
+    // 否则双挂载同卡时两侧互写会振荡并把对方的修改覆盖掉。有编辑时仍照常 flush，防丢语义不变。
     if (notesTimer.current) window.clearTimeout(notesTimer.current)
-    commitSave(true)
+    if (dirtyRef.current) {
+      commitSave(true)
+      dirtyRef.current = false
+    }
     const timer = window.setTimeout(() => setDraft(cardDraftFrom(card)), 0)
     return () => window.clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -268,7 +285,7 @@ export function CardDetail(props: CardDetailProps) {
   // P3-1：调取码输入即时过滤非法字符（仅英文/数字/短横线），并短暂提示
   function handleCodeInput(v: string) {
     const filtered = v.replace(/[^a-zA-Z0-9-]/g, '')
-    setDraft((d) => ({ ...d, code: filtered }))
+    setDraftEdited((d) => ({ ...d, code: filtered }))
     if (filtered !== v) {
       setCodeFiltered(true)
       if (codeTipTimer.current) window.clearTimeout(codeTipTimer.current)
@@ -294,7 +311,7 @@ export function CardDetail(props: CardDetailProps) {
       const newTitle = data.title?.trim() || card.title
       const newTags = data.tags ?? []
       props.onUpdateMeta(card.id, newTitle, newTags)
-      setDraft((d) => ({ ...d, title: newTitle, tagsText: newTags.join('、') }))
+      setDraftEdited((d) => ({ ...d, title: newTitle, tagsText: newTags.join('、') }))
       props.notify('已重新生成标签与标题')
     } catch (e) {
       if (ac.signal.aborted) return
@@ -355,7 +372,7 @@ export function CardDetail(props: CardDetailProps) {
       if (draftRef.current.body !== source) return
       const formatted = typeof data.body === 'string' ? normalizeBody(data.body) : ''
       if (!formatted) throw new Error('AI 未返回可用正文')
-      setDraft((d) => ({ ...d, body: formatted }))
+      setDraftEdited((d) => ({ ...d, body: formatted }))
       draftRef.current = { ...draftRef.current, body: formatted }
       bodyDirtyRef.current = false
       props.onSaveBody(c.id, formatted, true)
@@ -371,7 +388,7 @@ export function CardDetail(props: CardDetailProps) {
 
   function handleRollback(version: Version) {
     props.onRollback(card.id, version.id)
-    setDraft((d) => ({ ...d, body: version.body }))
+    setDraftEdited((d) => ({ ...d, body: version.body }))
     props.notify('已回滚到该版本')
   }
 
@@ -490,7 +507,7 @@ export function CardDetail(props: CardDetailProps) {
                   className="field"
                   value={draft.title}
                   maxLength={20}
-                  onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
+                  onChange={(e) => setDraftEdited((d) => ({ ...d, title: e.target.value }))}
                   onBlur={() => commitSave(true)}
                   placeholder="一句话总结"
                 />
@@ -504,7 +521,7 @@ export function CardDetail(props: CardDetailProps) {
                   existingTags={props.existingTags}
                   inputId="detail-tags"
                   onChange={(nextTags) => {
-                    setDraft((d) => ({ ...d, tagsText: nextTags.join('、') }))
+                    setDraftEdited((d) => ({ ...d, tagsText: nextTags.join('、') }))
                     props.onUpdateMeta(card.id, draftRef.current.title.trim() || card.title, nextTags)
                   }}
                 />
@@ -545,7 +562,7 @@ export function CardDetail(props: CardDetailProps) {
                   className="field resize-none overflow-hidden text-xs leading-relaxed"
                   value={draft.notes}
                   onChange={(e) => {
-                    setDraft((d) => ({ ...d, notes: e.target.value }))
+                    setDraftEdited((d) => ({ ...d, notes: e.target.value }))
                     resizeNotesTextarea(e.currentTarget)
                     scheduleNotesSave()
                   }}
@@ -625,7 +642,7 @@ export function CardDetail(props: CardDetailProps) {
                   style={{ textAlign: props.bodyAlignment }}
                   value={draft.body}
                   onChange={(e) => {
-                    setDraft((d) => ({ ...d, body: e.target.value }))
+                    setDraftEdited((d) => ({ ...d, body: e.target.value }))
                     bodyDirtyRef.current = true
                   }}
                   onBlur={() => commitSave(true)}
@@ -643,7 +660,7 @@ export function CardDetail(props: CardDetailProps) {
                   <Stars
                     rating={draft.rating}
                     onChange={(r) => {
-                      setDraft((d) => ({ ...d, rating: r }))
+                      setDraftEdited((d) => ({ ...d, rating: r }))
                       props.onRate(card.id, r)
                     }}
                     size="md"

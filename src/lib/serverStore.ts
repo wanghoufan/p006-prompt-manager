@@ -178,9 +178,14 @@ export async function setState(next: {
     return { ok: false, error: `数据校验失败：${invalid}` }
   }
 
+  // P1 推送死循环修复：库内 settings（toSettings）恒带 aiApiKey: ''，而 incoming 侧的
+  // nextSettings 已被 sanitizeSettings 删掉该键，两侧形状不一致会让本守卫永不相等 →
+  // 每次推送都 bump version + 落盘 + 广播，SSE 回声再触发客户端推回，形成自持循环。
+  // 这里对库内 settings 也过一遍 sanitizeSettings，只统一「比较口径」，不改落库内容
+  // （settingsToRow 本就不写该列，SQLite settings 表也无 aiApiKey 字段）。
   const currentSerialized = JSON.stringify({
     cards: current.cards,
-    settings: current.settings,
+    settings: sanitizeSettings(current.settings),
     tags: current.tags,
     promptTags: current.promptTags,
   })

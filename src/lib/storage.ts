@@ -472,9 +472,37 @@ export function backupLocalSnapshot(): void {
   }
 }
 
+// 最近一次与服务端同步成功的版本号（本机持久化）。用于跨页面加载判断服务端版本方向：
+// wipe（容器重建 / 删库）会让 version 回退，对端合法删光只会让 version 递增。
+// 页面重新打开时内存里的 knownVersion 为空，只有这份持久化值能提供「回退」这个信号。
+const KNOWN_VERSION_KEY = 'prompt-manager:known-version'
+
+/** 读取本机持久化的最近同步版本；无记录返回 null（无法判断方向，按保守处理）。 */
+export function readPersistedKnownVersion(): number | null {
+  try {
+    const raw = localStorage.getItem(KNOWN_VERSION_KEY)
+    if (raw === null) return null
+    const n = Number(raw)
+    return Number.isFinite(n) ? n : null
+  } catch {
+    return null
+  }
+}
+
+function persistKnownVersion(version: number | null): void {
+  if (version === null) return
+  try {
+    localStorage.setItem(KNOWN_VERSION_KEY, String(version))
+  } catch {
+    // 持久化失败不影响同步流程
+  }
+}
+
 let serverMode = false
 /** P0-A 版本号提交：本次本地快照基于的服务端版本。loadFromServer/pushToServer 成功后同步更新。 */
 let knownVersion: number | null = null
+/** 最近一次与服务端同步成功的版本号：pushToServer 成功、loadFromServer 载入后更新；
+ *  亦用于 subscribeSync 过滤自身推送回声（见该函数）。 */
 let lastPushedVersion: number | null = null
 let cacheCards: Card[] = []
 let cacheSettings: Settings = { ...DEFAULT_SETTINGS }
@@ -488,6 +516,9 @@ let onConflictRefresh: ((data: ServerSnapshot) => void) | null = null
 
 /** 推送失败回调：服务端拒绝（非冲突）或网络失败时通知页面提示用户，杜绝静默丢失。 */
 let onPushError: (() => void) | null = null
+
+/** P1-b 恢复上传回调：服务端为空且本机有数据、已把本机快照推回服务端时通知页面（不静默）。 */
+let onServerEmptyRestore: (() => void) | null = null
 
 function trySave(key: string, value: unknown): boolean {
   try {
@@ -540,8 +571,57 @@ async function doPush() {
     if (result === 'conflict') {
       // P0-A 版本已变化：拒绝本次写入 → 刷新到服务端权威数据（更新 knownVersion）→ 基于最新版本重试。
       // 本地刚执行的未落盘操作由冲突回调通知页面重载视图，用户可见并可按需重做。
+      // 先留存本机快照：loadFromServer 会用远端快照覆盖四个 cache，冲突重试需要原快照。
+      const localCards = cacheCards
+      const localSettings = cacheSettings
+      const localTags = cacheTags
+      const localPromptTags = cachePromptTags
+      // 冲突检出时的已知版本。必须在 loadFromServer 之前取：它会把 knownVersion 覆写成远端版本，
+      // 之后就再也拿不到「本机原本基于哪个版本」这个判方向的基准。
+      const preKnown = knownVersion
       const fresh = await loadFromServer()
       if (fresh) {
+        if (fresh.cards.length === 0 && localCards.length > 0) {
+          // 「服务端已空 + 本机有数据」有两种截然不同的成因，必须用版本方向区分：
+          //  - fresh.version < preKnown（版本回退）＝ 容器重建 / 删库 wipe，本机是幸存者 → 自动回灌；
+          //  - fresh.version >= preKnown（版本推进或持平）＝ 对端通过正常删除操作把卡删光，
+          //    这是对端明确的删除意图，绝不能把本机陈旧快照推回去复活它；=== 属异常，同样不静默 no-op。
+          // （旧实现只看 cards 数量，会把对端已合法删除的数据复活，只给一个 toast，丢失的是删除意图。）
+          const versionRolledBack =
+            preKnown !== null && fresh.version !== null && fresh.version < preKnown
+          if (versionRolledBack) {
+            // P1-b 服务端库内为空 + 本机有数据 → 以本机为准，把本机快照推回去。
+            // 背景：connect() 的「服务端为空 → 本机迁移上传」分支只在页面加载时执行；页面已打开期间
+            // 服务端被清空（直删库表 / 备份覆盖 / 容器重建）不会产生任何广播，客户端唯一能感知到
+            // 「服务端已空」的时机就是本次推送被判版本冲突之后。此处若不推回，则会用刚拉取的空快照
+            // 覆盖视图（用户数据从界面消失）并静默 no-op，服务端永远保持为空。
+            const retry = await pushToServer(localCards, localSettings, localTags, localPromptTags)
+            if (retry === 'ok') {
+              // 推回成功后把 cache 复原为本机快照，否则残留的空远端快照会被后续 schedulePush 推上去
+              cacheCards = localCards
+              cacheSettings = localSettings
+              cacheTags = localTags
+              cachePromptTags = localPromptTags
+              // 不调用 onConflictRefresh：那会把用户视图清空。改为明确提示用户发生了恢复上传。
+              onServerEmptyRestore?.()
+              return
+            }
+            // 推回失败（断网 / 服务端报错）：此时 loadFromServer 已把 cache 换成空快照，
+            // 若不复原，下一次 schedulePush 就会把「空包」推上去（与成功路径不对称）。
+            // 复原为本机快照，保证下一次调度重试的是本机数据而不是空包。
+            cacheCards = localCards
+            cacheSettings = localSettings
+            cacheTags = localTags
+            cachePromptTags = localPromptTags
+            onPushError?.()
+            return
+          }
+          // 对端合法删光（version 推进）或版本持平（异常）：走正常冲突刷新，
+          // 用服务端权威（空）快照覆盖视图并给出明确冲突提示，让用户决定是否重做。
+          // 不调用 pushToServer(local...) —— 那正是「复活对端已删数据」的旧路径。
+          onConflictRefresh?.(fresh)
+          return
+        }
         onConflictRefresh?.(fresh)
         await pushToServer(fresh.cards, fresh.settings, fresh.tags, fresh.promptTags)
       }
@@ -638,8 +718,13 @@ export async function loadFromServer(): Promise<ServerSnapshot | null> {
     // 净化悬空/重复关联后再入缓存与视图，杜绝旧数据污染计数与触发服务端校验拒绝
     const cleanPromptTags = sanitizePromptTags(promptTags, cards, tags)
     cachePromptTags = cleanPromptTags
-    if (typeof data.version === 'number') knownVersion = data.version
-    return { cards, settings, tags, promptTags: cleanPromptTags, version: typeof data.version === 'number' ? data.version : null }
+    const fetchedVersion = typeof data.version === 'number' ? data.version : null
+    if (fetchedVersion !== null) {
+      knownVersion = fetchedVersion
+      lastPushedVersion = fetchedVersion
+      persistKnownVersion(fetchedVersion)
+    }
+    return { cards, settings, tags, promptTags: cleanPromptTags, version: fetchedVersion }
   } catch {
     serverMode = false
     return null
@@ -681,6 +766,7 @@ export async function pushToServer(
     if (typeof data.version === 'number') {
       knownVersion = data.version
       lastPushedVersion = data.version
+      persistKnownVersion(data.version)
       return 'ok'
     }
     // 服务端拒绝时 route.ts 恒为 200，setState 的 union 结果透传在 version 字段内
@@ -704,6 +790,11 @@ export function setPushErrorHandler(cb: (() => void) | null) {
   onPushError = cb
 }
 
+/** 注册/注销「服务端为空、已把本机快照推回」回调（P1-b，提示用户恢复上传已发生，不静默）。 */
+export function setServerEmptyRestoreHandler(cb: (() => void) | null) {
+  onServerEmptyRestore = cb
+}
+
 // 订阅服务端变更；远程有更新时通过 onRemote 回调把最新数据交回页面。
 // 通过 lastPushedVersion 滤掉「自己刚推送」产生的回声，避免推送死循环。
 export function subscribeSync(
@@ -711,10 +802,10 @@ export function subscribeSync(
 ): () => void {
   if (typeof window === 'undefined' || typeof EventSource === 'undefined') return () => {}
   const es = new EventSource(STREAM_URL)
-  es.onmessage = (ev) => {
+  const handleFrame = async (raw: string) => {
     let version: number | null = null
     try {
-      const data = JSON.parse(ev.data) as { version?: number }
+      const data = JSON.parse(raw) as { version?: number }
       version = typeof data.version === 'number' ? data.version : null
     } catch {
       return
@@ -725,6 +816,16 @@ export function subscribeSync(
       knownVersion,
       lastPushedVersion,
     })
+    // P1-b：自己推送的广播可能**早于** POST 响应到达（服务端在 setState 内 emit，广播先于响应
+    // 出网）。此时 knownVersion/lastPushedVersion 还停在推送前的旧值，版本比较必然判「这是更新」，
+    // 于是白回拉一次快照、用它的新对象覆盖本机 state → 内容相同的空推（实测每次恢复上传多 1 次
+    // POST + 1 次 GET + 一次全量 state 覆盖）。推送在途时先等它落地再来比较。
+    if (pushInFlight) {
+      const deadline = Date.now() + 3000
+      while (pushInFlight && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      }
+    }
     // EventSource 建连会立即推送当前版本。若首条消息对应的是已经由
     // loadFromServer 载入的快照，无需再异步回拉；否则该请求可能在用户刚
     // 修改 AI 设置后才返回，用旧快照覆盖本地的新选择。
@@ -736,10 +837,10 @@ export function subscribeSync(
       console.log('[AI settings] SSE snapshot skipped: local echo', { version })
       return // 自己的回声，忽略
     }
-    void loadFromServer().then((r) => {
-      if (r) onRemote(r.cards, r.settings, r.tags, r.promptTags)
-    })
+    const r = await loadFromServer()
+    if (r) onRemote(r.cards, r.settings, r.tags, r.promptTags)
   }
+  es.onmessage = (ev) => void handleFrame(ev.data)
   es.onerror = () => {
     // EventSource 会自动重连，这里无需处理
   }

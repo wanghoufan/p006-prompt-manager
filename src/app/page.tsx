@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Card, Settings, SortMode, Tag, PromptTag, TagFilterMode, TagFilters } from '@/lib/types'
-import { loadCards, loadSettings, loadTags, loadPromptTags, parseImport, saveCards, saveSettings, saveTags, savePromptTags, buildMarkdownExport, isServerAvailable, loadFromServer, pushToServer, subscribeSync, sanitizePromptTags, setConflictRefreshHandler, setPushErrorHandler, backupLocalSnapshot } from '@/lib/storage'
+import { loadCards, loadSettings, loadTags, loadPromptTags, parseImport, saveCards, saveSettings, saveTags, savePromptTags, buildMarkdownExport, isServerAvailable, loadFromServer, pushToServer, readPersistedKnownVersion, subscribeSync, sanitizePromptTags, setConflictRefreshHandler, setPushErrorHandler, setServerEmptyRestoreHandler, backupLocalSnapshot } from '@/lib/storage'
 import { deletePromptCard, deletePromptTag, getPromptCloudSessionUser, getPromptCloudUserId, loadPromptCloudSnapshot, replacePromptCardVersions, savePromptCard, savePromptSettings, savePromptTag, subscribeToPromptCloudChanges, syncPromptCardTags, type PromptCloudSnapshot } from '@/lib/supabase/promptRepository'
 import { createCard, normalizeBody, parseTags, rollbackToVersion, saveBodyOnly, saveBodyWithVersion } from '@/lib/cards'
 import { DEMO_CARDS } from '@/lib/demo'
@@ -559,18 +559,33 @@ export default function Home() {
     setServerOnline(true)
     // BUG-12：应用 legacy 快照覆盖本机视图前，先滚动备份 localStorage（尽力而为）。
     backupLocalSnapshot()
-    // 服务端为空但本机有数据：首次迁移上传，避免两边永远为空
+    // 服务端为空但本机有数据：可能是 wipe（版本回退，本机是幸存者，应迁移上传），
+    // 也可能是对端通过正常删除把卡删光（版本递增，绝不能让本机陈旧快照复活它）。
+    // 页面刚加载时内存里没有基准版本，只能读本机持久化的最近同步版本判方向。
     if (remote.cards.length === 0) {
       const local = loadCards()
       if (local.length > 0) {
-        const localTags = loadTags()
-        const localPromptTags = loadPromptTags()
-        await pushToServer(local, loadSettings(), localTags, localPromptTags)
-        if (generation !== connectGenerationRef.current) return
-        setCards(local)
-        setSettings(loadSettings())
-        setTags(localTags)
-        setPromptTags(sanitizePromptTags(localPromptTags, local, localTags))
+        const preKnown = readPersistedKnownVersion()
+        const versionRolledBack =
+          preKnown !== null && remote.version !== null && remote.version < preKnown
+        if (versionRolledBack) {
+          const localTags = loadTags()
+          const localPromptTags = loadPromptTags()
+          await pushToServer(local, loadSettings(), localTags, localPromptTags)
+          if (generation !== connectGenerationRef.current) return
+          setCards(local)
+          setSettings(loadSettings())
+          setTags(localTags)
+          setPromptTags(sanitizePromptTags(localPromptTags, local, localTags))
+        } else {
+          // 服务端权威为空：以服务端为准呈现，明确提示且不上传本机缓存（禁止静默复活对端已删数据）。
+          // 本机原始快照已在上面 backupLocalSnapshot() 滚动备份到 prompt-manager:preconnect-backup。
+          setCards(remote.cards)
+          setSettings(remote.settings)
+          setTags(remote.tags)
+          setPromptTags(remote.promptTags)
+          notify('服务端数据已被其他设备清空，本机缓存未上传；如为误删可从本机备份找回')
+        }
       }
     } else {
       // 本地 SQLite 模式：服务器是唯一事实来源，直接用服务器数据覆盖 localStorage 残留。
@@ -700,9 +715,14 @@ export default function Home() {
     setPushErrorHandler(() => {
       notify('保存失败，请重试')
     })
+    // P1-b 恢复上传回调：服务端库内为空而本机有数据时，已把本机快照推回服务端，必须让用户知道
+    setServerEmptyRestoreHandler(() => {
+      notify('服务端数据为空，已把本机数据重新上传')
+    })
     return () => {
       setConflictRefreshHandler(null)
       setPushErrorHandler(null)
+      setServerEmptyRestoreHandler(null)
     }
   }, [notify])
 
