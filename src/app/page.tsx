@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Card, Settings, SortMode, Tag, PromptTag, TagFilterMode, TagFilters } from '@/lib/types'
-import { loadCards, loadSettings, loadTags, loadPromptTags, parseImport, saveCards, saveSettings, saveTags, savePromptTags, buildMarkdownExport, isServerAvailable, loadFromServer, pushToServer, subscribeSync, sanitizePromptTags, setConflictRefreshHandler, backupLocalSnapshot } from '@/lib/storage'
+import { loadCards, loadSettings, loadTags, loadPromptTags, parseImport, saveCards, saveSettings, saveTags, savePromptTags, buildMarkdownExport, isServerAvailable, loadFromServer, pushToServer, subscribeSync, sanitizePromptTags, setConflictRefreshHandler, setPushErrorHandler, backupLocalSnapshot } from '@/lib/storage'
 import { deletePromptCard, deletePromptTag, getPromptCloudSessionUser, getPromptCloudUserId, loadPromptCloudSnapshot, replacePromptCardVersions, savePromptCard, savePromptSettings, savePromptTag, subscribeToPromptCloudChanges, syncPromptCardTags, type PromptCloudSnapshot } from '@/lib/supabase/promptRepository'
 import { createCard, normalizeBody, parseTags, rollbackToVersion, saveBodyOnly, saveBodyWithVersion } from '@/lib/cards'
 import { DEMO_CARDS } from '@/lib/demo'
@@ -696,6 +696,14 @@ export default function Home() {
       setPromptTags(data.promptTags)
       notify('检测到其他设备更新了数据，已刷新至最新版本，请重试刚才的操作')
     })
+    // 推送失败回调：服务端拒绝（非冲突）或网络失败时可见提示，杜绝静默丢失
+    setPushErrorHandler(() => {
+      notify('保存失败，请重试')
+    })
+    return () => {
+      setConflictRefreshHandler(null)
+      setPushErrorHandler(null)
+    }
   }, [notify])
 
   useEffect(() => {

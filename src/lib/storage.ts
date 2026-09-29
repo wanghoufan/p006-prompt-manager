@@ -486,6 +486,9 @@ let pushPending = false
 /** P0-A 冲突回调：版本冲突并刷新到服务端权威数据后，通知页面重载视图并提示用户。 */
 let onConflictRefresh: ((data: ServerSnapshot) => void) | null = null
 
+/** 推送失败回调：服务端拒绝（非冲突）或网络失败时通知页面提示用户，杜绝静默丢失。 */
+let onPushError: (() => void) | null = null
+
 function trySave(key: string, value: unknown): boolean {
   try {
     localStorage.setItem(key, JSON.stringify(value))
@@ -508,12 +511,22 @@ function trySave(key: string, value: unknown): boolean {
 let pushTimer: ReturnType<typeof setTimeout> | null = null
 
 function schedulePush() {
-  if (!serverMode) return
   if (pushTimer) return
   pushTimer = setTimeout(() => {
     pushTimer = null
     if (pushInFlight) {
       pushPending = true
+      return
+    }
+    if (!serverMode) {
+      // 服务端曾不可用：先探测，恢复后立即补推缓存，保证用户下一次操作仍会触发重试
+      // （否则 serverMode 一旦被失败置 false，后续所有 save 都在这里被跳过，重试链断裂）。
+      void isServerAvailable().then((ok) => {
+        if (ok && !pushInFlight) {
+          pushInFlight = true
+          void doPush()
+        }
+      })
       return
     }
     pushInFlight = true
@@ -531,6 +544,15 @@ async function doPush() {
       if (fresh) {
         onConflictRefresh?.(fresh)
         await pushToServer(fresh.cards, fresh.settings, fresh.tags, fresh.promptTags)
+      }
+    } else if (result === 'error') {
+      // 推送失败不再静默（曾经：服务端 UNIQUE 失败 → version 永不推进 → 用户界面看到成功、
+      // 实际一个字节都没存）：通知用户，但不暴露服务端错误细节。
+      onPushError?.()
+      // 网络类失败会把 serverMode 置 false，导致后续 schedulePush 直接跳过、重试链断裂；
+      // 这里重新探测一次可用性（探测本身不改数据），恢复后立即补推最新缓存。
+      if (await isServerAvailable()) {
+        await pushToServer(cacheCards, cacheSettings, cacheTags, cachePromptTags)
       }
     }
   } finally {
@@ -675,6 +697,11 @@ export async function pushToServer(
 /** 注册/注销版本冲突回调（冲突刷新后通知页面重载视图并提示）。 */
 export function setConflictRefreshHandler(cb: ((data: ServerSnapshot) => void) | null) {
   onConflictRefresh = cb
+}
+
+/** 注册/注销推送失败回调（服务端拒绝或网络失败时提示用户；与冲突回调同型，复用页面 notify）。 */
+export function setPushErrorHandler(cb: (() => void) | null) {
+  onPushError = cb
 }
 
 // 订阅服务端变更；远程有更新时通过 onRemote 回调把最新数据交回页面。

@@ -433,3 +433,63 @@
 ## 结论
 
 **过，可放行。** 无 P0/P1；P2-1 随 QA 真机打星专项验证定夺是否返修，P2-2 单设备现状下影响可忽略（建议下轮迭代用 cardsRef 一行级收敛）。AGENTS.md §十一 的根因记录与代码事实一致。
+
+# 2026-09-29 专审：QA 第 4 批 3 个疑似 P1 是否真实存在（标签删除/合并链路）
+
+- Reviewer：code-reviewer（只读审查，未改任何业务代码）
+- 背景：编排者已走查确认 `tags.ts` 纯函数层正确（`deleteTag`/`mergeTags`）；QA 与编排者的自动化脚本均 abort 了 `POST /api/sync`，而隔离实例持久化正依赖该请求。本轮按任务书逐条审 `page.tsx` 调用链、`storage.ts` 推送层、`serverStore.ts` 服务端写入层。
+- 审查方式：纯静态走查（未起服务、未碰任何数据库、未跑隔离实例）。
+
+## 逐条判定
+
+### Q1｜拖拽合并「显示成功但卡片仍关联源标签」→ **假阳性**（合并链路代码正确）
+
+证据链（每一环都核过）：
+
+1. TagPanel 拖拽放中心 → `handleDrop`（TagPanel.tsx:732-741）存 `dropChoice{sourceId: 被拖标签, targetId: 放置目标}`，`resolveDropChoice`（TagPanel.tsx:743-757）以 `onMergeTag(sourceId, targetId)` 调用——**参数方向正确**（被拖者=source）。
+2. `handleMergeTag`（page.tsx:1680-1718）：source/target 存在性 ✓、`sourceId===targetId` 拒绝 ✓（1684）、target 是 source 后代即成环拒绝 ✓（1686-1687）、目标下同名子标签冲突拒绝 ✓（1688-1694）。合并本就允许任意目标，无需同级同名预检；需防的是 source 子标签与 target 子标签重名，已拦。
+3. `mergeTags` 返回 `{tags, promptTags}` 后 `applyTags(nextTags, nextPromptTags)`（1697-1698）——`applyTags`（page.tsx:1057-1063）**两个字段都写回**（`setTags` + `setPromptTags`），且 `syncCardsToPromptTags` 重建 Card.tags 冗余字段。无漏写字段。
+4. 持久化：`saveTags`/`savePromptTags` effect（page.tsx:727-728、827-828）→ `storage.ts` `saveTags`/`savePromptTags`（179-187、201-209，同时写 localStorage）→ `schedulePush` → `doPush` → `POST /api/sync`。
+
+**QA 观察的真因（环境，非代码）**：QA 脚本 abort 了 POST `/api/sync`。服务端已处理部分请求（version 推进）而客户端 `knownVersion` 未更新 → 下一次推送带过期 `baseVersion` → 服务端返回 `conflict`（serverStore.ts:197-203）→ `doPush` 走冲突分支（storage.ts:527-534）`loadFromServer` + `onConflictRefresh` → page.tsx:692-698 **用服务端快照整体替换四项 state**——刚合并完的内存态被回滚到合并前（服务端快照里源标签及其关联还在）。这与 QA 截图「源关联 1、目标 0、卡片仍挂源标签」完全吻合，也与 QA 自记「隔离页面出现重复版本冲突提示，重载后部分交互状态回退」吻合。**QA 复现方式需改：隔离靠服务端 `SQLITE_DB_PATH` 已足够，不应 abort `/api/sync`；若必须拦，须同时拦掉冲突刷新路径或接受「UI 状态回退」为预期噪声。**
+
+### Q2｜删除整棵子树「子标签和卡片关联仍显示」→ **假阳性**（删除链路代码正确）
+
+1. `removedIds` 含全部后代：page.tsx:1598 `new Set([id, ...collectDescendantIds(tags, id)])` ✓。
+2. 返回值两字段都写回：page.tsx:1609-1610 `deleteTag(...)` → `applyTags(nextTags, nextPromptTags)` ✓。
+3. 仅删自身时子标签提升：tags.ts:305-307（`parent_id === tagId` 的子标签改指 `target.parent_id`，QA 实测「子标签提升一级」✓）。
+4. 卡片本体不受影响：`deleteTag`（tags.ts:288-312）只过滤 `promptTags` 并增删 Tag 实体，从不触碰 `cards` 数组；QA 实测卡片数 3→3、2→2 ✓。
+5. subtree 模式的删除在内存中**原子**完成（一次 applyTags），且服务端快照是一致的整体——「父消失、子仍在」的混合态既不可能来自正确执行的内存操作，也不可能来自任何一份一致快照。结合本批 QA 自证的「重复版本冲突提示 + 重载回退」，该截图只能是冲突刷新/重载搅动中途的状态残影，无法在持久化正常的前提下复现。
+
+### Q3｜`idx_tags_parent_name` 唯一约束写入失败 → **真实缺陷（P1，客户端预检无罪，根因在服务端覆写与表达式唯一索引相克）**
+
+客户端预检**齐全**（QA「同父重名被拒」实测也确认）：新建 `handleCreateTag` 路径循环查同级同名（page.tsx:1473-1488）、重命名 `isNameUnique`（1502）、移动（1521）、重排（1539）。同父重名到不了 DB。
+
+但 QA 观察到的服务端 UNIQUE 失败是真缺陷，根因链：
+
+1. 索引是**表达式唯一索引**：`CREATE UNIQUE INDEX idx_tags_parent_name ON tags (COALESCE(parent_id, ''), lower(trim(name)))`（db/migrations/0001_init.sql:45）——`NULL` 父级被归一化为 `''`，**并非彼此独立**。
+2. 全量快照覆写在删除前先执行 `UPDATE tags SET parent_id = NULL`（src/lib/serverStore.ts:212，为绕开 `parent_id REFERENCES tags(id) ON DELETE RESTRICT` 的自引用 FK）。
+3. `validateTagGraph` 明确**允许不同父同名**（tags.ts:206-211，key 含 `parent_id`；「父/子」全路径显示功能 `2d49adf` 正是为此而建）。
+4. 于是：库里存在任意两个同名标签（不同父，完全合法）→ 覆写时 UPDATE 把所有父级清空 → 两行同时变成 `('', '同名')` → **UNIQUE 约束在 UPDATE 语句上爆炸** → 整个事务 ROLLBACK → version 冻结 → 此后**每一次推送全部失败**。QA 报的「`UNIQUE constraint failed: index 'idx_tags_parent_name'` 重复出现 + meta.version 卡在 1257」逐字吻合（SQLite 对表达式索引冲突正是报索引名而非列名）。
+5. 恶化因子：`doPush` 只处理 `conflict`，`error` 结果被**静默吞掉**（storage.ts:524-536 无任何 notify）——用户对「持久化已全停」零感知，后续所有改动刷新即丢。`/api/sync` route（route.ts:32-39）把 `setState` 的错误对象包进 `ok:true` 的 `version` 字段透传，客户端靠 storage.ts:665 解析，链路本身通，但错误被吞。
+6. QA 隔离库的引爆点：本批 AC-18 建了两组不同父同名子标签（AC-06 的标签就叫 `__QA-B4-同名`），从那刻起隔离实例所有写入必败——这也正是 AC-06/AC-07「刷新后全消失」的直接原因之一。
+
+**建议严重度：P1**（触发条件是用户合法使用「不同父同名」功能；一旦触发＝全部持久化静默停止、改动刷新即丢，属数据丢失级后果。若生产库当前已存在同名标签对则等同 P0——本轮未查生产数据，建议编排者用只读 SQL 核一下 `SELECT name, COUNT(*) FROM tags GROUP BY lower(trim(name)) HAVING COUNT(*) > 1`）。
+
+**最小修复（应用层，不动已发布 migration）**：`serverStore.ts:212-213` 用「按深度从深到浅逐层 DELETE」替代 `UPDATE tags SET parent_id = NULL`（快照已过无环校验，深度排序保证子行先删、`ON DELETE RESTRICT` 不触发，且全程不把 `parent_id` 归一化，COALESCE 索引不再自撞）。配套建议（可独立记 P2）：`doPush` 对 `error` 结果加一次 `notify`，杜绝静默失败。
+
+### Q4｜面板宽度「默认值落在 [MIN,MAX] 之外」的同类矛盾 → **无残留**
+
+- TagPanel：`PANEL_DEFAULT_W = 240`、`PANEL_MIN_W = PANEL_DEFAULT_W`、`MAX 480`（TagPanel.tsx:61-68），已对齐 ✓；`clampWidth` 与 localStorage 旧值防御（75-82）在位。
+- PreviewPanel：`MIN_W = 280`、`MAX_W = 720`（PreviewPanel.tsx:45-46），组件缺省 `defaultWidth = 320`（:77）∈ [280,720] ✓；唯一调用点 page.tsx:2222 传 `420` ∈ [280,720] ✓；初始化/重置均过 `clampWidth`（:121、:264），旧存值越界有防御（:52-60）。
+- 全组件扫描无其他 `*_W`/`defaultWidth` 常量，无同类矛盾。
+
+## 总结论
+
+- QA 第 4 批 3 个 P1 中：**2 个假阳性**（QA-B4-01 合并未生效、QA-B4-02 子树删除未生效——均为 abort `/api/sync` + 版本冲突刷新回滚造成的观察假象，客户端代码链路逐环正确）；**1 个真缺陷**（「标签写入持续失败」——根因不在客户端预检缺失，而在 `serverStore.ts:212` 的 `UPDATE tags SET parent_id = NULL` 与 `0001_init.sql:45` 表达式唯一索引相克：合法的「不同父同名」标签一旦存在，全量覆写必撞 UNIQUE、持久化全停且静默）。
+- 附带发现：`doPush` 静默吞 `error`（storage.ts:524-536），建议记 P2。
+- 修复责任建议：Q3 交 builder 走单文件小修链（serverStore.ts 深度序删除 + doPush 报错提示），修后由 QA 在 `SQLITE_DB_PATH` 隔离实例（不 abort `/api/sync`）复测「不同父同名 + 任意编辑 → 刷新持久」。
+
+## 合规自检
+
+未改任何业务代码（`src/`、`mcp/`、`db/`）；未起服务器/隔离实例；未连接或复制 `~/DockerData/prompt-manager/` 任何文件；未访问生产地址；未 commit/push；未用 `open -a`；本轮纯静态走查，无临时文件产生。

@@ -209,15 +209,59 @@ export async function setState(next: {
     db.exec('DELETE FROM prompt_tags')
     db.exec('DELETE FROM card_versions')
     db.exec('DELETE FROM cards')
-    db.exec('UPDATE tags SET parent_id = NULL')
-    db.exec('DELETE FROM tags')
     db.exec('DELETE FROM settings WHERE id = 1')
 
+    // 标签按「深度从深到浅」逐条删除：parent_id REFERENCES tags(id) ON DELETE RESTRICT
+    // 要求子行先于父行删除。不能用 UPDATE tags SET parent_id = NULL 绕开——表达式唯一
+    // 索引 idx_tags_parent_name 的键含 COALESCE(parent_id, '')，全表清空父级会让
+    // 「不同父级同名」标签（validateTagGraph 允许、全路径显示功能依赖）在 UPDATE 语句上
+    // 自撞 UNIQUE，导致整个事务回滚、version 永不推进、此后所有保存静默失败。
+    // 深度按「库内现存行」计算（快照缩小时库里可能有不在 nextTags 里的行，也要删光），
+    // 遇环时 guard 兜底终止。
+    const dbTagRows = db.prepare('SELECT id, parent_id FROM tags').all() as Array<{
+      id: string; parent_id: string | null
+    }>
+    const dbTagParentById = new Map(dbTagRows.map((row) => [row.id, row.parent_id]))
+    const dbDepthById = new Map<string, number>()
+    for (const row of dbTagRows) {
+      let depth = 0
+      let cur = row.parent_id
+      const guard = new Set<string>()
+      while (cur !== null && !guard.has(cur)) {
+        guard.add(cur)
+        depth += 1
+        cur = dbTagParentById.get(cur) ?? null
+      }
+      dbDepthById.set(row.id, depth)
+    }
+    const deleteTagStmt = db.prepare('DELETE FROM tags WHERE id = ?')
+    for (const row of [...dbTagRows].sort(
+      (a, b) => (dbDepthById.get(b.id) ?? 0) - (dbDepthById.get(a.id) ?? 0),
+    )) {
+      deleteTagStmt.run(row.id)
+    }
+
+    // 重插按「深度从浅到深」（深度按快照计算）：父行先落库，子行的自引用 FK 才能立即
+    // 满足（不依赖客户端数组的父子先后顺序）。
+    const nextTagById = new Map(nextTags.map((tag) => [tag.id, tag]))
+    const nextDepthById = new Map<string, number>()
+    for (const tag of nextTags) {
+      let depth = 0
+      let cur = tag.parent_id
+      const guard = new Set<string>()
+      while (cur !== null && !guard.has(cur)) {
+        guard.add(cur)
+        depth += 1
+        cur = nextTagById.get(cur)?.parent_id ?? null
+      }
+      nextDepthById.set(tag.id, depth)
+    }
+    const nextDepth = (tag: (typeof nextTags)[number]): number => nextDepthById.get(tag.id) ?? 0
     const insertTag = db.prepare(
       `INSERT INTO tags (id, name, parent_id, icon, is_pinned, sort_order, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    for (const tag of nextTags) {
+    for (const tag of [...nextTags].sort((a, b) => nextDepth(a) - nextDepth(b))) {
       insertTag.run(
         tag.id,
         tag.name,
