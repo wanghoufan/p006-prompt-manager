@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Tag, PromptTag, TagFilters } from '@/lib/types'
 import { childrenOf, collectDescendantIds, directCount, totalCount, tagPath } from '@/lib/tags'
 import { useConfirm } from '@/lib/useConfirm'
@@ -56,12 +56,15 @@ function writeExpanded(set: Set<string>) {
   }
 }
 
-/** 左侧面板拖宽：默认 240（原 w-60），下限 280，上限 480，持久化。 */
+/** 左侧面板拖宽：默认 240（原 w-60），下限 240（= 默认值），上限 480，持久化。 */
 const PANEL_WIDTH_KEY = 'pm:tag-panel-width'
 const PANEL_DEFAULT_W = 240
 // 下限不能是 0：容器宽度塌缩到 0 后，右缘 2px 拖拽手柄与双击区域都落在零宽容器内，
 // 用户再也抓不回宽度，形成死结（同右侧 PreviewPanel 的 MIN_W 处理）。
-const PANEL_MIN_W = 280
+// 下限还须不大于默认值：默认宽若落在 [MIN,MAX] 之外，「未设置」返回默认值、
+// 「读到的值过小」被 clamp 到 MIN，两条路径宽度不一致 —— 双击重置写下 240，
+// 下次读取却回退成 MIN，刷新后莫名变宽。
+const PANEL_MIN_W = PANEL_DEFAULT_W
 const PANEL_MAX_W = 480
 
 function clampPanelWidth(w: number): number {
@@ -394,7 +397,9 @@ export function TagPanel({
   onBulkDeleteTags,
   confirmDelete: confirmBeforeDelete = true,
 }: TagPanelProps) {
-  const [expanded, setExpanded] = useState<Set<string>>(() => readExpanded())
+  // SSR/水合阶段一律用空集合：服务端读不到 localStorage，若在 useState 惰性初始化里读，
+  // 客户端首渲染会与服务端 HTML 不一致 → React 水合告警（结构类差异还会被强行重挂）。
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [draggedId, setDraggedId] = useState<string | null>(null)
@@ -403,8 +408,23 @@ export function TagPanel({
   const [bulkMode, setBulkMode] = useState(false)
   const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set())
   // 左侧面板宽度：右缘拖拽条调整（方向与右侧预览条镜像），双击恢复默认。
-  const [panelWidth, setPanelWidth] = useState<number>(() => readSavedPanelWidth())
+  // 首屏（含 SSR 与水合）固定用默认宽，绝不在这里读 localStorage：
+  // 服务端读不到 localStorage 会与客户端首渲染不一致，而 React 对「属性不一致」只告警不回填，
+  // 结果就是「state 是 330、页面上永远是 240」。
+  const [panelWidth, setPanelWidth] = useState<number>(PANEL_DEFAULT_W)
   const panelDragState = useRef<{ startX: number; startW: number } | null>(null)
+  const hydratedRef = useRef(false)
+  // 挂载后只同步一次：把上次的宽度与展开状态读回来（读到的值走与拖拽写盘相同的清洗函数）。
+  // 只在 mount 跑一次，后续拖拽不会被这里覆盖回去。
+  useEffect(() => {
+    if (hydratedRef.current) return
+    hydratedRef.current = true
+    const savedWidth = clampPanelWidth(readSavedPanelWidth())
+    setPanelWidth((current) => (current === savedWidth ? current : savedWidth))
+    const savedExpanded = readExpanded()
+    // 无记忆时保持空集合（不改 state，避免多余渲染）
+    setExpanded((current) => (savedExpanded.size === 0 ? current : savedExpanded))
+  }, [])
   // 跟随鼠标焦点的确认弹窗（替代浏览器原生 confirm）
   const { confirm: askConfirm, dialog: confirmDialog } = useConfirm()
   // 跟随鼠标焦点的输入弹窗（替代浏览器原生 prompt）

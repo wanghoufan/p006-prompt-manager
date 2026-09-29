@@ -115,8 +115,20 @@ export function PreviewPanel({
   const [showVersions, setShowVersions] = useState(false)
   // P3-2：当前展开完整内容/diff 的版本 id（单开，再点收起）
   const [expandedVersionId, setExpandedVersionId] = useState<string | null>(null)
-  const [width, setWidth] = useState<number>(() => readSavedWidth(defaultWidth))
+  // 首屏（含 SSR 与水合）固定用默认宽，绝不在这里读 localStorage：
+  // 服务端读不到 localStorage 会与客户端首渲染不一致，而 React 对「属性不一致」只告警不回填，
+  // 结果就是「state 是 510、页面上永远是 420」。挂载后只同步一次读回上次拖出的宽度。
+  const [width, setWidth] = useState<number>(() => clampWidth(defaultWidth))
   const dragState = useRef<{ startX: number; startW: number } | null>(null)
+  const widthHydratedRef = useRef(false)
+  useEffect(() => {
+    if (widthHydratedRef.current) return
+    widthHydratedRef.current = true
+    const savedWidth = clampWidth(readSavedWidth(defaultWidth))
+    setWidth((current) => (current === savedWidth ? current : savedWidth))
+    // 只按挂载同步一次：defaultWidth 由调用方传入且在组件生命周期内不变
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   // <md 时作为底部抽屉：先从屏幕底部进入，拖动手柄下拉可收起。
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
   const mobileDragStartY = useRef<number | null>(null)
@@ -248,9 +260,11 @@ export function PreviewPanel({
   }
 
   function resetWidth() {
-    setWidth(defaultWidth)
+    // 与拖拽写盘、挂载同步共用同一清洗函数，避免默认值越界时写进一个非法宽度
+    const next = clampWidth(defaultWidth)
+    setWidth(next)
     try {
-      localStorage.setItem(WIDTH_KEY, String(defaultWidth))
+      localStorage.setItem(WIDTH_KEY, String(next))
     } catch {
       // ignore
     }
