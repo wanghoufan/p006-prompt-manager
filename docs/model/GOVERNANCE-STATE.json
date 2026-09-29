@@ -4,5 +4,5 @@
   "project_phase_field": "DEVELOP",
   "task_ledger_rows": 4,
   "agents_needs_manual_merge": false,
-  "product_acceptance_ac_added": false
+  "product_acceptance_ac_added": true
 }
