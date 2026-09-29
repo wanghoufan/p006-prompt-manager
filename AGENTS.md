@@ -122,12 +122,12 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## 〇、部署契约卡（Deploy Contract：涉及部署 / 容器 / 数据目录前必读）
 
-> 本卡是 Docker 规范 V1.1 的浓缩速查，如有冲突以 V1.1 全文为准。
+> 本卡是 Docker 规范（仓内正文 `docs/sop/docker.md`，当前 V1.1）的浓缩速查，如有冲突以该正文为准。
 
 | 项 | 值 |
 |---|---|
 | project_slug | `prompt-manager` |
-| 开发目录（唯一改源码处） | `~/Developer/coding/1.Active/ing丨0813提示词管理器 mac gpt桌面 v1.0/` |
+| 开发目录（唯一改源码处） | `~/Developer/coding/1.Active/006-ing-提示词管理器/` |
 | 部署副本（GitHub 克隆，禁止手改源码热修） | `~/Developer/coding/docker/prompt-manager/` |
 | 数据目录 | `~/DockerData/prompt-manager/`（含 `legacy-store/` bind mount） |
 | 备份目录 | `~/DockerBackups/prompt-manager/` |
@@ -137,7 +137,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 - 脚本分工：本项目日常部署**只用**上表的 `scripts/deploy.sh`；`~/Developer/coding/docker/deploy.sh` 是跨项目通用引导脚本（把新的 GitHub 仓库首次克隆成部署目录用），不用于本项目，避免产生第三份代码副本。
 - 红线：未经用户明确授权，不创建 / 删除 / 迁移 / 覆盖 部署副本、DockerData、DockerBackups、Named Volume，不 commit/push，不新建生产容器或公开新端口；`dev-server.sh` 仅限开发，禁占 3100 端口。
-- 完整规范：`~/Developer/coding/docker/2026-09-02 丨 Mac Mini 本地项目自托管 Docker 规范 丨 V1.1.md`（与通用引导脚本同放 `docker/` 根目录；项目内同名 V1.0 文件已作废，仅作历史）。
+- 完整规范：`docs/sop/docker.md`（当前 V1.1，随仓库入库，真相源在仓内）；项目根目录同名 V1.0 文件已作废、仅作历史留档（顶部有 DEPRECATED 横幅）。
 
 ## 一、项目档案
 
@@ -160,7 +160,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - 样式方案：Tailwind CSS v4
 - 代码检查：ESLint 9（eslint-config-next）
 - 测试方案：暂无（以真机双设备验收 + 隔离恢复演练为准）
-- 部署平台：Mac Mini Docker 自托管（规范全文 `2026-09-02 丨 Mac Mini 本地项目自托管 Docker 规范 丨 V1.1.md`，存于 `~/Developer/coding/docker/`；项目内同名 V1.0 已作废，见 §〇 部署契约卡）
+- 部署平台：Mac Mini Docker 自托管（规范全文 `docs/sop/docker.md`，随仓库入库；项目根目录同名 V1.0 已作废，见 §〇 部署契约卡）
 
 ### 常用命令
 
@@ -182,11 +182,11 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - 实施计划：`docs/pm/PLAN.md`（Supabase 迁移已完成并放行，§16.18）
 - 代码审查：`docs/review/CODE_REVIEW.md`（2026-08-26 基线，待 Supabase 增补）
 - 产品优化候选：`docs/review/PRODUCT_BACKLOG.md`
-- 交接上下文：`docs/handoff/HANDOFF.md`（**§16.28补3 为当前唯一有效入口**，2026-09-16：回收站 + 标签全路径显示真机 QA PASS 收工；§16.23–16.28 为 P0 FK/吐司/拖宽收敛过程，§16.22 及更早小节仅作历史记录）
+- 交接上下文：`docs/handoff/HANDOFF.md`（2026-09-28 精简重写版，当前唯一有效入口；旧全文见 `HANDOFF.md.旧版-2026-09-13`）
 - 质量记录：`docs/qa/BUGS.md`（BUG-9/10/11/12/13/14 FIXED；BUG-12=数据丢失事故，BUG-13=`tags.revision` 漏建已发布，BUG-14=标签 FK 裸错已除；**2026-09-10 第二十三次 QA（AI 服务商精简 + 上游错误提示分类）PASS，BUG-8（env Key 跨厂商回退）与 D2（401 三层语义误判）同轮收尾修复**；**2026-09-16 回收站 + 标签全路径显示真机 QA PASS（删→站→恢复→清空，73 卡归位）**；待办已全部取消）、`docs/qa/QA_CHECKLIST.md`
-- 规范：数据库 `2026-09-03 丨 共享 Supabase 项目与独立 Schema 数据库规范 丨 V1.3.md`（存于 `1.Active/alw丨数据库管理专家/`）+ Docker `2026-09-02 丨 Mac Mini 本地项目自托管 Docker 规范 丨 V1.1.md`（存于 `Developer/coding/docker/`；项目内 V1.0 已作废）
+- 规范：数据库 `docs/sop/supabase.md`（**当前 V1.4「当前生效」，随仓库入库**；仓外 `1.Active/alw丨数据库管理专家/` 平台仓同步维护，仓外 V1.3 为更早版本）+ Docker `docs/sop/docker.md`（当前 V1.1，随仓库入库；项目内 V1.0 已作废）
 - 平台仓库：`/Users/zzymima0000/Developer/coding/1.Active/alw丨数据库管理专家/平台丨共享 Supabase 数据库`（HEAD `2e92f08`，Remote 7/7 已发布，含 `20260901163555` + `20260904102000` BUG-13 修复 + habit_tracker 统一）
-- 远程仓库：https://github.com/wanghoufan/prompt-manager.git（master 已整合 mcp-delivery；部署副本即从该仓库克隆）
+- 远程仓库：https://github.com/wanghoufan/p006-prompt-manager.git（master 已整合 mcp-delivery；部署副本即从该仓库克隆）
 - 审查裁定：`/Users/zzymima0000/Developer/coding/1.Active/alw丨数据库管理专家/项目审查丨prompt_manager/收口审查裁定丨prompt_manager丨2026-09-03.md`（APPROVED_FOR_EXECUTION）
 - MCP 接入说明：`mcp/prompt-server/README.md`
 - 用户级模型执行指南（Stage Manager 只读引用）：`/Users/zzymima0000/.workbuddy/AI_MODEL_GUIDE.md`
@@ -277,7 +277,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 | 当前开发阶段 / Builder 技术交接 | `docs/progress/CURRENT_STAGE.md` |
 | 开发经验 | `docs/DEV_EXPERIENCE.md` |
 | 可选模板（架构 / 决策 / 模型指南）| `docs/optional/` |
-| 根级 规范 / SOP **历史留档** | 项目根目录（`2026-08-31 …SOP 丨 V1.0.md`、`2026-09-01 …数据库规范 丨 V1.0.md`、`2026-09-02 …数据库规范 丨 V1.0 / V1.1.md`、`2026-09-02 …Docker 规范 丨 V1.0.md`）。**均为历史留档，顶部已加 HISTORICAL 横幅，禁止作为当前依据**；现行规范在项目外：数据库 V1.3 存 `1.Active/alw丨数据库管理专家/`、Docker V1.1 存 `Developer/coding/docker/` |
+| 根级 规范 / SOP **历史留档** | 项目根目录（`2026-08-31 …SOP 丨 V1.0.md`、`2026-09-01 …数据库规范 丨 V1.0.md`、`2026-09-02 …数据库规范 丨 V1.0 / V1.1.md`、`2026-09-02 …Docker 规范 丨 V1.0.md`）。**均为历史留档，顶部已加 HISTORICAL 横幅，禁止作为当前依据**；现行规范：数据库正文见仓内 `docs/sop/supabase.md`（V1.4）、Docker 正文见仓内 `docs/sop/docker.md`（V1.1） |
 | 临时资料 | `scratch/` |
 
 同一事实不要在多个位置重复维护。
@@ -336,7 +336,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## 九、Git 与安全规则
 
-1. 远程仓库已配置：`https://github.com/wanghoufan/prompt-manager.git`（分支 `master`；部署副本即从该仓库克隆）。
+1. 远程仓库已配置：`https://github.com/wanghoufan/p006-prompt-manager.git`（分支 `master`；部署副本即从该仓库克隆）。
 2. 基线约定完成后建议先提交一次。
 3. `commit` / `push` **逐次需用户明确授权**（推送口令：用户说「现在推送」后才可 `git push`）；用户提出推送需求时，先完成改动、验证、暂存、提交，并报告待推送内容，等第二次确认再推送。
 4. `scratch/`、`coordination/`、构建缓存、依赖目录、密钥配置不得提交。

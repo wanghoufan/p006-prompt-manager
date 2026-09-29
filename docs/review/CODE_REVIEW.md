@@ -388,3 +388,48 @@
   4. **`mergeLocalOnlyIntoRemoteSnapshot` 非死代码**：云端 Supabase 分支（page.tsx:425）仍在调用，仅从本地分支移除。
   5. **tombstone 过滤一致**：覆盖分支对 tags/promptTags 保留 `deadTagIds()` 过滤，与 SSE 回调（page.tsx:580-587）口径一致。
 - **有意的行为回归（trade-off，需知情）**：本地模式下，离线期间仅存于本机的卡片/标签不再被自动合并找回——重连或刷新后将被服务器快照覆盖（可从 `preconnect-backup` 手动恢复）。当前 Mini 单设备使用模式下无实际影响；若未来恢复多设备使用，需重新评估此取舍（与 §4.3-1 Supabase 回退路径去留一并决策）。
+
+# 2026-09-29 Code Review：cb898f7 星级热区修复 + 88f4d85 确认弹窗替换/批量删除显式入口
+
+- Task：修复星级评分点击热区过小（用户 P0 反馈）；自定义确认弹窗替换 10 处 window.confirm；卡片批量删除显式入口
+- Commit：`cb898f7`（Stars.tsx + AGENTS.md）、`88f4d85`（ConfirmDialog/useConfirm/page/SortBar/TagPanel/TrashModal/Composer）
+- Reviewer：code-reviewer
+- Result：**过（可放行）**——无 P0/P1；2 条 P2 建议随 QA 真机验证跟进，不阻塞
+- 范围说明：两提交在历史中不相邻（88f4d85 位于 57c13c5 之下 4 个提交，父为 b07e616），逐提交取 diff 审查；中间 d25d881/57c13c5 不在本轮范围。复跑验证：`npx tsc --noEmit` 0 error；`npm run lint` 0 error（9 warnings 均预存）。
+
+## 通过的关键点（逐项核过）
+
+1. **Stars.tsx 热区修复数学正确、零布局位移**（[Stars.tsx:32](file:///Users/zzymima0000/Developer/coding/1.Active/006-ing-提示词管理器/src/components/Stars.tsx#L32)）：`px-1.5 py-1`（外扩 12×8px）与 `-mx-1.5 -my-1`（负 margin 精确抵消），margin box 尺寸不变，父容器 `inline-flex items-center` 的行高与相邻间距均不变；只读分支（无 onChange）未改动；`aria-label`/`title`/`type="button"` 保留。
+2. **重叠带归属靠 paint order 自洽**：相邻星热区重叠约 10px；鼠标用户下 hover 的那颗 `hover:z-10` 抬层、另一方 z-auto 必输，hover 判定与点击判定一致；键盘用户 `focus-visible:z-10` 同理（且按钮无背景色，透明 padding 不会遮挡前一颗的焦点环）。
+3. **focus-visible 降级无害**：Chrome 86+ / Safari 15.4+ / Firefox 85+ 全支持；老浏览器仅表现为"聚焦不抬层"，默认焦点环仍可见，无功能损失。
+4. **Esc 冲突声明属实**（[page.tsx:1989-1998](file:///Users/zzymima0000/Developer/coding/1.Active/006-ing-提示词管理器/src/app/page.tsx#L1989)）：ConfirmDialog 的 Esc 在 `document` **捕获阶段**拦截并 `stopPropagation`（[ConfirmDialog.tsx:81-115](file:///Users/zzymima0000/Developer/coding/1.Active/006-ing-提示词管理器/src/components/ConfirmDialog.tsx#L81)），多选模式的 Esc（window 冒泡）确实不会被误触发；Tab 陷阱含焦点丢失兜底（焦点不在弹窗内时拉回首个按钮）。
+5. **confirm 异步化未破坏同步语义**：Composer 的 `submitting` 锁贯穿整个 `await onCreate`（[Composer.tsx:113-141](file:///Users/zzymima0000/Developer/coding/1.Active/006-ing-提示词管理器/src/components/Composer.tsx#L113)），确认期间不可重复提交，取消路径 `setSubmitting(false)` 完整；`handleCreate` 后续写 state 全用函数式更新（page.tsx:1110-1116）。
+6. **useConfirm 并发接管正确**（[useConfirm.tsx:55-63](file:///Users/zzymima0000/Developer/coding/1.Active/006-ing-提示词管理器/src/lib/useConfirm.tsx#L55)）：后发 confirm 先 resolve(false) 旧 promise，无悬挂 await；anchor 缺省取最近 pointerdown 坐标，键盘触发（keydown 捕获清空 pointerRef）退回视口居中——打分快捷键/回车建卡场景已覆盖。
+7. **无内存泄漏、无 SSR 风险**：ConfirmDialog 三个 effect（定位/焦点/键盘）与 useConfirm 的两个 document 监听均在 cleanup 中移除；dialog 仅在 pending 非空（纯客户端交互后）才渲染。
+8. **z-index 层级正确**：ConfirmDialog `z-[60]` > TrashModal z-50 / Toast z-50 / SettingsModal z-40；在 TrashModal 内部渲染时处于其 z-50 stacking context 内仍居遮罩之上；定位用 `visibility:hidden` 首帧防左上角闪烁，量算后写 style 不引发级联渲染。
+9. **多选模式状态机闭环**：进入仅经 SortBar 显式按钮（demo 视图隐藏入口）；载入示例/清空仓库/导入覆盖三条路径均 `exitBulkMode()`；Esc 退出并清空选中；`bulkActive={bulkMode || bulkIds.size > 0}` 兼容旧 P2-11 语义。
+10. **无安全问题、无重复逻辑**：弹窗文案经 React 转义无注入面；useConfirm 在 page/TagPanel/TrashModal 三处实例化是正确的组件级封装而非复制粘贴。
+
+## 发现的问题
+
+### P2（建议修 / 随 QA 跟进，不阻塞放行）
+
+- **P2-1 · 触屏端相邻星重叠带归属偏后一颗**（[Stars.tsx:32](file:///Users/zzymima0000/Developer/coding/1.Active/006-ing-提示词管理器/src/components/Stars.tsx#L32)）
+  相邻星 pitch 约 16px 而热区 26px，重叠约 10px。鼠标下由 hover:z-10 仲裁；但**触屏无 hover**，静止 paint order 下后一颗（DOM 靠后者）盖住前一颗字形右缘约 4px——手指点星 3 的右缘会打成 4 星。本提交目的是"点了不管用"，修好桌面端的同时在触屏引入了"点偏一颗"的新边界。
+  建议：QA 真机（触屏/窄屏）专项验证打星；若需修，方案是去掉 `-mx-1.5`、把容器 `gap-0.5` 调大到 ≥ 水平 padding（间距视觉略变，需产品确认），而非恢复小热区。
+- **P2-2 · 异步确认窗口期的闭包快照可能陈旧**（[page.tsx:1920-1926](file:///Users/zzymima0000/Developer/coding/1.Active/006-ing-提示词管理器/src/app/page.tsx#L1920) 导入、[page.tsx:1761-1772](file:///Users/zzymima0000/Developer/coding/1.Active/006-ing-提示词管理器/src/app/page.tsx#L1761) 批量删除）
+  原生 `window.confirm` 同步阻塞、无窗口期；改 `await askConfirm` 后，确认期间若 SSE 推来另一端变更（或 MCP activate 广播），`handleImportFile`/`handleBulkDelete` 在 await 之后仍用进入函数时的 `cards`/`promptTags` 闭包值构建快照与回收站条目，点撤销会把并发变更一并回滚（`markCardsCloudDirty` 会把旧快照写穿到服务器）。单用户 Mini 单设备下概率极低。
+  建议：确认通过后改读 `cardsRef.current`（已存在，page.tsx:1112 在用）与 `promptTagsRef`（如有）构建快照，一行级改动；或记录为已知取舍不修。
+
+### P3（记录在案，无需本轮处理）
+
+- **P3-1 · 弹窗关闭后焦点不回退触发按钮**（[ConfirmDialog.tsx:75-78](file:///Users/zzymima0000/Developer/coding/1.Active/006-ing-提示词管理器/src/components/ConfirmDialog.tsx#L75)）：焦点落在确认按钮上，关闭后元素移除、焦点丢到 body。建议后续记录触发元素并在 close 时恢复。
+- **P3-2 · `aria-modal="true"` 名不副实**（[ConfirmDialog.tsx:135](file:///Users/zzymima0000/Developer/coding/1.Active/006-ing-提示词管理器/src/components/ConfirmDialog.tsx#L135)）：无遮罩浮层、底层仍可交互（点外部=取消+点击穿透到下层控件同时发生，如确认删除时点另一张卡会取消确认并切换多选）。这是相对原生 confirm 的行为变化，非缺陷，QA 需按此口径验收；读屏语义上建议改 `aria-modal` 去除或加 `inert`（成本高，暂不必）。
+- **P3-3 · TrashModal 内点遮罩背景会连确认一起关**（[TrashModal.tsx:27](file:///Users/zzymima0000/Developer/coding/1.Active/006-ing-提示词管理器/src/components/TrashModal.tsx#L27)）：「清空回收站」确认弹窗开着时点暗色背景 = 确认取消 + 回收站整个关闭。可接受，记录口径。
+- **P3-4 · 批量删除后仍停留在多选模式**（[page.tsx:1779](file:///Users/zzymima0000/Developer/coding/1.Active/006-ing-提示词管理器/src/app/page.tsx#L1779)）：`handleBulkDelete` 收尾用 `clearBulk()` 而非 `exitBulkMode()`，删完不退模式。连续删除场景合理，但与「载入示例/清空/导入」三条路径的退出口径不一致，请产品确认是否有意。
+- **P3-5 · 勾选 SVG 图标两处重复**：SortBar.tsx 与 TagPanel.tsx 各有一份相同的多选勾选图标 path。量小，可留待下次顺手收敛。
+- **P3-6 ·（预存，非本次引入）Stars 容器 `role="img"` 包裹可交互 button**（[Stars.tsx:12](file:///Users/zzymima0000/Developer/coding/1.Active/006-ing-提示词管理器/src/components/Stars.tsx#L12)）：`role="img"` 会使子元素对读屏器呈 presentational，按钮可能被 AT 忽略。建议后续改为 `role="group"` + `aria-label`。
+
+## 结论
+
+**过，可放行。** 无 P0/P1；P2-1 随 QA 真机打星专项验证定夺是否返修，P2-2 单设备现状下影响可忽略（建议下轮迭代用 cardsRef 一行级收敛）。AGENTS.md §十一 的根因记录与代码事实一致。
