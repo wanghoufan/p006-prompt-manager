@@ -176,14 +176,14 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ### 当前进展与产物索引
 
-- 当前状态：P0/P1/P2 全部 CLOSED（2026-08-28）；**2026-09-01~09-04 Supabase 云端多端同步已完成并获 APPROVED_FOR_EXECUTION（2026-09-03 15:00 裁定放行）**：独立 `prompt_manager` Schema（6 表 + RLS + Realtime，`20260901163555` + `20260904102000` BUG-13 已发布，Remote 7/7）、Auth（Magic Link + Google OAuth PKCE）、记录级 `revision`（含 `tags.revision` 修复）、MCP RPC、Docker 自托管、双设备验收（BUG-11/并发/MCP 隔离）、55 卡备份 + 隔离重放全绿；**收口材料已回填 §9/§10 并登记发布**，写队列 30s 超时 + BUG-12/13 已闭环，剩余待办已于 2026-09-04 经用户最终裁定全部取消；项目进入现状运行期（Mini 单设备，`http://192.168.31.60:3100`）。**2026-09-10**：AI 服务商由 8 厂商收敛为 3 家（4 选项）并已上线生产（`1b569a5`），同轮修复 D2（401 三层语义误判）与 BUG-8（env Key 跨厂商回退），dev 回环不水合已修
+- 当前状态：P0/P1/P2 全部 CLOSED（2026-08-28）；**2026-09-01~09-04 Supabase 云端多端同步已完成并获 APPROVED_FOR_EXECUTION（2026-09-03 15:00 裁定放行）**：独立 `prompt_manager` Schema（6 表 + RLS + Realtime，`20260901163555` + `20260904102000` BUG-13 已发布，Remote 7/7）、Auth（Magic Link + Google OAuth PKCE）、记录级 `revision`（含 `tags.revision` 修复）、MCP RPC、Docker 自托管、双设备验收（BUG-11/并发/MCP 隔离）、55 卡备份 + 隔离重放全绿；**收口材料已回填 §9/§10 并登记发布**，写队列 30s 超时 + BUG-12/13 已闭环，剩余待办已于 2026-09-04 经用户最终裁定全部取消；项目进入现状运行期（Mini 单设备，`http://192.168.31.60:3100`）。**2026-09-10**：AI 服务商由 8 厂商收敛为 3 家（4 选项）并已上线生产（`1b569a5`），同轮修复 D2（401 三层语义误判）与 BUG-8（env Key 跨厂商回退），dev 回环不水合已修。**2026-09-27～09-29**：自定义确认弹窗替换 10 处 `window.confirm` + 卡片批量删除显式入口（`88f4d85`）+ 星级点击热区修复（`cb898f7`，14×14→26×22，用户 P0 反馈）+ 触屏端星级重叠带归属修复（`832f565`，事件委托按最近字形中心判定）+ 剩余 4 处 `window.prompt` 替换为 `PromptDialog`（`6af818d`）+ SSR 水合致 localStorage 面板配置读不回来修复（`cbf0c73`）+ **P0** 标签全量覆写自撞唯一索引 + 推送失败静默吞错修复（`16a604b`）均已上线（最新镜像 `18bb1f033e35`）；同轮 QA 完成产品验收追踪矩阵 4 批实测（结果见 `docs/qa/BUGS.md`「产品验收追踪矩阵」）
 - 需求文档：`docs/pm/提示词管理工具-需求文档.md`
 - 产品报告：`docs/pm/产品报告.md`
 - 实施计划：`docs/pm/PLAN.md`（Supabase 迁移已完成并放行，§16.18）
-- 代码审查：`docs/review/CODE_REVIEW.md`（2026-08-26 基线，待 Supabase 增补）
+- 代码审查：`docs/review/CODE_REVIEW.md`（2026-08-26 基线 + §四 SQLite 迁移专项审查（2026-09-28）+ 2026-09-29 两次审查：星级/确认弹窗代码审查、QA 第 4 批疑似 P1 专审）
 - 产品优化候选：`docs/review/PRODUCT_BACKLOG.md`
 - 交接上下文：`docs/handoff/HANDOFF.md`（2026-09-28 精简重写版，当前唯一有效入口；旧全文见 `HANDOFF.md.旧版-2026-09-13`）
-- 质量记录：`docs/qa/BUGS.md`（BUG-9/10/11/12/13/14 FIXED；BUG-12=数据丢失事故，BUG-13=`tags.revision` 漏建已发布，BUG-14=标签 FK 裸错已除；**2026-09-10 第二十三次 QA（AI 服务商精简 + 上游错误提示分类）PASS，BUG-8（env Key 跨厂商回退）与 D2（401 三层语义误判）同轮收尾修复**；**2026-09-16 回收站 + 标签全路径显示真机 QA PASS（删→站→恢复→清空，73 卡归位）**；待办已全部取消）、`docs/qa/QA_CHECKLIST.md`
+- 质量记录：`docs/qa/BUGS.md`（BUG-9/10/11/12/13/14 FIXED；BUG-12=数据丢失事故，BUG-13=`tags.revision` 漏建已发布，BUG-14=标签 FK 裸错已除；**2026-09-10 第二十三次 QA（AI 服务商精简 + 上游错误提示分类）PASS，BUG-8（env Key 跨厂商回退）与 D2（401 三层语义误判）同轮收尾修复**；**2026-09-16 回收站 + 标签全路径显示真机 QA PASS（删→站→恢复→清空，73 卡归位）**；**2026-09-29 产品验收追踪矩阵 4 批实测（20 条 AC：AC-17/18 PASS，其余 DEGRADED/FAIL，见该文件同名节）**；待办已全部取消）、`docs/qa/QA_CHECKLIST.md`
 - 规范：数据库 `docs/sop/supabase.md`（**当前 V1.4「当前生效」，随仓库入库**；仓外 `1.Active/alw丨数据库管理专家/` 平台仓同步维护，仓外 V1.3 为更早版本）+ Docker `docs/sop/docker.md`（当前 V1.1，随仓库入库；项目内 V1.0 已作废）
 - 平台仓库：`/Users/zzymima0000/Developer/coding/1.Active/alw丨数据库管理专家/平台丨共享 Supabase 数据库`（HEAD `2e92f08`，Remote 7/7 已发布，含 `20260901163555` + `20260904102000` BUG-13 修复 + habit_tracker 统一）
 - 远程仓库：https://github.com/wanghoufan/p006-prompt-manager.git（master 已整合 mcp-delivery；部署副本即从该仓库克隆）
