@@ -1,5 +1,26 @@
 # AGENTS.md｜ORCA（全员遵守，一页）
 
+<!-- ORCA-RULES-BLOCK:BEGIN -->
+<!-- 本区块由治理母版 scripts/sync-old-projects.sh 于 2026-09-29 注入；只增不删，可重复运行原地更新。 -->
+<!-- 本项目 AGENTS.md 的其余内容（项目专属规矩）保持原样，冲突时以本区块为准。 -->
+## ORCA 规则增量（母版 2026-09-29-产品验收）
+
+> 本区块只写**对外通用**的机制增量；派工细节见 `docs/roles/`，账本口径见下方条目。
+
+- **产品验收（2026-09-28 定）**：开发完成的判断来自**用户可见要求的覆盖证据**，不只看单测／构建／代码审查／工具调用成功。
+  - 验收标准写在计划里：Phase1 给每条用户可见要求编一条可观察可测的**验收条目（AC）**，并标出**关键 AC**（对应 P0／blocking P1／核心用户路径／必要视觉交互呈现）；**关键 AC 集合不得为空**。
+  - 证据落 `docs/qa/` 的**产品验收追踪矩阵**（照 `docs/qa/BUGS.template.md` 同名节）。
+  - **不可放行三情形**（命中任一不得判 `PASS`）：①关键产品 DoD／AC 未测；②关键任务涉及的**每个**可见操作控件未实际点击并观察到页面／锚点／状态变化（只验 `href` 存在不算）；③验收证据缺失。
+  - 视觉验收最小覆盖：关键用户任务逐条走通、按项目要求检查桌面与窄屏、用边界样本（奇偶条目数／长标题长正文／空状态）检验对齐·换行·裁切·溢出·可读性、留真实浏览器截图。
+  - **用户签收**：发布类型为**首次发布**的，用户签收通过才算完成（签收前状态记未完成）；迭代更新与局部修复不强制签收。签收属 **Human Gate 范畴（用户参与）**，**不是新增 QA Gate**。
+- **体系更新三件套（2026-09-29 定）**：①本项目规则文件改动后与母版对齐（用 `bash scripts/sync-old-projects.sh` 或按《迁移整理提示词》取包，**备份不覆盖**）；②账本内容**不重写**（实绩历史），只做 schema 校验 `node scripts/model/check-ledger.mjs docs/model`（须 `LEDGER-OK`）；③**HANDOFF 记一行**。**老项目无两包概念，故母版的「同步两包＋更新对外概览」不适用。**
+- **派工跨目录禁令（2026-09-29 定）**：派 opencode 通道角色（supervisor／neat-freak／experience-recorder）时，任务里读写本仓以外目录（如 `/tmp`、`1.Active/` 等）会被 `external_directory` 权限自动拒、步骤静默失败，可能让角色误报已做也易反复盲试烧额度（禁盲试）；派单前处置二选一——①临时文件改到仓内已 gitignore 的 `temp/`，②先取得用户授权；codebuddy／codex 通道无此限制。
+- **红线（2026-09-29 增补）**：产品验收未落盘或关键 AC 未测、不得报完工/收工；首次发布未取得用户签收、不得报完工/收工。
+- **本项目迁移状态**：`docs/model/GOVERNANCE-STATE.json`（`rules_version`／`synced_at`／`project_phase_field`／`task_ledger_rows`／`agents_needs_manual_merge`／`product_acceptance_ac_added`）。
+- **存量项目待办（不自动做，需项目 TM 判断）**：本项目实绩 Plan 需补「视觉与交互验收标准（AC 编号）＋关键 AC 集合＋发布类型」，否则新规则下收尾会被判**计划缺项**；完成后把 `product_acceptance_ac_added` 置 `true`。
+<!-- ORCA-RULES-BLOCK:END -->
+
+
 ## 两阶段治理（固定 9+1＋1 专项，不再新增角色）
 
 - 状态：`PLAN / WAITING_HUMAN_APPROVAL / DEVELOP / PLAN_REOPEN_REQUIRED`（仅Change C受控重开期间；`PROJECT_PHASE` 当前值以 HANDOFF 为准）。
@@ -354,4 +375,5 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 > 项目级踩坑条目统一归此节，集中存放，便于日后统一整理、升级为用户级经验文档。格式：日期 + 场景 + 现象 + 原因 + 解法，一条一行。
 
+- **2026-09-29 ｜ 星级评分 ｜ 点五颗星「点了不管用」**：用户给一张 2 星卡片点第 5 颗星无反应。原因：单颗星点击热区只有 14×14px（`text-sm` 的 `★` 字形本身），5 颗总跨度仅 78px，手抖偏 5px 就命中外层 `mt-auto flex justify-between` 行容器，页面无任何反馈，观感即"失效"；打星逻辑本身正常（后台实测点正中 `0→5`）。放大背景：`b07e616` 起整卡可点（点卡片=切换多选），误点不再天然无害，更易被误认为功能坏。解法：`Stars.tsx` 星按钮加 `px-1.5 py-1 -mx-1.5 -my-1`（负 margin 抵消位移，视觉零变化，热区 14×14→26×22；用 `p-1 -m-1` 不够——水平只外扩 4px，落在"右缘外 5px"之外）＋ `relative hover:z-10 focus-visible:z-10`（解决 16px 间隔 < 26px 热区的相邻重叠，让悬停那颗判给用户）＋ 与「复制」按钮的间距**实测本就达标**（到「次复制」18.86px、到「复制」73.33px），**不加 `ml-2`**——那行是 `justify-between`，给首项加左边距会把整排右移 8px、破坏与标题左对齐、反而缩小间距。**通用教训三条：①文字/图标类小控件必须按可点击热区而非字形尺寸来验收，量 `getBoundingClientRect()` 并专门测"偏 5px"是否仍命中；②抬层用 `hover:z-10` 必须配 `focus-visible:z-10`，用 `focus:z-10` 会让"鼠标点过的那颗"永久保持 z-index 10，在重叠带压住后续 hover 判定（实测 hover 第 4 颗仍命中第 5 颗）；③同一组件多处分时改一处即三处生效，禁止在调用方分别打补丁。本例 `Stars` 被卡片区 / 详情面板 / 预览面板三处复用。**
 - **2026-09-28 ｜ Docker 部署 ｜ 凭据助手 PATH 缺失**：终端手动跑 `deploy.sh` 报 `error getting credentials - err: exec: "docker-credential-desktop": executable file not found in $PATH`，构建失败（容器仍跑旧版）。原因：本机 `which docker` 指向 `~/.local/bin/docker`，PATH 里没有 Docker Desktop 的凭据助手目录，BuildKit 拉取 syntax 镜像时凭据失败。解法：`export PATH="/Applications/Docker.app/Contents/Resources/bin:$PATH"` 后重跑 `deploy.sh` 即成功（已验证）。非脚本问题，脚本无需改。

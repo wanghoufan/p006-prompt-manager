@@ -29,7 +29,7 @@ export function Stars({ rating, onChange, size = 'sm' }: StarsProps) {
               e.stopPropagation()
               onChange(i)
             }}
-            className={`cursor-pointer transition-colors ${filled ? 'text-gold hover:text-gold-bright' : 'text-ink-700 hover:text-gold-deep'}`}
+            className={`relative cursor-pointer px-1.5 py-1 -mx-1.5 -my-1 transition-colors hover:z-10 focus-visible:z-10 ${filled ? 'text-gold hover:text-gold-bright' : 'text-ink-700 hover:text-gold-deep'}`}
           >
             ★
           </button>
