@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from 'react'
 import type { Tag, PromptTag, TagFilters } from '@/lib/types'
 import { childrenOf, collectDescendantIds, directCount, totalCount, tagPath } from '@/lib/tags'
 import { useConfirm } from '@/lib/useConfirm'
+import { usePrompt } from '@/lib/usePrompt'
 
 export interface TagPanelProps {
   tags: Tag[]
@@ -406,6 +407,8 @@ export function TagPanel({
   const panelDragState = useRef<{ startX: number; startW: number } | null>(null)
   // 跟随鼠标焦点的确认弹窗（替代浏览器原生 confirm）
   const { confirm: askConfirm, dialog: confirmDialog } = useConfirm()
+  // 跟随鼠标焦点的输入弹窗（替代浏览器原生 prompt）
+  const { prompt: askPrompt, dialog: promptDialog } = usePrompt()
 
   function handlePanelDragStart(e: React.PointerEvent<HTMLDivElement>) {
     e.preventDefault()
@@ -469,13 +472,18 @@ export function TagPanel({
       .sort((a, b) => a.name.localeCompare(b.name, 'zh'))
   }, [tags, searchTerm])
 
-  function promptForName(title: string, initial = ''): string | null {
-    return window.prompt(title, initial)
+  /** 输入类弹窗入口（新建 / 重命名 / 移动 / 合并四处共用）：按场景给不同标题与预填值，取消返回 null。 */
+  function promptForName(options: {
+    title: string
+    description?: string
+    defaultValue?: string
+  }): Promise<string | null> {
+    return askPrompt(options)
   }
 
-  function handleCreate(parentId: string | null) {
+  async function handleCreate(parentId: string | null) {
     if (!onCreateTag) return
-    const name = promptForName(parentId ? '新建子标签名称：' : '新建标签名称：')
+    const name = await promptForName({ title: parentId ? '新建子标签名称：' : '新建标签名称：' })
     if (name === null) return
     const trimmed = name.trim()
     if (!trimmed) {
@@ -504,7 +512,10 @@ export function TagPanel({
 
   async function handleRename(tag: Tag) {
     if (!onRenameTag) return
-    const name = promptForName(`重命名标签「${tag.name}」为：`, tag.name)
+    const name = await promptForName({
+      title: `重命名标签「${tag.name}」为：`,
+      defaultValue: tag.name,
+    })
     if (name === null) return
     const trimmed = name.trim()
     if (!trimmed) {
@@ -553,9 +564,10 @@ export function TagPanel({
       setError('没有可合并的目标标签')
       return
     }
-    const targetInput = promptForName(
-      `将「${tagPath(tags, tag.id)}」合并到哪个标签？\n请输入完整路径（例如：开发/前端）；同名时必须输入完整路径。`,
-    )
+    const targetInput = await promptForName({
+      title: `将「${tagPath(tags, tag.id)}」合并到哪个标签？`,
+      description: '请输入完整路径（例如：开发/前端）；同名时必须输入完整路径。',
+    })
     if (targetInput === null) return
     const trimmed = targetInput.trim()
     if (!trimmed) {
@@ -598,12 +610,13 @@ export function TagPanel({
     setError(null)
   }
 
-  function handleMove(tag: Tag) {
+  async function handleMove(tag: Tag) {
     if (!onMoveTag) return
     // 输入目标父标签名称（留空 = 移到顶级）；同名标签按第一个匹配（P0 简化）
-    const targetName = promptForName(
-      `移动「${tag.name}」到哪个父标签下？（留空 = 移到顶级）\n当前父级：${tag.parent_id ? tagPath(tags, tag.parent_id) : '（顶级）'}`,
-    )
+    const targetName = await promptForName({
+      title: `移动「${tag.name}」到哪个父标签下？（留空 = 移到顶级）`,
+      description: `当前父级：${tag.parent_id ? tagPath(tags, tag.parent_id) : '（顶级）'}`,
+    })
     if (targetName === null) return
     let parentId: string | null = null
     const trimmed = targetName.trim()
@@ -967,6 +980,7 @@ export function TagPanel({
         )
       })()}
       {confirmDialog}
+      {promptDialog}
       <div className="border-t border-line px-4 py-3 text-[11px] leading-relaxed text-muted">
         {offline
           ? syncMode === 'cloud'

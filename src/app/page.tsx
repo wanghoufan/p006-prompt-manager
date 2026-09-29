@@ -20,6 +20,7 @@ import { SettingsModal } from '@/components/SettingsModal'
 import { TrashModal } from '@/components/TrashModal'
 import { Toast } from '@/components/Toast'
 import { useConfirm } from '@/lib/useConfirm'
+import { usePrompt } from '@/lib/usePrompt'
 import { newTrashId, readTrash, writeTrash, type TrashEntry } from '@/lib/trash'
 import { readPendingTagDeletes, writePendingTagDeletes } from '@/lib/tagTombstones'
 import {
@@ -233,6 +234,8 @@ export default function Home() {
   const [bulkMode, setBulkMode] = useState(false)
   // 跟随鼠标焦点的确认弹窗（替代浏览器原生 confirm）
   const { confirm: askConfirm, dialog: confirmDialog } = useConfirm()
+  // 跟随鼠标焦点的输入弹窗（替代浏览器原生 prompt）
+  const { prompt: askPrompt, dialog: promptDialog } = usePrompt()
   const undoRef = useRef<(() => void) | null>(null)
   // 标签关联失败去重：同一错误重试期间静默（仍 retryCloudSync），仅在 message 变化时再吐司。
   const lastRelationErrorRef = useRef<string | null>(null)
@@ -1785,9 +1788,11 @@ export default function Home() {
   }
 
   // 批量打标签：追加去重（不覆盖卡片已有标签），走标签实体关系
-  function handleBulkTag() {
+  async function handleBulkTag() {
     if (bulkIds.size === 0) return
-    const input = window.prompt(`为选中的 ${bulkIds.size} 张卡片添加标签（多个用逗号/顿号分隔）`)
+    const input = await askPrompt({
+      title: `为选中的 ${bulkIds.size} 张卡片添加标签（多个用逗号/顿号分隔）`,
+    })
     if (input === null) return
     const tagNames = parseTags(input)
     if (tagNames.length === 0) {
@@ -1818,9 +1823,11 @@ export default function Home() {
   }
 
   // 批量移除标签：从选中卡片中移除指定标签
-  function handleBulkRemoveTag() {
+  async function handleBulkRemoveTag() {
     if (bulkIds.size === 0) return
-    const input = window.prompt(`从选中的 ${bulkIds.size} 张卡片中移除标签（多个用逗号/顿号分隔）`)
+    const input = await askPrompt({
+      title: `从选中的 ${bulkIds.size} 张卡片中移除标签（多个用逗号/顿号分隔）`,
+    })
     if (input === null) return
     const tagNames = parseTags(input)
     if (tagNames.length === 0) {
@@ -1858,18 +1865,18 @@ export default function Home() {
     }
   }
 
-  // 批量打星：0-5 整数，0 表示清零
-  function handleBulkRate() {
+  // 批量打星：0-5 整数，0 表示清零；非法输入在弹窗内拦截（不关弹窗、不清空已输入内容）
+  async function handleBulkRate() {
     if (bulkIds.size === 0) return
-    const input = window.prompt(
-      `为选中的 ${bulkIds.size} 张卡片设置评分（0-5 整数，0 表示清零）`,
-    )
+    const input = await askPrompt({
+      title: `为选中的 ${bulkIds.size} 张卡片设置评分（0-5 整数，0 表示清零）`,
+      validate: (value) => {
+        const parsed = Number(value)
+        return Number.isInteger(parsed) && parsed >= 0 && parsed <= 5 ? null : '评分需为 0-5 的整数'
+      },
+    })
     if (input === null) return
     const n = Number(input)
-    if (!Number.isInteger(n) || n < 0 || n > 5) {
-      notify('评分需为 0-5 的整数')
-      return
-    }
     const ids = bulkIds
     const count = ids.size
     markCardsCloudDirty()
@@ -2261,6 +2268,7 @@ export default function Home() {
         />
       )}
       {confirmDialog}
+      {promptDialog}
       <Toast
         message={toast?.msg ?? null}
         detail={toast?.detail ?? null}
