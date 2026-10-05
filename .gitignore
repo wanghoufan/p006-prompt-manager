@@ -84,3 +84,6 @@ mcp/prompt-server/dist/
 
 # ORCA 迁移备份（回滚用，勿入库）
 *.旧版-2026-09-29
+
+# 交付临时文件夹，不上传 GitHub
+temp/
