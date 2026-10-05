@@ -4,10 +4,8 @@
 
 > A local web app that turns your prompt library into a searchable knowledge base plus an agent interface: paste a prompt, get a titled and tagged card, copy it to keep count, store everything in a local SQLite database, and let AI agents such as WorkBuddy inject any card as a system prompt through a short recall code over MCP (Model Context Protocol — the standard that lets an agent call external tools).
 
-![Home screen](docs/screenshots/home.jpg)
-
 ![Detail panel](docs/screenshots/detail.jpg)
-> Screenshots taken from the live app on 2026-10-05 (main view + card detail editing panel), showing real local data.
+> Screenshot taken from the live app on 2026-10-05 (card detail editing panel), showing real local data.
 
 ## Why this exists
 
