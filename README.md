@@ -1,5 +1,7 @@
 # 提示词管理工具（Prompt Manager）
 
+[English](./README.en.md)
+
 > 一个本地网页端的**提示词知识库 + Agent 接口**：把常用提示词沉淀成可检索的卡片，复制即统计，数据存储在本地 SQLite，并可通过 **MCP** 让 WorkBuddy 等 AI Agent 用「调取码」一键把任意卡片注入为系统提示词直接执行。
 
 ![首页截图](docs/screenshots/home.png)
