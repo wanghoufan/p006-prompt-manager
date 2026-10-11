@@ -3,6 +3,16 @@
 import { useRef } from 'react'
 import { DemoMenu, type ViewMode } from '@/components/DemoMenu'
 import { SupabaseAuthControl } from '@/components/SupabaseAuthControl'
+import type { Settings } from '@/lib/types'
+
+/** 2026-10-11 顶栏主题速切（截图参考样式：胶囊分段）；「跟随系统」留在设置弹窗，速切即固定主题 */
+const THEME_OPTIONS: { value: Exclude<Settings['theme'], 'system'>; label: string; title: string }[] = [
+  { value: 'dark', label: '暗色', title: '暗色 · 皮革账本' },
+  { value: 'light', label: '亮色', title: '亮色 · 暖纸墨' },
+  { value: 'cinnabar', label: '印谱', title: '朱砂印谱（亮）' },
+  { value: 'phosphor', label: '磷青', title: '夜航磷青（暗）' },
+  { value: 'blueprint', label: '蓝图', title: '工程蓝图（暗）' },
+]
 
 interface TopBarProps {
   view: ViewMode
@@ -16,6 +26,8 @@ interface TopBarProps {
   onOpenSettings: () => void
   onOpenTrash: () => void
   trashCount: number
+  theme: Settings['theme']
+  onThemeChange: (theme: Settings['theme']) => void
 }
 
 export function TopBar({
@@ -30,19 +42,45 @@ export function TopBar({
   onOpenSettings,
   onOpenTrash,
   trashCount,
+  theme,
+  onThemeChange,
 }: TopBarProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const readOnly = view === 'demo'
 
   return (
-    <header className="flex shrink-0 items-center justify-between border-b border-line bg-ink-950 px-5 py-3">
+    <header className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-line bg-ink-950 px-5 py-3">
       <div className="flex items-baseline gap-3">
-        <h1 className="font-serif text-lg tracking-wide text-paper">提示词管理</h1>
+        <h1 className="whitespace-nowrap font-serif text-lg tracking-wide text-paper">提示词管理</h1>
         <span className="hidden font-mono text-[11px] uppercase tracking-[0.25em] text-muted sm:block">
           Prompt Ledger
         </span>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {/* 主题速切：system 态不高亮任何段（提示由设置弹窗开启跟随系统） */}
+        <div
+          role="radiogroup"
+          aria-label="外观主题"
+          className="hidden items-center gap-0.5 rounded-full border border-line bg-ink-900 p-0.5 md:flex"
+        >
+          {THEME_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              role="radio"
+              aria-checked={theme === opt.value}
+              title={opt.title}
+              onClick={() => onThemeChange(opt.value)}
+              className={`rounded-full px-2.5 py-1 text-xs transition-colors ${
+                theme === opt.value
+                  ? 'bg-gold/15 font-medium text-gold-bright shadow-[inset_0_0_0_1px_var(--color-gold)]'
+                  : 'text-muted hover:text-paper'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
         <DemoMenu
           view={view}
           repoCount={repoCount}

@@ -29,8 +29,9 @@ export interface Settings {
   thinkingSummaryPrompt: string
   /** P0-4：网格直删前是否二次确认（默认 true） */
   confirmDelete: boolean
-  /** P0-5：外观主题；system 跟随系统偏好，dark/light 手动覆盖 */
-  theme: 'dark' | 'light' | 'system'
+  /** P0-5：外观主题；system 跟随系统偏好，dark/light 手动覆盖；
+   *  2026-10-11 新增三套主题：cinnabar 朱砂印谱（亮）/ phosphor 夜航磷青（暗）/ blueprint 工程蓝图（暗） */
+  theme: 'dark' | 'light' | 'system' | 'cinnabar' | 'phosphor' | 'blueprint'
   /** P0-I：粘贴正文后是否自动请求 AI 进行格式整理（默认关闭） */
   autoFormatBody: boolean
   /** P0-I：正文显示及 AI 格式整理所采用的对齐方式 */

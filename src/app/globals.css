@@ -57,6 +57,83 @@ html.light {
   color-scheme: light;
 }
 
+/* ===== 2026-10-11 三套新主题（token 复用 ink/paper/gold/rust 语义槽位，组件零改动） ===== */
+
+/* 朱砂印谱（亮色）：宣纸白底 + 松烟墨字 + 朱砂主色 + 靛青辅色 */
+html.theme-cinnabar {
+  --color-ink-950: #f4f0e4;
+  --color-ink-900: #fcfaf2;
+  --color-ink-850: #ece6d5;
+  --color-ink-800: #e3dcc8;
+  --color-ink-700: #cfc5ac;
+  --color-line: #d9d0ba;
+  --color-paper: #272b32;
+  --color-paper-dim: #565d68;
+  --color-muted: #8e8875;
+  --color-gold: #b8391f;
+  --color-gold-bright: #8a2a15;
+  --color-gold-deep: #6e2110;
+  --color-rust: #b04a3a;
+  --color-highlight: #f0c453;
+  --color-highlight-text: #5a3a06;
+  --color-highlight-ring: rgba(184, 57, 31, 0.45);
+  --color-highlight-shadow: transparent;
+  --scroll-thumb: #cfc5ac;
+  color-scheme: light;
+}
+
+/* 夜航磷青（暗色）：深炭青底 + 雾白字 + 磷光青绿主色，终端气质 */
+html.theme-phosphor {
+  --color-ink-950: #0a120f;
+  --color-ink-900: #0f1a16;
+  --color-ink-850: #15231e;
+  --color-ink-800: #1c2e27;
+  --color-ink-700: #22382f;
+  --color-line: #20362d;
+  --color-paper: #d8e6de;
+  --color-paper-dim: #8fa89c;
+  --color-muted: #587165;
+  --color-gold: #43d9a3;
+  --color-gold-bright: #6fe8ba;
+  --color-gold-deep: #1e7a58;
+  --color-rust: #e06c5b;
+  --color-highlight: #43d9a3;
+  --color-highlight-text: #06110c;
+  --color-highlight-ring: rgba(67, 217, 163, 0.55);
+  --color-highlight-shadow: rgba(67, 217, 163, 0.22);
+  --scroll-thumb: #22382f;
+}
+
+/* 工程蓝图（暗色）：图纸蓝底 + 网格纹理 + 标注橙主色 */
+html.theme-blueprint {
+  --color-ink-950: #14274c;
+  --color-ink-900: #1a3560;
+  --color-ink-850: #203d6d;
+  --color-ink-800: #28477c;
+  --color-ink-700: #335392;
+  --color-line: #2c4470;
+  --color-paper: #e8eefb;
+  --color-paper-dim: #a9bdd9;
+  --color-muted: #7488ab;
+  --color-gold: #f2a052;
+  --color-gold-bright: #ffb86b;
+  --color-gold-deep: #b06a28;
+  --color-rust: #ef6461;
+  --color-highlight: #f2c14c;
+  --color-highlight-text: #3a2c05;
+  --color-highlight-ring: rgba(242, 193, 76, 0.5);
+  --color-highlight-shadow: rgba(242, 193, 76, 0.2);
+  --scroll-thumb: #28477c;
+}
+
+/* 蓝图网格纸纹理（28px 细网格，低调不抢内容） */
+html.theme-blueprint body {
+  background-image:
+    linear-gradient(rgba(158, 188, 235, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(158, 188, 235, 0.05) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
 body {
   background: var(--color-ink-950);
   color: var(--color-paper);
@@ -108,7 +185,8 @@ mark {
     0 0 0 1px var(--color-highlight-ring),
     0 0 0 2px var(--color-highlight-shadow);
 }
-html.light mark {
+html.light mark,
+html.theme-cinnabar mark {
   background: color-mix(in srgb, var(--color-highlight) 50%, transparent);
 }
 
@@ -138,13 +216,13 @@ html.light mark {
 }
 
 @utility btn {
-  @apply inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-line bg-ink-850 px-3 py-1.5 text-sm text-paper-dim transition-colors hover:border-ink-700 hover:bg-ink-800 hover:text-paper;
+  @apply inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-md border border-line bg-ink-850 px-3 py-1.5 text-sm text-paper-dim transition-colors hover:border-ink-700 hover:bg-ink-800 hover:text-paper;
 }
 
 @utility btn-gold {
-  @apply inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-gold/50 bg-gold/10 px-3 py-1.5 text-sm text-gold-bright transition-colors hover:border-gold/70 hover:bg-gold/20;
+  @apply inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-md border border-gold/50 bg-gold/10 px-3 py-1.5 text-sm text-gold-bright transition-colors hover:border-gold/70 hover:bg-gold/20;
 }
 
 @utility btn-ghost {
-  @apply inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted transition-colors hover:bg-ink-800 hover:text-paper;
+  @apply inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1 text-xs text-muted transition-colors hover:bg-ink-800 hover:text-paper;
 }

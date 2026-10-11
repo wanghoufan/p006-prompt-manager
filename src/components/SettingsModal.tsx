@@ -88,11 +88,13 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
   const [copied, setCopied] = useState<string | null>(null)
   // P1-AI1：API Key 输入框草稿（不直接回显明文，仅在 placeholder 展示脱敏值）
   const [keyDraft, setKeyDraft] = useState('')
+  const [showKey, setShowKey] = useState(false)
   const [connectionTest, setConnectionTest] = useState<{ success: boolean; message: string } | null>(null)
   const [isTestingConnection, setIsTestingConnection] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
   // P1-AI4：AI 配置即存，防抖后 toast 反馈
   const aiSaveTimer = useRef<number | null>(null)
+  const templateSaveTimer = useRef<number | null>(null)
   const aiService = AI_SERVICES.find((service) => service.provider === settings.aiProvider)
   const aiModels = aiService?.models ?? []
 
@@ -102,8 +104,24 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
   useEffect(() => {
     return () => {
       if (aiSaveTimer.current) window.clearTimeout(aiSaveTimer.current)
+      if (templateSaveTimer.current) window.clearTimeout(templateSaveTimer.current)
     }
   }, [])
+
+  /** 思维模板与其他设置一样即存（防抖 800ms）；校验失败不落库、只提示。 */
+  function handleTemplateChange(value: string) {
+    setText(value)
+    const trimmed = value.trim()
+    if (trimmed && !trimmed.includes('{body}')) {
+      setError('模板中需要包含 {body} 占位符，否则正文不会被注入（此项未保存）')
+      return
+    }
+    setError(null)
+    if (templateSaveTimer.current) window.clearTimeout(templateSaveTimer.current)
+    templateSaveTimer.current = window.setTimeout(() => {
+      onSave((current) => ({ ...current, thinkingSummaryPrompt: trimmed }))
+    }, 800)
+  }
 
   /** P1-AI4：AI 配置 onChange 即存，防抖提示「AI配置已保存」 */
   function saveAi(patch: Partial<Settings>) {
@@ -170,14 +188,8 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
     }
   }
 
-  function handleSave() {
-    const trimmed = text.trim()
-    if (trimmed && !trimmed.includes('{body}')) {
-      setError('模板中需要包含 {body} 占位符，否则正文不会被注入')
-      return
-    }
-    // 合并保存：保留 confirmDelete / theme 即时设置项
-    onSave({ ...settings, thinkingSummaryPrompt: trimmed })
+  // 所有设置均已即存；「完成」仅关闭弹窗。模板校验失败时不落库（上方有红字提示），关闭即放弃该草稿。
+  function handleDone() {
     onClose()
   }
 
@@ -240,7 +252,7 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
             <label htmlFor="settings-theme" className="text-sm text-paper">
               外观主题
             </label>
-            <p className="mt-0.5 text-xs text-muted">跟随系统偏好，或手动固定为暗色 / 亮色</p>
+            <p className="mt-0.5 text-xs text-muted">跟随系统偏好，或手动固定一套主题；顶栏胶囊可快速切换</p>
             <select
               id="settings-theme"
               className="field mt-2"
@@ -248,8 +260,11 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
               onChange={(e) => onSave({ ...settings, theme: e.target.value as Settings['theme'] })}
             >
               <option value="system">跟随系统</option>
-              <option value="dark">暗色</option>
-              <option value="light">亮色</option>
+              <option value="dark">暗色 · 皮革账本</option>
+              <option value="light">亮色 · 暖纸墨</option>
+              <option value="cinnabar">朱砂印谱（亮）</option>
+              <option value="phosphor">夜航磷青（暗）</option>
+              <option value="blueprint">工程蓝图（暗）</option>
             </select>
           </div>
           <McpCloudAccess />
@@ -345,10 +360,14 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
               onChange={(e) => {
                 const provider = e.target.value as AIProvider
                 const service = AI_SERVICES.find((s) => s.provider === provider)
+                // 仅在未自定义（为空或仍是旧服务商默认地址）时跟随切换默认值，
+                // 用户手填的自定义 Base URL（如自建网关）予以保留，不再静默清空。
+                const prevDefault = aiService?.defaultBaseUrl ?? ''
+                const keepCustom = settings.aiBaseUrl !== '' && settings.aiBaseUrl !== prevDefault
                 saveAi({
                   aiProvider: provider,
                   aiModel: service?.models[0] ?? '',
-                  aiBaseUrl: service?.defaultBaseUrl ?? '',
+                  aiBaseUrl: keepCustom ? settings.aiBaseUrl : (service?.defaultBaseUrl ?? ''),
                 })
               }}
             >
@@ -400,7 +419,7 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
               autoComplete="off"
             />
             <p className="mt-1.5 text-xs leading-relaxed text-muted">
-              Base URL 是服务商 API 的基础地址。留空使用默认地址，或填写自定义地址。{' '}
+              Base URL 是服务商 API 的基础地址。留空使用默认地址，或填写自定义地址（自定义地址在切换服务商时会保留）。{' '}
               {aiService && (
                 <a
                   href={aiService.docsUrl}
@@ -416,18 +435,29 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
               API Key
             </label>
             {/* P1-AI1：Key 不回显明文。已有 Key 时 placeholder 展示脱敏值（前4后4），聚焦留空输入即替换；留空表示用服务端环境变量 */}
-            <input
-              id="settings-ai-api-key"
-              type="password"
-              className="field mt-1"
-              value={keyDraft}
-              onChange={(e) => {
-                setKeyDraft(e.target.value)
-                saveAi({ aiApiKey: e.target.value })
-              }}
-              placeholder={settings.aiApiKey ? maskApiKey(settings.aiApiKey) : '留空则使用服务端环境变量'}
-              autoComplete="new-password"
-            />
+            <div className="relative mt-1">
+              <input
+                id="settings-ai-api-key"
+                type={showKey ? 'text' : 'password'}
+                className="field pr-14"
+                value={keyDraft}
+                onChange={(e) => {
+                  setKeyDraft(e.target.value)
+                  saveAi({ aiApiKey: e.target.value })
+                }}
+                placeholder={settings.aiApiKey ? maskApiKey(settings.aiApiKey) : '留空则使用服务端环境变量'}
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-1.5 py-0.5 text-xs text-muted transition-colors hover:text-paper"
+                onClick={() => setShowKey((v) => !v)}
+                aria-label={showKey ? '隐藏 API Key' : '显示 API Key'}
+                aria-pressed={showKey}
+              >
+                {showKey ? '隐藏' : '显示'}
+              </button>
+            </div>
             {settings.aiApiKey && (
               <p className="mt-1.5 text-xs text-muted">
                 已保存 Key：{maskApiKey(settings.aiApiKey)}（仅保存在本机浏览器，不同步到服务端；点击输入框输入新 Key 可替换）
@@ -513,16 +543,13 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
               思维方式总结提示词模板
             </label>
             <p className="mt-0.5 text-xs leading-relaxed text-muted">
-              留空则使用内置默认模板；模板必须包含 {'{body}'} 占位符（会被替换为提示词正文）。
+              留空则使用内置默认模板；模板必须包含 {'{body}'} 占位符（会被替换为提示词正文）。修改后自动保存。
             </p>
             <textarea
               id="settings-prompt"
               className="field mt-2 min-h-48 resize-y font-mono text-xs leading-relaxed"
               value={text}
-              onChange={(e) => {
-                setText(e.target.value)
-                setError(null)
-              }}
+              onChange={(e) => handleTemplateChange(e.target.value)}
               placeholder={DEFAULT_THINKING_PROMPT}
               aria-invalid={error ? true : undefined}
             />
@@ -531,17 +558,15 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
                 {error}
               </p>
             )}
-            <button type="button" className="btn mt-2" onClick={() => setText(DEFAULT_THINKING_PROMPT)}>
+            <button type="button" className="btn mt-2" onClick={() => handleTemplateChange(DEFAULT_THINKING_PROMPT)}>
               恢复默认模板
             </button>
           </div>
         </div>
-        <footer className="flex items-center justify-end gap-2 border-t border-line px-5 py-3">
-          <button type="button" className="btn" onClick={onClose}>
-            取消
-          </button>
-          <button type="button" className="btn-gold" onClick={handleSave}>
-            保存设置
+        <footer className="flex items-center justify-between gap-2 border-t border-line px-5 py-3">
+          <p className="text-xs text-muted">所有设置更改后立即自动保存</p>
+          <button type="button" className="btn-gold" onClick={handleDone}>
+            完成
           </button>
         </footer>
       </div>

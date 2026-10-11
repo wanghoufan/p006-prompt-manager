@@ -383,14 +383,19 @@ export default function Home() {
     return () => window.clearTimeout(timer)
   }, [searchQuery])
 
-  // P0-5 主题应用：light class 由 settings.theme 驱动；
+  // P0-5 主题应用：主题 class 由 settings.theme 驱动（dark 无 class，light / theme-cinnabar / theme-phosphor / theme-blueprint）；
   // system 模式监听系统偏好实时跟随（layout 内联脚本已做首屏预置，此处幂等接管）
   useEffect(() => {
     const root = document.documentElement
     const mq = window.matchMedia('(prefers-color-scheme: light)')
+    const THEME_CLASSES = ['light', 'theme-cinnabar', 'theme-phosphor', 'theme-blueprint'] as const
     const apply = () => {
-      const light = settings.theme === 'light' || (settings.theme === 'system' && mq.matches)
-      root.classList.toggle('light', light)
+      // ?theme=xxx URL 覆盖（预览/测试用，不写回设置；与 layout 内联脚本同口径）
+      const q = new URLSearchParams(window.location.search).get('theme')
+      const raw = q && ['dark', 'light', 'cinnabar', 'phosphor', 'blueprint'].includes(q) ? q : settings.theme
+      const t = raw === 'system' ? (mq.matches ? 'light' : 'dark') : raw
+      root.classList.remove(...THEME_CLASSES)
+      if (t !== 'dark') root.classList.add(t === 'light' ? 'light' : `theme-${t}`)
     }
     apply()
     if (settings.theme === 'system') {
@@ -2049,6 +2054,8 @@ export default function Home() {
         onOpenSettings={() => setShowSettings(true)}
         onOpenTrash={() => setShowTrash(true)}
         trashCount={trash.length}
+        theme={settings.theme}
+        onThemeChange={(theme) => setSettings((prev) => ({ ...prev, theme }))}
       />
       <div className="flex min-h-0 flex-1">
         <TagPanel
