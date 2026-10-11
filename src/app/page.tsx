@@ -591,6 +591,14 @@ export default function Home() {
           setPromptTags(remote.promptTags)
           notify('服务端数据已被其他设备清空，本机缓存未上传；如为误删可从本机备份找回')
         }
+      } else {
+        // 双侧皆空（空仓库）：同样以服务端快照为准，把 settings（含 theme）灌进 state。
+        // 否则 state 停在挂载默认值（theme='system'），markHydrated 后 save effect 会把默认值
+        // 反写服务端，造成「空仓库刷新把已存主题重置为 system」（2026-10-11 隔离实例复现后修复）。
+        setCards(remote.cards)
+        setSettings(remote.settings)
+        setTags(remote.tags)
+        setPromptTags(remote.promptTags)
       }
     } else {
       // 本地 SQLite 模式：服务器是唯一事实来源，直接用服务器数据覆盖 localStorage 残留。
