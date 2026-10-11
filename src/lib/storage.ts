@@ -115,7 +115,7 @@ const AI_PROVIDERS_SET = AI_PROVIDERS as readonly string[]
 /** 设置归一化（P0-4/P0-5）：老数据缺 confirmDelete / theme 字段时补默认值；
  *  theme 仅接受 THEME_VALUES，其余（含 undefined）回退 'system'。
  *  通用AI配置（Phase 2）：缺 ai* 字段时补默认值，非法服务商回退 deepseek。 */
-const THEME_VALUES = ['dark', 'light', 'system', 'cinnabar', 'phosphor', 'blueprint'] as const
+const THEME_VALUES = ['dark', 'light', 'system', 'phosphor', 'blueprint'] as const
 function normalizeSettings(v: unknown): Settings {
   const s = (v && typeof v === 'object' ? v : {}) as Partial<Settings>
   const theme = (THEME_VALUES as readonly string[]).includes(s.theme as string) ? (s.theme as Settings['theme']) : 'system'

@@ -9,7 +9,6 @@ import type { Settings } from '@/lib/types'
 const THEME_OPTIONS: { value: Exclude<Settings['theme'], 'system'>; label: string; title: string }[] = [
   { value: 'dark', label: '暗色', title: '暗色 · 皮革账本' },
   { value: 'light', label: '亮色', title: '亮色 · 暖纸墨' },
-  { value: 'cinnabar', label: '印谱', title: '朱砂印谱（亮）' },
   { value: 'phosphor', label: '磷青', title: '夜航磷青（暗）' },
   { value: 'blueprint', label: '蓝图', title: '工程蓝图（暗）' },
 ]

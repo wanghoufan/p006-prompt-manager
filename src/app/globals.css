@@ -58,29 +58,7 @@ html.light {
 }
 
 /* ===== 2026-10-11 三套新主题（token 复用 ink/paper/gold/rust 语义槽位，组件零改动） ===== */
-
-/* 朱砂印谱（亮色）：宣纸白底 + 松烟墨字 + 朱砂主色 + 靛青辅色 */
-html.theme-cinnabar {
-  --color-ink-950: #f4f0e4;
-  --color-ink-900: #fcfaf2;
-  --color-ink-850: #ece6d5;
-  --color-ink-800: #e3dcc8;
-  --color-ink-700: #cfc5ac;
-  --color-line: #d9d0ba;
-  --color-paper: #272b32;
-  --color-paper-dim: #565d68;
-  --color-muted: #8e8875;
-  --color-gold: #b8391f;
-  --color-gold-bright: #8a2a15;
-  --color-gold-deep: #6e2110;
-  --color-rust: #b04a3a;
-  --color-highlight: #f0c453;
-  --color-highlight-text: #5a3a06;
-  --color-highlight-ring: rgba(184, 57, 31, 0.45);
-  --color-highlight-shadow: transparent;
-  --scroll-thumb: #cfc5ac;
-  color-scheme: light;
-}
+/* 2026-10-11 晚：朱砂印谱（cinnabar）与亮色（暖纸墨）同为暖纸亮色调、肉眼几乎无差，经用户裁定整题删除 */
 
 /* 夜航磷青（暗色）：深炭青底 + 雾白字 + 磷光青绿主色，终端气质 */
 html.theme-phosphor {
@@ -185,8 +163,7 @@ mark {
     0 0 0 1px var(--color-highlight-ring),
     0 0 0 2px var(--color-highlight-shadow);
 }
-html.light mark,
-html.theme-cinnabar mark {
+html.light mark {
   background: color-mix(in srgb, var(--color-highlight) 50%, transparent);
 }
 

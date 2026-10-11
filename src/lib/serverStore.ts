@@ -58,7 +58,7 @@ function toSettings(row: Record<string, unknown>): Settings {
   return {
     thinkingSummaryPrompt: String(row.thinking_summary_prompt ?? ''),
     confirmDelete: Boolean(row.confirm_delete),
-    theme: (['dark', 'light', 'system', 'cinnabar', 'phosphor', 'blueprint'] as const).includes(
+    theme: (['dark', 'light', 'system', 'phosphor', 'blueprint'] as const).includes(
       row.theme as Settings['theme'],
     )
       ? (row.theme as Settings['theme'])
@@ -372,7 +372,7 @@ function settingsToRow(settings: unknown): {
   return {
     thinking_summary_prompt: typeof s.thinkingSummaryPrompt === 'string' ? s.thinkingSummaryPrompt : '',
     confirm_delete: s.confirmDelete !== false,
-    theme: ['dark', 'light', 'system', 'cinnabar', 'phosphor', 'blueprint'].includes(s.theme as string)
+    theme: ['dark', 'light', 'system', 'phosphor', 'blueprint'].includes(s.theme as string)
       ? (s.theme as string)
       : 'system',
     auto_format_body: s.autoFormatBody === true,
