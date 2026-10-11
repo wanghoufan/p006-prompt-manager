@@ -260,8 +260,8 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
               onChange={(e) => onSave({ ...settings, theme: e.target.value as Settings['theme'] })}
             >
               <option value="system">跟随系统</option>
-              <option value="dark">暗色 · 皮革账本</option>
               <option value="light">亮色 · 暖纸墨</option>
+              <option value="dark">墨色 · 皮革账本</option>
               <option value="phosphor">夜航磷青（暗）</option>
               <option value="blueprint">工程蓝图（暗）</option>
             </select>

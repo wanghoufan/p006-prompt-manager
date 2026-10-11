@@ -7,8 +7,8 @@ import type { Settings } from '@/lib/types'
 
 /** 2026-10-11 顶栏主题速切（截图参考样式：胶囊分段）；「跟随系统」留在设置弹窗，速切即固定主题 */
 const THEME_OPTIONS: { value: Exclude<Settings['theme'], 'system'>; label: string; title: string }[] = [
-  { value: 'dark', label: '暗色', title: '暗色 · 皮革账本' },
   { value: 'light', label: '亮色', title: '亮色 · 暖纸墨' },
+  { value: 'dark', label: '墨色', title: '墨色 · 皮革账本' },
   { value: 'phosphor', label: '磷青', title: '夜航磷青（暗）' },
   { value: 'blueprint', label: '蓝图', title: '工程蓝图（暗）' },
 ]
