@@ -1,7 +1,8 @@
 # HANDOFF｜交接（暂停/恢复用，先读我）
 
-> **2026-09-29 开发阶段收尾交接。本文件是现役唯一入口，无编号节。**
+> **2026-10-11 主题＋交互优化阶段交接。本文件是现役唯一入口，无编号节。**
 > 旧交接全文见 `HANDOFF.md.旧版-2026-09-13`（1900+ 行）。阶段状态：**DEVELOP（开发已暂停，待用户指令恢复）**。
+> ⚠️ **当前有一整批已验证但未提交的改动（三主题＋B1 交互修复），工作区是脏的，下一步第一件事就是等用户说「现在推送」后提交部署，见 §二·0。**
 
 ---
 
@@ -13,10 +14,10 @@
 |---|---|
 | 访问地址 | `http://192.168.31.60:3100`（Mac Mini Docker 自托管，局域网） |
 | 容器 | `prompt-manager-prompt-manager-1`，`0.0.0.0:3100` |
-| 生产镜像 | `18bb1f033e35` |
+| 生产镜像 | `398a5fb503de` |
 | 远端仓库 | `https://github.com/wanghoufan/p006-prompt-manager.git`，分支 **`master`**（**远程不存在 `main`**，本地 `wanghoufan/main` 是 `~/Developer/Playground/` 下另一个 worktree 的分支，与本仓无关） |
-| 主分支 HEAD | `16a604b`，与 `origin/master` 同步 |
-| 用户数据 | 124 张卡片 / 48 个标签 / 194 条关联，**本日全程零污染**（内容级校验，见 §三·4） |
+| 主分支 HEAD | `b069dba`，与 `origin/master` 同步 |
+| 用户数据 | 124 张卡片 / 48 个标签 / 194 条关联 / `version=57391`，**全程零污染**（内容级校验，见 §三·4） |
 
 ### 1.2 本阶段（2026-09-27 ~ 09-29）已完成并上线
 
@@ -38,28 +39,70 @@
 - 残留清理 + 文档事实对齐（远程地址、开发目录路径、Docker/数据库规范真相源、HANDOFF 引用等 6 处过期事实已修）。
 - `AGENTS.md` §十一 新增 5 条踩坑（星级两层坑、零污染校验双错、AC 必须拆批、跨目录派工禁令）。
 
+### 1.4 本轮（2026-09-30，commit `b069dba`，生产镜像 `398a5fb503de`）已修复并上线
+
+改 5 个文件：`src/lib/serverStore.ts`、`src/lib/storage.ts`、`src/app/page.tsx`、`src/components/CardDetail.tsx`、`src/components/PreviewPanel.tsx`。
+
+| 编号 | 内容 | 实测数字 |
+|---|---|---|
+| P1 | **推送死循环**：`serverStore` 守卫比较前对库内 settings 也过 `sanitizeSettings`，两侧同形状比较 | 点 1 次星：`POST /api/sync` **3024 → 1 次**、`version` **+2204 → +1**；生产只读验证 `version` 静置 11 秒零增长 |
+| P1 | **详情页双挂载标题静默丢失**：`CardDetail` + `PreviewPanel` 加 dirty 标记，仅本组件确有未落库编辑时才在 `[card]` effect 里 flush | 双挂载改标题：**2~70 次 POST + DB 留旧值 → 1 次 POST/+1 + DB 存新值** |
+| P0（预防性） | **冲突回灌加版本方向门槛**：仅 `version` 回退（wipe）才自动回灌；递增或持平（对端合法删光）禁止自动推回，改走冲突刷新 + 明确提示 | 两条路径均不复活对端已删数据 |
+| — | `subscribeSync` 改为推送在途先等落地再比较版本 | — |
+
+**已上线并 `curl` 验 HTTP 200；生产 `version=57391` 静置零增长，124 卡/48 标签/194 关联零污染。**
+
+### 1.5 本轮（2026-10-11）：三套新主题 ＋ B1 交互修复 —— 已验证，**未提交未部署**
+
+用户拍板口径：**A=三种新主题全做**、顶栏胶囊分段速切；**B1=全站系统性交互打磨**；**C1=完成后部署上线**（等口令「现在推送」）。
+
+**主题（6 主题制：system / dark / light / cinnabar / phosphor / blueprint）**
+
+| 改动 | 文件 |
+|---|---|
+| 追加 3 个 `html.theme-*` token 块（朱砂印谱·亮 / 夜航磷青·暗 / 工程蓝图·暗＋28px 网格纹理）＋ mark 规则 ＋ color-scheme | `src/app/globals.css` |
+| theme 联合类型扩 6 值 | `src/lib/types.ts` |
+| THEME_VALUES 校验 | `src/lib/storage.ts` |
+| 两处 theme 白名单（L61/L375 附近） | `src/lib/serverStore.ts` |
+| 防 FOUC 内联脚本支持主题 class ＋ `?theme=` URL 预览参数 | `src/app/layout.tsx` |
+| 主题 effect 应用 class＋URL 覆盖；TopBar 接线 | `src/app/page.tsx`（L386-403、L2055-2056 附近） |
+| 顶栏胶囊分段速切器（md 以上显示，active=bg-gold/15＋text-gold-bright） | `src/components/TopBar.tsx` |
+| 主题下拉补 3 项 | `src/components/SettingsModal.tsx` |
+| settings 表重建放宽 theme CHECK（dev 库已应用；**生产库部署时自动跑 migration**） | `db/migrations/0003_theme_values.sql`（新增） |
+
+**B1 交互修复（本轮新做）**
+
+| 改动 | 文件 |
+|---|---|
+| 切服务商**保留**用户自定义 Base URL（仅未自定义时跟随回填默认）；文案说明 | `src/components/SettingsModal.tsx` |
+| API Key 输入框加「显示/隐藏」切换（password↔text） | 同上 |
+| 设置弹窗心智统一为**全即存**：思维模板改防抖 800ms 即存（校验失败不落库只红字提示），底部「取消/保存设置」→ 单「完成」＋「所有设置更改后立即自动保存」 | 同上 |
+| 窄屏顶栏：btn/btn-gold/btn-ghost 加 `whitespace-nowrap`，header 加 `flex-wrap`，标题 `whitespace-nowrap`（修复 480px 下按钮被压成竖排） | `src/app/globals.css`、`src/components/TopBar.tsx` |
+
+**验证（全部通过）**：`tsc --noEmit` 0 错；lint 0 错（7 个既有 warning）；`next build` 过；Playwright headless 16/16 PASS（窄屏 480/360/1280 无横向溢出、Tab 焦点框 2px solid、Key 可见性切换、非法模板红字、模板防抖即存 localStorage、「完成」关闭、自定义 Base URL 保留/回填）；主题链路此前已实测：点击→html class→localStorage→`POST /api/sync` 持久化全链 PASS，三套主题真实截图确认。
+
+**已知未修（存量问题，非本轮引入）**：**空仓库**刷新页面会把服务端 theme 重置为 system（疑似 serverEmptyRestore 推默认值覆盖）；非空仓库（真实使用）持久化正常。上线后真机复测，若复现再修。
+
 ---
 
 ## 二、下一步的任务
 
-### P0｜已知缺陷（**未修，用户已知情并同意暂缓**）
+### 0｜🚨 最优先：把 2026-10-11 这批改动送上线（等用户口令「现在推送」）
 
-**【P1｜推送死循环】一次点击 = 3000+ 次 `POST /api/sync`**
+1. `git status` 确认改动清单＝§一·1.5 列的文件（含新增 `db/migrations/0003_theme_values.sql`；**HANDOFF.md 本文件也一起提交**）。
+2. 用户说「现在推送」后：commit → push `master`（**只有 master，禁推 main**）。
+3. 部署：`export PATH="/Applications/Docker.app/Contents/Resources/bin:$PATH"` → `cd ~/Developer/coding/docker/prompt-manager && bash scripts/deploy.sh`（migration 0003 会随部署自动应用到生产库）。
+4. 部署后真机实测 `http://192.168.31.60:3100`：顶栏胶囊切 5 套主题、刷新持久化、设置弹窗「完成」即存语义、窄屏顶栏；**顺带复测空仓库 theme 重置问题**（§一·1.5 末条）。
+5. 收尾清理：`temp/主题预览/`（交付预览稿，工作完成后统一清理 temp）、停 dev server（3210 端口）。
 
-- **现象**：编排者隔离实测，点 1 次星 → `POST /api/sync` **3024 次**、`meta.version` 从 1 冲到 2204。生产 `meta.version` 已达 **57391**（两天累积）。
-- **对用户的影响**：App 变慢、服务负载高、请求浪费。**用户存的东西仍会正常保存，不丢数据**。属既有缺陷，非本日引入。
-- **根因**（code-reviewer 静态确证 + builder 二次确证）：
-  1. `GET /api/sync` 的 settings 经 `sanitizeSettings` **删掉** `aiApiKey` 键 → 浏览器 `normalizeSettings` 又**补回** `aiApiKey: ''`；
-  2. `src/lib/serverStore.ts` 约 181–196 行「无变化不 bump version」守卫比较「库内表示（含键）」vs「推入表示（已剥键）」→ **永不相等 → 每次推送都 bump**；
-  3. SSE 回声：`emitter.emit` 在 route 返回**之前**触发（`serverStore.ts:298` 附近）→ 客户端 `onRemote` → 四个 save effect → `schedulePush` → 再推 → **自持循环**。
-- **建议修法（二选一，均为一行级）**：
-  - A（推荐）：守卫比较前，**对库内 settings 也过一遍 `sanitizeSettings`**，两侧同形状比较；
-  - B：`settingsForServer` 推出去时**保留 `aiApiKey: ''` 空串**而非删键。
-  - **约束**：`aiApiKey` 的剥离是**安全要求必须保留**，两条方案都要证明 Key 仍不落库、不回传。
-- **另建议**：加一道「内容与最近成功推送相同则抑制」的兜底，目标是**任何操作引发的 POST ≤ 2 次**；并保证**双页面 SSE 实时同步不劣化**。
-- **验收口径**：点 1 次星 → 2 秒内 `POST /api/sync` ≤ 2 次、`version` 增长 ≤ 2、修前对照值是 3024 次 / +2204。
+### P2｜遗留清单（本轮未清）
 
-### P1｜功能改进（用户尚未拍板）
+- **P2｜wipe 后恢复本机数据多发空推**：wipe 后恢复本机数据时多发 1~2 次内容相同的空推（实测 **3 次**，要求 **≤2**）。服务端 dedup 不 bump version，**不造成 version 通胀**。位置：`src/lib/storage.ts` 冲突回灌路径。
+- **未测｜推送失败路径（T11）**：故障注入**未测完整**，失败后 cache 是否残留空快照**未判定**。（不得写 PASS）
+- **产品验收矩阵**：20 条仍 **PASS 2 / DEGRADED 11 / 未测 9**。
+- **已知既有**：React #418 水合 pageerror（回收站计数），本轮碰到 1 次，与本轮改动无关。
+
+### P1｜功能改进（用户尚未拍板，承接原 §二·P1 四条）
 
 1. **批量删除后不自动退出多选**（`page.tsx` 用 `clearBulk` 而非 `exitBulkMode`，与其他三条退出口径不一致）—— 一行可改，问用户。
 2. **P3 a11y**：`Stars.tsx:12` 的 `role="img"` 包裹可交互 button，辅助技术可能忽略内部控件 → 建议改 `role="group"`。
@@ -92,6 +135,9 @@
 | 零污染校验**必须用内容级**，禁止字节哈希 | 2026-09-28 迁 SQLite 后主存储是 `legacy-store/prompt-manager.db`；`store.json` 是 legacy 回退路径。活库字节本就会变（WAL checkpoint、用户自己建卡），字节哈希判定是**假阴性安全** |
 | SQL 里 `__` 是单字符通配符、**不是下划线** | 要匹配字面下划线必须 `ESCAPE '\'`。误用会匹配到「**生成**QA…」等用户真实卡片，误报污染 |
 | 断言前等 `meta.version` 连续 1.2s 不变 | 乐观更新 + 延迟落盘，立即查会读到旧值 → 假 FAIL。查列名是 `meta(key,value)`，**不是** `meta.version` |
+| **Playwright 等待用 `domcontentloaded`，禁 `networkidle`** | 本项目有 SSE 长连接（`/api/sync/stream`），networkidle 永远等不到 → 卡死（2026-10-11 实测） |
+| **headless Chrome CLI 截图本机不可靠**，用 `python3` + Playwright（已装 `~/Library/Python/3.9`） | CLI 截图进程卡死；python Playwright 稳定（2026-10-11 实测） |
+| 本地 dev 验证端口用 **3210** | 3100 被生产容器占用、3000 被别的项目占用；`npx next dev -p 3210` |
 | **起隔离实例不能用 `next start`** | 本项目 `output: standalone`。正确做法：`npx next build` → `cp -r .next/static .next/standalone/.next/` → `PORT=3101 SQLITE_DB_PATH=<scratch 内绝对路径> NEXT_PUBLIC_SUPABASE_*="" node .next/standalone/server.js` |
 | 测试完停实例 | `lsof -ti :3101 \| xargs kill`。EADDRINUSE 会让服务静默起不来，报错是 `listen` 失败而非库问题 |
 | **禁止抢用户前台** | 用户 2026-09-17 / 09-21 明文立规：全 headless；禁 `open -a`、禁 `osascript` 激活窗口。测试前记得 `lsof` 查残留端口 |
@@ -125,6 +171,7 @@
 
 ## 四、恢复开发的第一步
 
-1. 读本文件 → 读 `AGENTS.md`（ORCA 段 + §十一 踩坑 5 条）→ 读 `USER_MODEL_OVERRIDE.md`。
-2. 问用户：本轮做**推送死循环（P1）**、**用户新需求**、还是**AC 补证**？（三者优先级见 §二）
-3. 任何派工前先按 §三·2 搭好隔离环境、§三·1 备好部署 PATH。
+1. 读本文件 → 读 `AGENTS.md`（ORCA 段 + §十一 踩坑）→ 读 `USER_MODEL_OVERRIDE.md`。
+2. **先确认 §二·0 是否已做**：`git status` 若仍有 §一·1.5 的未提交改动，第一件事是等用户口令「现在推送」后提交并部署上线；若工作区干净且线上已是新版，跳过。
+3. 之后问用户：做**遗留清单（P2 空推整备 / T11 故障注入补测 / 原 P1 四条功能改进）**、**用户新需求**、还是**AC 补证**？
+4. 任何派工前先按 §三·2 搭好隔离环境、§三·1 备好部署 PATH。

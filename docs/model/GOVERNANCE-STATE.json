@@ -1,6 +1,6 @@
 {
-  "rules_version": "2026-09-29-产品验收",
-  "synced_at": "2026-09-29",
+  "rules_version": "2026-10-08-APP基础能力",
+  "synced_at": "2026-10-08",
   "project_phase_field": "ABSENT",
   "task_ledger_rows": 6,
   "agents_block_injected": true,

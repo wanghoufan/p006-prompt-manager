@@ -87,7 +87,6 @@ mcp/prompt-server/dist/
 
 # 交付临时文件夹，不上传 GitHub
 temp/
-
 # >>> ORCA 治理块 BEGIN（母版托管，勿手改） >>>
 # 本块由母版 scripts/orca-gitignore.sh 托管，请勿手改；要改请改 scripts/orca-public-ignore.txt 后重跑。
 /AGENTS.md
