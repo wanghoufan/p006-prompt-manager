@@ -7,6 +7,7 @@ import { deletePromptCard, deletePromptTag, getPromptCloudSessionUser, getPrompt
 import { createCard, normalizeBody, parseTags, rollbackToVersion, saveBodyOnly, saveBodyWithVersion } from '@/lib/cards'
 import { DEMO_CARDS } from '@/lib/demo'
 import { nowIso } from '@/lib/util'
+import { IS_STATIC_TRIAL } from '@/lib/trial'
 import { DEFAULT_AI_MODEL, DEFAULT_AI_PROVIDER } from '@/lib/ai/types'
 import { TopBar } from '@/components/TopBar'
 import type { ViewMode } from '@/components/DemoMenu'
@@ -425,6 +426,19 @@ export default function Home() {
     const markHydrated = () => {
       hydratedOnceRef.current = true
       setHydrated(true)
+    }
+    // 静态试用版（GitHub Pages）：没有服务端与 Supabase，直接以本机 localStorage 为准。
+    // 初次打开时四组缓存为空 → 提示词库为空白，由用户自己填写。
+    if (IS_STATIC_TRIAL) {
+      const dead = deadTagIds()
+      setCloudMode(false)
+      setServerOnline(false)
+      setCards(loadCards())
+      setSettings(loadSettings())
+      setTags(loadTags().filter((tag) => !dead.has(tag.id)))
+      setPromptTags(loadPromptTags().filter((relation) => !dead.has(relation.tag_id)))
+      markHydrated()
+      return
     }
     const applyCloud = (next: PromptCloudSnapshot, options?: { force?: boolean }) => {
       // 不用旧快照覆盖仍未落云的本机卡片/标签；等待写队列完成后由 Realtime 重新读取。
@@ -2065,6 +2079,12 @@ export default function Home() {
         theme={settings.theme}
         onThemeChange={(theme) => setSettings((prev) => ({ ...prev, theme }))}
       />
+      {IS_STATIC_TRIAL && (
+        <div className="flex shrink-0 flex-wrap items-center justify-center gap-x-2 gap-y-1 border-b border-gold/25 bg-gold/5 px-5 py-1.5 text-[11px] text-gold-bright">
+          <span>网页试用版：数据只保存在当前浏览器，换设备或清缓存不会带走。</span>
+          <span className="text-muted">可随时点「导出」备份；AI 辅助与云同步未启用。</span>
+        </div>
+      )}
       <div className="flex min-h-0 flex-1">
         <TagPanel
           tags={activeTags}
@@ -2076,8 +2096,8 @@ export default function Home() {
           onToggleUntagged={handleToggleUntagged}
           onIncludeDescendantsChange={handleIncludeDescendantsChange}
           onResetFilters={resetTagFilters}
-          offline={serverOnline === false}
-          syncMode={cloudMode ? 'cloud' : 'legacy'}
+          offline={!IS_STATIC_TRIAL && serverOnline === false}
+          syncMode={IS_STATIC_TRIAL ? 'local' : cloudMode ? 'cloud' : 'legacy'}
           onCreateTag={isDemoView ? undefined : handleCreateTag}
           onRenameTag={isDemoView ? undefined : handleRenameTag}
           onMoveTag={isDemoView ? undefined : handleMoveTag}
@@ -2089,7 +2109,7 @@ export default function Home() {
         />
         <main className="flex min-w-0 flex-1 gap-4 overflow-hidden px-5 py-4">
           <div className="min-w-0 flex-1 space-y-4 overflow-y-auto">
-            {!isDemoView && hydrated && cloudMode && serverOnline === false && (
+            {!isDemoView && !IS_STATIC_TRIAL && hydrated && cloudMode && serverOnline === false && (
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-rust/40 bg-rust/10 px-3.5 py-2.5">
                 <span className="text-xs leading-relaxed text-rust">
                   云端暂时不可用：已保持在 Supabase 云端模式（登录态有效），正在自动重试；期间修改仅保存在本机缓存，不会写入局域网共享存储。
@@ -2184,7 +2204,7 @@ export default function Home() {
               ) : cards.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-line bg-ink-900/40 px-6 py-16 text-center">
                   {/* P2-7 空/离线态区分：常驻同步态横幅，避免误判「真空」与「未连上服务端」 */}
-                  {!isDemoView && serverOnline === false && (
+                  {!isDemoView && !IS_STATIC_TRIAL && serverOnline === false && (
                     <div className="flex w-full max-w-sm flex-col items-center gap-2 rounded-lg border border-rust/40 bg-rust/10 px-4 py-3">
                       <span className="text-sm font-medium text-rust">{cloudMode ? '云端同步离线' : '同步服务离线'}</span>
                       <p className="max-w-xs text-xs leading-relaxed text-muted">
@@ -2195,17 +2215,24 @@ export default function Home() {
                       </button>
                     </div>
                   )}
-                  {!isDemoView && serverOnline === null && (
+                  {!isDemoView && !IS_STATIC_TRIAL && serverOnline === null && (
                     <div className="w-full max-w-sm rounded-lg border border-line bg-ink-850 px-4 py-2 text-xs text-muted">
                       正在连接{cloudMode ? ' Supabase 云端' : '同步服务'}…
                     </div>
                   )}
-                  {!isDemoView && serverOnline === true && (
+                  {!isDemoView && !IS_STATIC_TRIAL && serverOnline === true && (
                     <div className="w-full max-w-sm text-[11px] text-muted">{cloudMode ? '已连接 Supabase 云端同步' : '已连接同步服务'}</div>
+                  )}
+                  {!isDemoView && IS_STATIC_TRIAL && (
+                    <div className="w-full max-w-sm rounded-lg border border-line bg-ink-850 px-4 py-2 text-xs leading-relaxed text-muted">
+                      网页试用版 · 数据仅保存在当前浏览器，可随时导出备份
+                    </div>
                   )}
                   <span className="font-serif text-2xl tracking-widest text-paper-dim">提示词库还是空的</span>
                   <p className="max-w-sm text-sm leading-relaxed text-muted">
-                    在上方粘贴第一条提示词正文，AI 会自动生成标题与标签，建立你的专属提示词库。
+                    {IS_STATIC_TRIAL
+                      ? '在上方粘贴第一条提示词正文，建立你的专属提示词库；标题与标签可在详情中手动补充。'
+                      : '在上方粘贴第一条提示词正文，AI 会自动生成标题与标签，建立你的专属提示词库。'}
                   </p>
                   <button type="button" className="btn-gold" onClick={handleLoadDemo}>
                     或先载入示例知识库试试

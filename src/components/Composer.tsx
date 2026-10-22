@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { aiRequestHeaders } from '@/lib/aiClient'
+import { IS_STATIC_TRIAL } from '@/lib/trial'
 
 interface ComposerProps {
   existingTags: string[]
@@ -81,6 +82,8 @@ export function Composer({ existingTags, addMode, autoFormatBody, composerAutoTa
 
   async function enrichCard(id: string, source: string, generateTitle: boolean, generateTags: boolean) {
     if (!generateTitle && !generateTags) return
+    // 静态试用版没有 AI 代理路由，建卡后保持用户原文与空标签，避免每次建卡都弹一次 404。
+    if (IS_STATIC_TRIAL) return
     const controller = new AbortController()
     abortControllersRef.current.add(controller)
     beginGeneration(generateTitle, generateTags)
@@ -116,7 +119,7 @@ export function Composer({ existingTags, addMode, autoFormatBody, composerAutoTa
     if (!raw) return
     setSubmitting(true)
     let body = raw
-    if (autoFormat) {
+    if (autoFormat && !IS_STATIC_TRIAL) {
       try {
         const res = await fetch('/api/ai/format-body', {
           method: 'POST',
@@ -175,34 +178,40 @@ export function Composer({ existingTags, addMode, autoFormatBody, composerAutoTa
 
       <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          <span>粘贴正文后全自动生成</span>
-          <label className="flex cursor-pointer items-center gap-1.5 text-paper-dim">
-            <input
-              type="checkbox"
-              checked={autoGenerateTags}
-              onChange={(e) => onComposerOptionsChange({ autoTags: e.target.checked })}
-              className="accent-gold"
-            />
-            自动生成标签
-          </label>
-          <label className="flex cursor-pointer items-center gap-1.5 text-paper-dim">
-            <input
-              type="checkbox"
-              checked={autoGenerateTitle}
-              onChange={(e) => onComposerOptionsChange({ autoTitle: e.target.checked })}
-              className="accent-gold"
-            />
-            自动生成标题
-          </label>
-          <label className="flex cursor-pointer items-center gap-1.5 text-paper-dim">
-            <input
-              type="checkbox"
-              checked={autoFormat}
-              onChange={(e) => onComposerOptionsChange({ autoFormat: e.target.checked })}
-              className="accent-gold"
-            />
-            自动格式整理
-          </label>
+          {IS_STATIC_TRIAL ? (
+            <span>网页试用版不启用 AI 自动生成；建卡后可手动补充标题与标签</span>
+          ) : (
+            <>
+              <span>粘贴正文后全自动生成</span>
+              <label className="flex cursor-pointer items-center gap-1.5 text-paper-dim">
+                <input
+                  type="checkbox"
+                  checked={autoGenerateTags}
+                  onChange={(e) => onComposerOptionsChange({ autoTags: e.target.checked })}
+                  className="accent-gold"
+                />
+                自动生成标签
+              </label>
+              <label className="flex cursor-pointer items-center gap-1.5 text-paper-dim">
+                <input
+                  type="checkbox"
+                  checked={autoGenerateTitle}
+                  onChange={(e) => onComposerOptionsChange({ autoTitle: e.target.checked })}
+                  className="accent-gold"
+                />
+                自动生成标题
+              </label>
+              <label className="flex cursor-pointer items-center gap-1.5 text-paper-dim">
+                <input
+                  type="checkbox"
+                  checked={autoFormat}
+                  onChange={(e) => onComposerOptionsChange({ autoFormat: e.target.checked })}
+                  className="accent-gold"
+                />
+                自动格式整理
+              </label>
+            </>
+          )}
         </div>
         <button
           type="button"

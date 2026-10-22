@@ -3,6 +3,7 @@ import { AI_PROVIDERS, DEFAULT_AI_MODEL, DEFAULT_AI_PROVIDER, normalizeAiModel }
 import { nowIso, uid } from '@/lib/util'
 import { normalizeBody } from '@/lib/cards'
 import { isTag, isPromptTag, normalizeTag } from '@/lib/tags'
+import { IS_STATIC_TRIAL } from '@/lib/trial'
 
 export const CARDS_KEY = 'prompt-manager:cards'
 export const SETTINGS_KEY = 'prompt-manager:settings'
@@ -543,6 +544,8 @@ function trySave(key: string, value: unknown): boolean {
 let pushTimer: ReturnType<typeof setTimeout> | null = null
 
 function schedulePush() {
+  // 静态试用版没有服务端：不探测、不推送，避免每次保存都打一串 404。
+  if (IS_STATIC_TRIAL) return
   if (pushTimer) return
   pushTimer = setTimeout(() => {
     pushTimer = null
@@ -646,6 +649,10 @@ async function doPush() {
 }
 
 export async function isServerAvailable(): Promise<boolean> {
+  if (IS_STATIC_TRIAL) {
+    serverMode = false
+    return false
+  }
   try {
     const res = await fetch(SYNC_URL, { method: 'GET', cache: 'no-store' })
     serverMode = res.ok
@@ -681,6 +688,7 @@ export function sanitizePromptTags(promptTags: PromptTag[], cards: Card[], tags:
 }
 
 export async function loadFromServer(): Promise<ServerSnapshot | null> {
+  if (IS_STATIC_TRIAL) return null
   try {
     const res = await fetch(SYNC_URL, { cache: 'no-store' })
     if (!res.ok) return null
@@ -801,6 +809,8 @@ export function setServerEmptyRestoreHandler(cb: (() => void) | null) {
 export function subscribeSync(
   onRemote: (cards: Card[], settings: Settings, tags: Tag[], promptTags: PromptTag[]) => void,
 ): () => void {
+  // 静态试用版没有 SSE 端点，直接返回空订阅。
+  if (IS_STATIC_TRIAL) return () => {}
   if (typeof window === 'undefined' || typeof EventSource === 'undefined') return () => {}
   const es = new EventSource(STREAM_URL)
   const handleFrame = async (raw: string) => {

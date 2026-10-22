@@ -19,7 +19,7 @@ export interface TagPanelProps {
   onIncludeDescendantsChange: (value: boolean) => void
   onResetFilters: () => void
   offline?: boolean
-  syncMode?: 'cloud' | 'legacy'
+  syncMode?: 'cloud' | 'legacy' | 'local'
   /** demo/只读视图不传以下操作回调（隐藏管理入口） */
   onCreateTag?: (name: string, parentId: string | null) => { ok: boolean; error?: string; createdRootId?: string }
   onRenameTag?: (id: string, name: string) => { ok: boolean; error?: string }
@@ -1002,13 +1002,15 @@ export function TagPanel({
       {confirmDialog}
       {promptDialog}
       <div className="border-t border-line px-4 py-3 text-[11px] leading-relaxed text-muted">
-        {offline
-          ? syncMode === 'cloud'
-            ? '云端暂时不可用，正在自动重试；本机保留离线缓存'
-            : '未连接同步服务，已使用本机本地数据'
-          : syncMode === 'cloud'
-            ? '已开启 Supabase 云端实时同步；本机保留离线缓存'
-            : '已开启局域网实时同步（服务端共享存储），离线时回退本机缓存'}
+        {syncMode === 'local'
+          ? '网页试用版：数据仅保存在当前浏览器，不联网同步'
+          : offline
+            ? syncMode === 'cloud'
+              ? '云端暂时不可用，正在自动重试；本机保留离线缓存'
+              : '未连接同步服务，已使用本机本地数据'
+            : syncMode === 'cloud'
+              ? '已开启 Supabase 云端实时同步；本机保留离线缓存'
+              : '已开启局域网实时同步（服务端共享存储），离线时回退本机缓存'}
       </div>
     </aside>
   )

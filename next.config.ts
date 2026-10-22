@@ -25,10 +25,21 @@ function getLanIpv4Addresses(): string[] {
   return [...addresses];
 }
 
+// GitHub Pages 静态镜像开关：仅 Actions 构建时注入 STATIC_EXPORT=1 + BASE_PATH；
+// Docker / 本地开发不设该变量，仍走 standalone，行为保持不变。
+const isStaticExport = process.env.STATIC_EXPORT === "1";
+const basePath = isStaticExport ? process.env.BASE_PATH ?? "" : "";
+
 const nextConfig: NextConfig = {
-  // Docker 使用 Next.js standalone 输出，产物只包含生产运行所需的文件。
-  // 旧的 /api/sync 与 SSE 路由仍会保留在该产物内，直到云端迁移验收完成。
-  output: "standalone",
+  // Docker 使用 Next.js standalone 输出；GitHub Pages 试用版导出纯静态 out/。
+  ...(isStaticExport
+    ? {
+        output: "export" as const,
+        trailingSlash: true,
+        images: { unoptimized: true },
+      }
+    : { output: "standalone" as const }),
+  ...(basePath ? { basePath } : {}),
 
   // 允许局域网内其他设备访问 dev 服务器与同步接口，
   // 否则 Next 会把非 localhost 来源的请求当作跨域拦截，导致另一台电脑无法同步。

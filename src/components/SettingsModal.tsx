@@ -8,6 +8,7 @@ import { DEFAULT_THINKING_PROMPT } from '@/lib/prompts'
 import { useModalFocus } from '@/hooks/useModalFocus'
 import { maskApiKey } from '@/lib/util'
 import { McpCloudAccess } from '@/components/McpCloudAccess'
+import { IS_STATIC_TRIAL } from '@/lib/trial'
 
 const MCP_PROJECT_ROOT = '/Users/zzymima0000/Developer/coding/1.Active/ing丨0813提示词管理器 mac gpt桌面 v1.0'
 
@@ -222,6 +223,12 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
           </button>
         </header>
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+          {IS_STATIC_TRIAL && (
+            <div className="rounded-lg border border-gold/30 bg-gold/5 px-3.5 py-3 text-xs leading-relaxed text-muted">
+              网页试用版：数据只保存在当前浏览器（localStorage），不会上传任何服务器。AI 辅助、云同步与 MCP
+              接入需要本地服务端，试用版未启用；可用顶栏「导出」备份数据。
+            </div>
+          )}
           {/* P0-4 删除前二次确认（onChange 即存） */}
           <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-ink-900 px-3.5 py-3">
             <div className="min-w-0">
@@ -266,7 +273,7 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
               <option value="blueprint">工程蓝图（暗）</option>
             </select>
           </div>
-          <McpCloudAccess />
+          {!IS_STATIC_TRIAL && <McpCloudAccess />}
           <div className="rounded-lg border border-line bg-ink-900 px-3.5 py-3">
             <label htmlFor="settings-composer-add-mode" className="text-sm text-paper">
               添加模式
