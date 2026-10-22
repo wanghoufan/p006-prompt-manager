@@ -25,8 +25,9 @@ jobs:
           cache: npm
       - run: npm ci
       # 静态站没有 Node 运行时：本次构建临时移除 API 路由（不改仓库文件）。
-      - name: Remove API routes for static export
-        run: rm -rf src/app/api
+      # MCP 是本机 stdio 子包，静态站不需要，且其依赖未在 CI 安装，一并排除以免根 tsconfig 类型检查失败。
+      - name: Remove server-only code for static export
+        run: rm -rf src/app/api mcp
       - name: Build static export
         run: npm run build
         env:
