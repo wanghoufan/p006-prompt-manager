@@ -350,6 +350,9 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
               <option value="right">右对齐</option>
             </select>
           </div>
+          {/* AI 与 MCP 都需要本地服务端，网页试用版整体隐藏 */}
+          {!IS_STATIC_TRIAL && (
+            <>
           {/* 通用AI接口（Phase 2）：服务商 / 模型 / Base URL / API Key（onChange 即存） */}
           <div className="rounded-lg border border-line bg-ink-900 px-3.5 py-3">
             <p className="text-sm text-paper">AI 服务</p>
@@ -543,6 +546,8 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
                 : '接入完成后，对 AI 说「调取 <调取码>」即可加载对应卡片。'}
             </p>
           </div>
+            </>
+          )}
           {/* P0-5 主题提示：当前生效主题（仅提示，不改设置） */}
           <div className="rounded-lg border border-line bg-ink-900 px-3.5 py-3">
             <label htmlFor="settings-prompt" className="text-xs text-muted">
