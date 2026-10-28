@@ -93,7 +93,7 @@ MCP talks to the local HTTP API, so Prompt Manager must be running. Each compute
 - **Cloud is optional**: cloud sync and login (the fallback path) only turn on after you configure a Supabase public URL and publishable key. Without them the app is purely local.
 - **AI is an external service**: when AI features run, the prompt body is sent to the provider you selected. The key lives in local settings or `.env.local` and is never committed.
 - **The static trial** is only for a quick look at the interface; it does not use the local database and does not support AI, MCP or cloud sync.
-- **License**: the repository currently ships no open-source license. Contact the author before reusing the code.
+- **License**: source-available, **not open source** — released under [PolyForm Noncommercial 1.0.0](LICENSE). Personal, academic, and other noncommercial use (including modification and noncommercial redistribution) is permitted; **any commercial use is prohibited**, including internal use by a for-profit company, bundling into a paid product, or offering paid services built on it. Commercial licensing requires written permission from the author.
 
 ## Project layout
 

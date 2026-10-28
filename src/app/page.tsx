@@ -2084,6 +2084,7 @@ export default function Home() {
         <div className="flex shrink-0 flex-wrap items-center justify-center gap-x-2 gap-y-1 border-b border-gold/25 bg-gold/5 px-5 py-1.5 text-[11px] text-gold-bright">
           <span>网页试用版：数据只保存在当前浏览器，换设备或清缓存不会带走。</span>
           <span className="text-muted">可随时点「导出」备份；AI 可用你自己的 API Key（设置 → AI 服务），云同步未启用。</span>
+          <span className="text-muted">仅限个人非商业使用（PolyForm Noncommercial 1.0.0），商用请联系作者授权。</span>
         </div>
       )}
       <div className="flex min-h-0 flex-1">
