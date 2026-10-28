@@ -2,8 +2,9 @@
  *  2026-09-10 收敛为 4 个实体 / 3 家：DeepSeek 官方、OpenRouter、OpenCode（Zen 与 Go 两个端点）。
  *  已移除 zhipu、tencent、doubao、kimi、google、openai —— 它们的模型清单维护成本高于使用频率。
  *  历史配置若指向已移除的服务商，由 normalizeSettings 回退到 deepseek，不会报错。
+ *  2026-10 新增 custom：任意 OpenAI 兼容端点，仅走浏览器直连（不经过 /api/ai/*，服务端不支持）。
  *  注意：新增或删除服务商只需改这一处 + SettingsModal 的 AI_SERVICES + factory.ts 分支。 */
-export const AI_PROVIDERS = ['deepseek', 'openrouter', 'opencode', 'opencode-go'] as const
+export const AI_PROVIDERS = ['deepseek', 'openrouter', 'opencode', 'opencode-go', 'custom'] as const
 
 export type AIProvider = (typeof AI_PROVIDERS)[number]
 
@@ -13,6 +14,17 @@ export const AI_MODEL_PRESETS: Record<AIProvider, readonly string[]> = {
   openrouter: ['auto'],
   opencode: ['glm-5.3-flash'],
   'opencode-go': ['deepseek-v4-flash', 'glm-5.3-flash'],
+  custom: [],
+}
+
+/** 各服务商默认 OpenAI 兼容端点。baseUrl 留空时用它兜底（浏览器直连与服务端适配器同一份）。
+ *  custom 没有默认值：必须由用户填写自己的端点。 */
+export const AI_DEFAULT_BASE_URLS: Record<AIProvider, string> = {
+  deepseek: 'https://api.deepseek.com',
+  openrouter: 'https://openrouter.ai/api/v1',
+  opencode: 'https://opencode.ai/zen/v1',
+  'opencode-go': 'https://opencode.ai/zen/go/v1',
+  custom: '',
 }
 
 export const DEFAULT_AI_PROVIDER: AIProvider = 'deepseek'
@@ -25,11 +37,13 @@ export const LEGACY_DEEPSEEK_MODEL_MAP: Record<string, string> = {
 }
 
 /** 归一化模型名：迁移历史名；空值回退该服务商首个预置模型（再不济回退全局默认）。
- *  非空自定义字符串原样透传，不做白名单限制。 */
+ *  非空自定义字符串原样透传，不做白名单限制。
+ *  custom 没有预置模型，留空就保持空串（由界面提示用户自己填），不塞一个别家的默认模型。 */
 export function normalizeAiModel(provider: string, model: unknown): string {
   const raw = typeof model === 'string' && model.trim() ? model.trim() : ''
   const migrated = provider === 'deepseek' ? LEGACY_DEEPSEEK_MODEL_MAP[raw] ?? raw : raw
   if (migrated) return migrated
+  if (provider === 'custom') return ''
   return AI_MODEL_PRESETS[provider as AIProvider]?.[0] ?? DEFAULT_AI_MODEL
 }
 

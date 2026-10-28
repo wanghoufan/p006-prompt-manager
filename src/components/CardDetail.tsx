@@ -10,7 +10,7 @@ import { TagEditor } from '@/components/TagEditor'
 import { VersionDiff } from '@/components/VersionDiff'
 import { formatTime } from '@/lib/util'
 import { useModalFocus } from '@/hooks/useModalFocus'
-import { aiRequestHeaders } from '@/lib/aiClient'
+import { aiFormatBody, aiGenerateMeta, aiSummarizeThinking } from '@/lib/ai/client'
 
 interface CardDetailProps {
   card: Card
@@ -299,15 +299,8 @@ export function CardDetail(props: CardDetailProps) {
     metaAbortRef.current = ac
     setMetaLoading(true)
     try {
-      const res = await fetch('/api/ai/generate-meta', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...aiRequestHeaders() },
-        body: JSON.stringify({ body: card.body, existingTags: props.existingTags }),
-        signal: ac.signal,
-      })
-      const data: { title?: string; tags?: string[]; error?: string } = await res.json()
+      const data = await aiGenerateMeta(card.body, props.existingTags, { signal: ac.signal })
       if (ac.signal.aborted) return
-      if (!res.ok) throw new Error(data.error || '重新生成失败')
       const newTitle = data.title?.trim() || card.title
       const newTags = data.tags ?? []
       props.onUpdateMeta(card.id, newTitle, newTags)
@@ -327,16 +320,11 @@ export function CardDetail(props: CardDetailProps) {
     summaryAbortRef.current = ac
     setSummaryLoading(true)
     try {
-      const res = await fetch('/api/ai/summarize-thinking', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...aiRequestHeaders() },
-        body: JSON.stringify({ body: card.body, prompt: props.customThinkingPrompt || null }),
+      const summary = await aiSummarizeThinking(card.body, props.customThinkingPrompt || null, {
         signal: ac.signal,
       })
-      const data: { summary?: string; error?: string } = await res.json()
       if (ac.signal.aborted) return
-      if (!res.ok) throw new Error(data.error || '总结失败')
-      props.onSetSummary(card.id, data.summary ?? '')
+      props.onSetSummary(card.id, summary)
       props.notify('思维总结已生成')
     } catch (e) {
       if (ac.signal.aborted) return
@@ -359,18 +347,11 @@ export function CardDetail(props: CardDetailProps) {
     formatAbortRef.current = ac
     setFormatLoading(true)
     try {
-      const res = await fetch('/api/ai/format-body', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...aiRequestHeaders() },
-        body: JSON.stringify({ body: source, alignment: props.bodyAlignment }),
-        signal: ac.signal,
-      })
-      const data: { body?: string; error?: string } = await res.json()
+      const formattedRaw = await aiFormatBody(source, props.bodyAlignment, { signal: ac.signal })
       if (ac.signal.aborted) return
-      if (!res.ok) throw new Error(data.error || '格式整理失败')
       // 整理期间用户继续编辑时，不以旧响应覆盖新输入。
       if (draftRef.current.body !== source) return
-      const formatted = typeof data.body === 'string' ? normalizeBody(data.body) : ''
+      const formatted = normalizeBody(formattedRaw)
       if (!formatted) throw new Error('AI 未返回可用正文')
       setDraftEdited((d) => ({ ...d, body: formatted }))
       draftRef.current = { ...draftRef.current, body: formatted }

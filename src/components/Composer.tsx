@@ -1,8 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { aiRequestHeaders } from '@/lib/aiClient'
-import { IS_STATIC_TRIAL } from '@/lib/trial'
+import { aiFormatBody, aiGenerateMeta, AI_NOT_CONFIGURED_HINT } from '@/lib/ai/client'
 
 interface ComposerProps {
   existingTags: string[]
@@ -11,6 +10,10 @@ interface ComposerProps {
   composerAutoTags: boolean
   composerAutoTitle: boolean
   bodyAlignment: 'left' | 'center' | 'right'
+  /** 是否已配好 AI（静态站=填了自己的 Key；本地版=内置服务商或 Key）。只影响提示文案，不禁用按钮。 */
+  aiConfigured: boolean
+  /** 未配置时「去设置」的入口 */
+  onOpenSettings?: () => void
   /** 开关变更回调：写入全局 settings 走持久化（autoTags→composerAutoTags、autoTitle→composerAutoTitle、autoFormat→autoFormatBody）。 */
   onComposerOptionsChange: (patch: { autoTags?: boolean; autoTitle?: boolean; autoFormat?: boolean }) => void
   onCreate: (body: string, title: string, tags: string[]) => Promise<string | null>
@@ -22,7 +25,7 @@ function Corner({ position }: { position: string }) {
   return <span aria-hidden className={`pointer-events-none absolute h-3 w-3 border-gold/70 ${position}`} />
 }
 
-export function Composer({ existingTags, addMode, autoFormatBody, composerAutoTags, composerAutoTitle, bodyAlignment, onComposerOptionsChange, onCreate, onApplyGeneratedMeta, notify }: ComposerProps) {
+export function Composer({ existingTags, addMode, autoFormatBody, composerAutoTags, composerAutoTitle, bodyAlignment, aiConfigured, onOpenSettings, onComposerOptionsChange, onCreate, onApplyGeneratedMeta, notify }: ComposerProps) {
   const [text, setText] = useState('')
   // 三个开关均为全局 settings 的受控视图（持久化见 onComposerOptionsChange），不再持有本地 state
   const autoGenerateTags = composerAutoTags
@@ -35,6 +38,8 @@ export function Composer({ existingTags, addMode, autoFormatBody, composerAutoTa
   const activeGenerationsRef = useRef(0)
   const completionTimerRef = useRef<number | null>(null)
   const mountedRef = useRef(true)
+  // 未配置 AI 的引导只提示一次，避免每次粘贴建卡都弹同一条 toast
+  const guidanceShownRef = useRef(false)
   const taRef = useRef<HTMLTextAreaElement>(null)
 
   // P3-4：autoResize 至 maxRows=6，粘贴长文自动展开，避免手动拖高
@@ -82,26 +87,20 @@ export function Composer({ existingTags, addMode, autoFormatBody, composerAutoTa
 
   async function enrichCard(id: string, source: string, generateTitle: boolean, generateTags: boolean) {
     if (!generateTitle && !generateTags) return
-    // 静态试用版没有 AI 代理路由，建卡后保持用户原文与空标签，避免每次建卡都弹一次 404。
-    if (IS_STATIC_TRIAL) return
+    // 未配置 AI 时给出一次引导（不再静默跳过）：卡片照常创建，标题标签可稍后补。
+    if (!aiConfigured) {
+      if (!guidanceShownRef.current) {
+        guidanceShownRef.current = true
+        notify(AI_NOT_CONFIGURED_HINT)
+      }
+      return
+    }
     const controller = new AbortController()
     abortControllersRef.current.add(controller)
     beginGeneration(generateTitle, generateTags)
     try {
-      const res = await fetch('/api/ai/generate-meta', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...aiRequestHeaders() },
-        body: JSON.stringify({ body: source, existingTags }),
-        signal: controller.signal,
-      })
-      let data: { title?: string; tags?: string[]; error?: string }
-      try {
-        data = await res.json()
-      } catch {
-        throw new Error('AI 服务返回了无法识别的响应，请稍后重试')
-      }
+      const data = await aiGenerateMeta(source, existingTags, { signal: controller.signal })
       if (controller.signal.aborted) return
-      if (!res.ok) throw new Error(data.error || 'AI 自动生成暂不可用，请稍后重试')
       onApplyGeneratedMeta(id, data.title ?? '', data.tags ?? [], generateTitle, generateTags)
     } catch (error) {
       if (!controller.signal.aborted) {
@@ -119,16 +118,10 @@ export function Composer({ existingTags, addMode, autoFormatBody, composerAutoTa
     if (!raw) return
     setSubmitting(true)
     let body = raw
-    if (autoFormat && !IS_STATIC_TRIAL) {
+    if (autoFormat && aiConfigured) {
       try {
-        const res = await fetch('/api/ai/format-body', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...aiRequestHeaders() },
-          body: JSON.stringify({ body: raw, alignment: bodyAlignment }),
-        })
-        const data: { body?: string; error?: string } = await res.json()
-        if (!res.ok) throw new Error(data.error || '格式整理失败')
-        if (typeof data.body === 'string' && data.body.trim()) body = data.body.trim()
+        const formatted = await aiFormatBody(raw, bodyAlignment)
+        if (formatted) body = formatted
       } catch (e) {
         notify(`自动格式整理失败，已使用原文：${e instanceof Error ? e.message : '未知错误'}`)
       }
@@ -178,39 +171,50 @@ export function Composer({ existingTags, addMode, autoFormatBody, composerAutoTa
 
       <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          {IS_STATIC_TRIAL ? (
-            <span>网页试用版不启用 AI 自动生成；建卡后可手动补充标题与标签</span>
-          ) : (
-            <>
-              <span>粘贴正文后全自动生成</span>
-              <label className="flex cursor-pointer items-center gap-1.5 text-paper-dim">
-                <input
-                  type="checkbox"
-                  checked={autoGenerateTags}
-                  onChange={(e) => onComposerOptionsChange({ autoTags: e.target.checked })}
-                  className="accent-gold"
-                />
-                自动生成标签
-              </label>
-              <label className="flex cursor-pointer items-center gap-1.5 text-paper-dim">
-                <input
-                  type="checkbox"
-                  checked={autoGenerateTitle}
-                  onChange={(e) => onComposerOptionsChange({ autoTitle: e.target.checked })}
-                  className="accent-gold"
-                />
-                自动生成标题
-              </label>
-              <label className="flex cursor-pointer items-center gap-1.5 text-paper-dim">
-                <input
-                  type="checkbox"
-                  checked={autoFormat}
-                  onChange={(e) => onComposerOptionsChange({ autoFormat: e.target.checked })}
-                  className="accent-gold"
-                />
-                自动格式整理
-              </label>
-            </>
+          <span>粘贴正文后自动生成</span>
+          <label className="flex cursor-pointer items-center gap-1.5 text-paper-dim">
+            <input
+              type="checkbox"
+              checked={autoGenerateTags}
+              onChange={(e) => onComposerOptionsChange({ autoTags: e.target.checked })}
+              className="accent-gold"
+            />
+            自动生成标签
+          </label>
+          <label className="flex cursor-pointer items-center gap-1.5 text-paper-dim">
+            <input
+              type="checkbox"
+              checked={autoGenerateTitle}
+              onChange={(e) => onComposerOptionsChange({ autoTitle: e.target.checked })}
+              className="accent-gold"
+            />
+            自动生成标题
+          </label>
+          <label className="flex cursor-pointer items-center gap-1.5 text-paper-dim">
+            <input
+              type="checkbox"
+              checked={autoFormat}
+              onChange={(e) => onComposerOptionsChange({ autoFormat: e.target.checked })}
+              className="accent-gold"
+            />
+            自动格式整理
+          </label>
+          {!aiConfigured && (
+            <span className="flex items-center gap-1 text-gold-bright">
+              <span>未配置 AI：</span>
+              <span className="text-muted">粘贴后不会自动生成，</span>
+              {onOpenSettings ? (
+                <button
+                  type="button"
+                  className="underline underline-offset-2 hover:text-paper"
+                  onClick={onOpenSettings}
+                >
+                  去设置填 API Key
+                </button>
+              ) : (
+                <span className="text-muted">先到设置里填你自己的 API Key</span>
+              )}
+            </span>
           )}
         </div>
         <button

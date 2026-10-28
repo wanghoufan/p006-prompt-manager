@@ -9,7 +9,7 @@ import { Spinner } from '@/components/Spinner'
 import { TagEditor } from '@/components/TagEditor'
 import { VersionDiff } from '@/components/VersionDiff'
 import { formatTime } from '@/lib/util'
-import { aiRequestHeaders } from '@/lib/aiClient'
+import { aiFormatBody, aiGenerateMeta, aiSummarizeThinking } from '@/lib/ai/client'
 
 interface PreviewPanelProps {
   card: Card | null
@@ -433,15 +433,8 @@ export function PreviewPanel({
     metaAbortRef.current = ac
     setMetaLoading(true)
     try {
-      const res = await fetch('/api/ai/generate-meta', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...aiRequestHeaders() },
-        body: JSON.stringify({ body: card.body, existingTags }),
-        signal: ac.signal,
-      })
-      const data: { title?: string; tags?: string[]; error?: string } = await res.json()
+      const data = await aiGenerateMeta(card.body, existingTags, { signal: ac.signal })
       if (ac.signal.aborted) return
-      if (!res.ok) throw new Error(data.error || '重新生成失败')
       const newTitle = data.title?.trim() || card.title
       const newTags = data.tags ?? []
       onUpdateMeta(card.id, newTitle, newTags)
@@ -466,16 +459,11 @@ export function PreviewPanel({
     summaryAbortRef.current = ac
     setSummaryLoading(true)
     try {
-      const res = await fetch('/api/ai/summarize-thinking', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...aiRequestHeaders() },
-        body: JSON.stringify({ body: card.body, prompt: customThinkingPrompt || null }),
+      const summary = await aiSummarizeThinking(card.body, customThinkingPrompt || null, {
         signal: ac.signal,
       })
-      const data: { summary?: string; error?: string } = await res.json()
       if (ac.signal.aborted) return
-      if (!res.ok) throw new Error(data.error || '总结失败')
-      onSetSummary(card.id, data.summary ?? '')
+      onSetSummary(card.id, summary)
       notify('思维总结已生成')
     } catch (e) {
       if (ac.signal.aborted) return
@@ -498,18 +486,11 @@ export function PreviewPanel({
     formatAbortRef.current = ac
     setFormatLoading(true)
     try {
-      const res = await fetch('/api/ai/format-body', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...aiRequestHeaders() },
-        body: JSON.stringify({ body: source, alignment: bodyAlignment }),
-        signal: ac.signal,
-      })
-      const data: { body?: string; error?: string } = await res.json()
+      const formattedRaw = await aiFormatBody(source, bodyAlignment, { signal: ac.signal })
       if (ac.signal.aborted) return
-      if (!res.ok) throw new Error(data.error || '格式整理失败')
       // 自动整理期间用户继续编辑时，不能以旧响应覆盖新输入。
       if (bodyTextareaRef.current?.value !== source) return
-      const formatted = typeof data.body === 'string' ? normalizeBody(data.body) : ''
+      const formatted = normalizeBody(formattedRaw)
       if (!formatted) throw new Error('AI 未返回可用正文')
       setDraftEdited((d) => ({ ...d, body: formatted }))
       draftRef.current = { ...draftRef.current, body: formatted }

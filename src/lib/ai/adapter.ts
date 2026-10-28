@@ -13,11 +13,12 @@ export const PROVIDER_LABELS: Record<AIProvider, string> = {
   openrouter: 'OpenRouter',
   opencode: 'OpenCode',
   'opencode-go': 'OpenCode Go',
+  custom: '自定义服务商',
 }
 
 /** 从各家上游的错误响应里抽出可读原因：DeepSeek 官方是 {error:{message,type,code}}，
  *  OpenRouter 是 {error:{message,code}}，部分厂商直接给 {message}。抽不出来时退回原文。 */
-function extractErrorReason(body: string): string {
+export function extractErrorReason(body: string): string {
   try {
     const data = JSON.parse(body) as { error?: unknown; message?: unknown }
     const error = data.error

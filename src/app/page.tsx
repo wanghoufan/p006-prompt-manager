@@ -9,6 +9,7 @@ import { DEMO_CARDS } from '@/lib/demo'
 import { nowIso } from '@/lib/util'
 import { IS_STATIC_TRIAL } from '@/lib/trial'
 import { DEFAULT_AI_MODEL, DEFAULT_AI_PROVIDER } from '@/lib/ai/types'
+import { isAiConfigured } from '@/lib/ai/client'
 import { TopBar } from '@/components/TopBar'
 import type { ViewMode } from '@/components/DemoMenu'
 import { TagPanel } from '@/components/TagPanel'
@@ -2082,7 +2083,7 @@ export default function Home() {
       {IS_STATIC_TRIAL && (
         <div className="flex shrink-0 flex-wrap items-center justify-center gap-x-2 gap-y-1 border-b border-gold/25 bg-gold/5 px-5 py-1.5 text-[11px] text-gold-bright">
           <span>网页试用版：数据只保存在当前浏览器，换设备或清缓存不会带走。</span>
-          <span className="text-muted">可随时点「导出」备份；AI 辅助与云同步未启用。</span>
+          <span className="text-muted">可随时点「导出」备份；AI 可用你自己的 API Key（设置 → AI 服务），云同步未启用。</span>
         </div>
       )}
       <div className="flex min-h-0 flex-1">
@@ -2152,6 +2153,8 @@ export default function Home() {
                 composerAutoTags={settings.composerAutoTags}
                 composerAutoTitle={settings.composerAutoTitle}
                 bodyAlignment={settings.bodyAlignment}
+                aiConfigured={isAiConfigured(settings)}
+                onOpenSettings={() => setShowSettings(true)}
                 onComposerOptionsChange={handleComposerOptionsChange}
                 onCreate={handleCreate}
                 onApplyGeneratedMeta={handleApplyGeneratedMeta}
@@ -2231,7 +2234,7 @@ export default function Home() {
                   <span className="font-serif text-2xl tracking-widest text-paper-dim">提示词库还是空的</span>
                   <p className="max-w-sm text-sm leading-relaxed text-muted">
                     {IS_STATIC_TRIAL
-                      ? '在上方粘贴第一条提示词正文，建立你的专属提示词库；标题与标签可在详情中手动补充。'
+                      ? '在上方粘贴第一条提示词正文，建立你的专属提示词库；先在设置里填你自己的 API Key，就能自动生成标题与标签。'
                       : '在上方粘贴第一条提示词正文，AI 会自动生成标题与标签，建立你的专属提示词库。'}
                   </p>
                   <button type="button" className="btn-gold" onClick={handleLoadDemo}>

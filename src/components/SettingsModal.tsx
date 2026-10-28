@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 
 import type { Settings } from '@/lib/types'
 import { AI_MODEL_PRESETS, type AIProvider } from '@/lib/ai/types'
 import { AiError } from '@/lib/ai/adapter'
+import { aiListModels, aiTestConnection, resolveClientAiConfig } from '@/lib/ai/client'
 import { DEFAULT_THINKING_PROMPT } from '@/lib/prompts'
 import { useModalFocus } from '@/hooks/useModalFocus'
 import { maskApiKey } from '@/lib/util'
@@ -27,11 +28,13 @@ const SETUP_AGENT_INSTRUCTION = `请执行 ${SETUP_COMMAND} 完成提示词管�
  */
 const SETUP_CLIENTS = 'WorkBuddy · Codex · Cursor · Claude Desktop · Cline · Windsurf · Gemini CLI'
 
-const CONNECTION_TEST_TIMEOUT_MS = 100_000
+const CONNECTION_TEST_HINT = '连接测试会真实调用一次上游，最多等 100 秒（推理模型首字较慢）'
 
 /**
- * 通用AI接口的服务商注册表（Phase 2）。
- * 模型列表固定在客户端；仅 OpenRouter 支持自定义模型名称。
+ * 通用AI接口的服务商注册表。
+ * DeepSeek 是预置项（默认 V4.1：model id `deepseek-flash`，base https://api.deepseek.com）；
+ * 其余厂商走 custom —— 任意 OpenAI 兼容端点，只需 baseURL + apiKey + model。
+ * 注意：custom 只支持浏览器直连（见 lib/ai/client.ts），静态试用版正是这种模式。
  */
 const AI_SERVICES: {
   provider: AIProvider
@@ -43,7 +46,7 @@ const AI_SERVICES: {
 }[] = [
   {
     provider: 'deepseek',
-    label: 'DeepSeek',
+    label: 'DeepSeek（预置 · V4.1）',
     available: true,
     models: AI_MODEL_PRESETS.deepseek,
     defaultBaseUrl: 'https://api.deepseek.com',
@@ -73,6 +76,14 @@ const AI_SERVICES: {
     defaultBaseUrl: 'https://opencode.ai/zen/go/v1',
     docsUrl: 'https://opencode.ai/docs/zh-cn/go',
   },
+  {
+    provider: 'custom',
+    label: '自定义（任意 OpenAI 兼容端点）',
+    available: true,
+    models: AI_MODEL_PRESETS.custom,
+    defaultBaseUrl: '',
+    docsUrl: '',
+  },
 ]
 
 interface SettingsModalProps {
@@ -92,12 +103,15 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
   const [showKey, setShowKey] = useState(false)
   const [connectionTest, setConnectionTest] = useState<{ success: boolean; message: string } | null>(null)
   const [isTestingConnection, setIsTestingConnection] = useState(false)
+  // 「拉取模型列表」：成功后填进 datalist 供选，失败复用 connectionTest 的位置报错
+  const [fetchedModels, setFetchedModels] = useState<string[]>([])
+  const [isFetchingModels, setIsFetchingModels] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
   // P1-AI4：AI 配置即存，防抖后 toast 反馈
   const aiSaveTimer = useRef<number | null>(null)
   const templateSaveTimer = useRef<number | null>(null)
   const aiService = AI_SERVICES.find((service) => service.provider === settings.aiProvider)
-  const aiModels = aiService?.models ?? []
+  const aiModels = fetchedModels.length > 0 ? fetchedModels : (aiService?.models ?? [])
 
   // OPT-NEW-2：复用 CardDetail 的 useModalFocus（打开聚焦 / Tab 循环 / 关闭归还 / Esc 关闭）
   useModalFocus(panelRef, true, onClose)
@@ -143,49 +157,50 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
     aiSaveTimer.current = window.setTimeout(() => onNotify?.('AI配置已保存'), 800)
   }
 
+  /** 面板上「此刻正在编辑」的配置：测试连接/拉模型用它，避免读到上一次落盘的旧值。 */
+  function currentConfig() {
+    const resolved = resolveClientAiConfig(settings)
+    return {
+      provider: settings.aiProvider,
+      model: settings.aiModel,
+      baseUrl: settings.aiBaseUrl || resolved.baseUrl,
+      apiKey: keyDraft || settings.aiApiKey,
+    }
+  }
+
   async function testConnection() {
     setIsTestingConnection(true)
     setConnectionTest(null)
-    const controller = new AbortController()
-    const timeout = window.setTimeout(() => controller.abort(), CONNECTION_TEST_TIMEOUT_MS)
-    const baseUrl = settings.aiBaseUrl || aiService?.defaultBaseUrl || ''
-    const apiKey = keyDraft || settings.aiApiKey
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'x-ai-provider': settings.aiProvider,
-      'x-ai-model': settings.aiModel,
-      'x-ai-base-url': baseUrl,
-    }
-    if (apiKey) headers['x-ai-api-key'] = apiKey
-
     try {
-      const res = await fetch('/api/ai/summarize-thinking', {
-        method: 'POST',
-        headers,
-        signal: controller.signal,
-        body: JSON.stringify({
-          body: '连接测试',
-          prompt: '请仅回复“连接成功”。内容：{body}',
-        }),
-      })
-      const data = (await res.json().catch(() => ({}))) as { error?: unknown }
-      if (!res.ok) {
-        throw new AiError(typeof data.error === 'string' ? data.error : `请求失败（${res.status}）`, res.status)
-      }
-      setConnectionTest({ success: true, message: '连接成功' })
+      const message = await aiTestConnection(currentConfig())
+      setConnectionTest({ success: true, message })
     } catch (e) {
-      const reason = controller.signal.aborted
-        ? '连接测试超时（100 秒），请稍后重试或更换模型'
-        : e instanceof Error
-          ? e.message
-          : '未知错误'
       setConnectionTest({
         success: false,
-        message: e instanceof AiError ? e.message : `连接失败：${reason}`,
+        message: e instanceof AiError ? e.message : `连接失败：${e instanceof Error ? e.message : '未知错误'}`,
       })
     } finally {
-      window.clearTimeout(timeout)
       setIsTestingConnection(false)
+    }
+  }
+
+  async function fetchModels() {
+    setIsFetchingModels(true)
+    setConnectionTest(null)
+    try {
+      const models = await aiListModels(currentConfig())
+      setFetchedModels(models)
+      setConnectionTest({
+        success: true,
+        message: `已拉取 ${models.length} 个模型，点「模型」输入框可下拉选择`,
+      })
+    } catch (e) {
+      setConnectionTest({
+        success: false,
+        message: e instanceof AiError ? e.message : `拉取失败：${e instanceof Error ? e.message : '未知错误'}`,
+      })
+    } finally {
+      setIsFetchingModels(false)
     }
   }
 
@@ -225,8 +240,9 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
           {IS_STATIC_TRIAL && (
             <div className="rounded-lg border border-gold/30 bg-gold/5 px-3.5 py-3 text-xs leading-relaxed text-muted">
-              网页试用版：数据只保存在当前浏览器（localStorage），不会上传任何服务器。AI 辅助、云同步与 MCP
-              接入需要本地服务端，试用版未启用；可用顶栏「导出」备份数据。
+              网页试用版：数据与 API Key 都只保存在当前浏览器（localStorage），不会上传任何服务器。AI
+              由浏览器直连你自己填的服务商，不预置也不内置任何 Key；云同步与 MCP 接入需要本地服务端，
+              试用版未启用。换浏览器或清缓存后 Key 需要重填，数据可用顶栏「导出」备份。
             </div>
           )}
           {/* P0-4 删除前二次确认（onChange 即存） */}
@@ -314,31 +330,29 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
             </button>
           </div>
           <div className="rounded-lg border border-line bg-ink-900 px-3.5 py-3">
-            {!IS_STATIC_TRIAL && (
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm text-paper">粘贴后自动整理正文</p>
-                  <p className="mt-0.5 text-xs text-muted">开启后，粘贴到正文区域的内容会按所选对齐方式由 AI 整理。</p>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={settings.autoFormatBody}
-                  aria-label="粘贴后自动整理正文"
-                  onClick={() => onSave({ ...settings, autoFormatBody: !settings.autoFormatBody })}
-                  className={`relative h-5 w-9 shrink-0 cursor-pointer rounded-full transition-colors ${
-                    settings.autoFormatBody ? 'bg-gold' : 'bg-ink-700'
-                  }`}
-                >
-                  <span
-                    className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${
-                      settings.autoFormatBody ? 'left-[18px]' : 'left-0.5'
-                    }`}
-                  />
-                </button>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm text-paper">粘贴后自动整理正文</p>
+                <p className="mt-0.5 text-xs text-muted">开启后，粘贴到正文区域的内容会按所选对齐方式由 AI 整理。</p>
               </div>
-            )}
-            <label htmlFor="settings-body-alignment" className={`block text-sm text-paper ${IS_STATIC_TRIAL ? '' : 'mt-3'}`}>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={settings.autoFormatBody}
+                aria-label="粘贴后自动整理正文"
+                onClick={() => onSave({ ...settings, autoFormatBody: !settings.autoFormatBody })}
+                className={`relative h-5 w-9 shrink-0 cursor-pointer rounded-full transition-colors ${
+                  settings.autoFormatBody ? 'bg-gold' : 'bg-ink-700'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${
+                    settings.autoFormatBody ? 'left-[18px]' : 'left-0.5'
+                  }`}
+                />
+              </button>
+            </div>
+            <label htmlFor="settings-body-alignment" className="mt-3 block text-sm text-paper">
               正文对齐方式
             </label>
             <select
@@ -353,13 +367,12 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
             </select>
           </div>
           {/* AI 与 MCP 都需要本地服务端，网页试用版整体隐藏 */}
-          {!IS_STATIC_TRIAL && (
-            <>
-          {/* 通用AI接口（Phase 2）：服务商 / 模型 / Base URL / API Key（onChange 即存） */}
+          {/* AI 服务：试用版也可见。静态站走浏览器直连用户自备 Key（见 lib/ai/client.ts） */}
           <div className="rounded-lg border border-line bg-ink-900 px-3.5 py-3">
             <p className="text-sm text-paper">AI 服务</p>
-            <p className="mt-0.5 text-xs text-muted">
-              用于标题标签生成、正文整理与思考摘要。切换服务商自动切换到默认模型。
+            <p className="mt-0.5 text-xs leading-relaxed text-muted">
+              用于生成标题标签、AI 整理思考与正文格式化。不预置任何 Key：用你自己的账号，Key
+              只存在本浏览器 localStorage，不上传服务器，换浏览器或清缓存就没了。
             </p>
             <label htmlFor="settings-ai-provider" className="mt-3 block text-xs text-muted">
               服务商
@@ -375,8 +388,10 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
                 // 用户手填的自定义 Base URL（如自建网关）予以保留，不再静默清空。
                 const prevDefault = aiService?.defaultBaseUrl ?? ''
                 const keepCustom = settings.aiBaseUrl !== '' && settings.aiBaseUrl !== prevDefault
+                setFetchedModels([])
                 saveAi({
                   aiProvider: provider,
+                  // DeepSeek 预置 V4.1（deepseek-flash）；custom 没有预置模型，留空由用户填写
                   aiModel: service?.models[0] ?? '',
                   aiBaseUrl: keepCustom ? settings.aiBaseUrl : (service?.defaultBaseUrl ?? ''),
                 })
@@ -388,37 +403,8 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
                 </option>
               ))}
             </select>
-            <label htmlFor="settings-ai-model" className="mt-3 block text-xs text-muted">
-              模型
-            </label>
-            <input
-              id="settings-ai-model"
-              className="field mt-1"
-              list="settings-ai-model-presets"
-              value={settings.aiModel}
-              onChange={(e) => saveAi({ aiModel: e.target.value })}
-              placeholder={aiModels[0] ?? '输入模型名称'}
-              autoComplete="off"
-            />
-            <datalist id="settings-ai-model-presets">
-              {aiModels.map((model) => (
-                <option key={model} value={model} />
-              ))}
-            </datalist>
-            {settings.aiProvider === 'opencode' && (
-              <p className="mt-1.5 text-xs leading-relaxed text-muted">
-                <a
-                  href="https://opencode.ai/docs/zh-cn/zen"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-gold underline underline-offset-2 hover:text-paper"
-                >
-                  查看当前可用的免费模型
-                </a>
-              </p>
-            )}
             <label htmlFor="settings-ai-base-url" className="mt-3 block text-xs text-muted">
-              Base URL（可选，留空使用默认）
+              请求地址（Base URL）
             </label>
             <input
               id="settings-ai-base-url"
@@ -426,26 +412,30 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
               className="field mt-1"
               value={settings.aiBaseUrl}
               onChange={(e) => saveAi({ aiBaseUrl: e.target.value })}
-              placeholder={aiService?.defaultBaseUrl ?? 'https://…'}
+              placeholder={aiService?.defaultBaseUrl || 'https://你的端点/v1'}
               autoComplete="off"
             />
             <p className="mt-1.5 text-xs leading-relaxed text-muted">
-              Base URL 是服务商 API 的基础地址。留空使用默认地址，或填写自定义地址（自定义地址在切换服务商时会保留）。{' '}
-              {aiService && (
-                <a
-                  href={aiService.docsUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-gold underline underline-offset-2 hover:text-paper"
-                >
-                  查看 {aiService.label} API 文档
-                </a>
+              填 OpenAI 兼容端点即可。DeepSeek 填 <code className="font-mono">https://api.deepseek.com</code>
+              ，带不带 <code className="font-mono">/v1</code> 都行（浏览器直连时会自动补全路径）。
+              {aiService?.docsUrl && (
+                <>
+                  {' '}
+                  <a
+                    href={aiService.docsUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-gold underline underline-offset-2 hover:text-paper"
+                  >
+                    查看 API 文档
+                  </a>
+                </>
               )}
             </p>
             <label htmlFor="settings-ai-api-key" className="mt-3 block text-xs text-muted">
               API Key
             </label>
-            {/* P1-AI1：Key 不回显明文。已有 Key 时 placeholder 展示脱敏值（前4后4），聚焦留空输入即替换；留空表示用服务端环境变量 */}
+            {/* P1-AI1：Key 不回显明文。已有 Key 时 placeholder 展示脱敏值（前4后4），聚焦留空输入即替换 */}
             <div className="relative mt-1">
               <input
                 id="settings-ai-api-key"
@@ -456,7 +446,13 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
                   setKeyDraft(e.target.value)
                   saveAi({ aiApiKey: e.target.value })
                 }}
-                placeholder={settings.aiApiKey ? maskApiKey(settings.aiApiKey) : '留空则使用服务端环境变量'}
+                placeholder={
+                  settings.aiApiKey
+                    ? maskApiKey(settings.aiApiKey)
+                    : IS_STATIC_TRIAL
+                      ? '粘贴你自己的 API Key'
+                      : '留空则使用服务端环境变量'
+                }
                 autoComplete="new-password"
               />
               <button
@@ -471,15 +467,55 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
             </div>
             {settings.aiApiKey && (
               <p className="mt-1.5 text-xs text-muted">
-                已保存 Key：{maskApiKey(settings.aiApiKey)}（仅保存在本机浏览器，不同步到服务端；点击输入框输入新 Key 可替换）
+                已保存 Key：{maskApiKey(settings.aiApiKey)}（只存在本浏览器，不上传服务器；输入新 Key 可替换）
               </p>
             )}
             <p className="mt-2 text-xs leading-relaxed text-muted">
-              本机填写的 API Key 仅保存在浏览器本地，不会上传到同步服务端；留空时自动回退到服务端{' '}
-              <code className="font-mono">.env.local</code> 环境变量——但仅当该环境变量所属厂商与上方所选服务商一致时生效，
-              否则会提示未配置 Key，以免把别家的密钥发到本服务商的端点。
+              Key 只写入本机浏览器 localStorage，不进入同步快照、不写服务端；换浏览器或清缓存后需要重填。
+              {!IS_STATIC_TRIAL && '留空时回退服务端 .env.local，但仅当该变量所属厂商与所选服务商一致。'}
             </p>
+            <label htmlFor="settings-ai-model" className="mt-3 block text-xs text-muted">
+              模型
+            </label>
+            <input
+              id="settings-ai-model"
+              className="field mt-1"
+              list="settings-ai-model-presets"
+              value={settings.aiModel}
+              onChange={(e) => saveAi({ aiModel: e.target.value })}
+              placeholder={aiModels[0] ?? '输入模型名称，如 deepseek-flash'}
+              autoComplete="off"
+            />
+            <datalist id="settings-ai-model-presets">
+              {aiModels.map((model) => (
+                <option key={model} value={model} />
+              ))}
+            </datalist>
+            <p className="mt-1.5 text-xs leading-relaxed text-muted">
+              模型名可自由输入。DeepSeek 预置 <code className="font-mono">deepseek-flash</code>（V4.1）；
+              也可点「拉取模型列表」从服务商读回可用模型。
+            </p>
+            {settings.aiProvider === 'opencode' && (
+              <p className="mt-1.5 text-xs leading-relaxed text-muted">
+                <a
+                  href="https://opencode.ai/docs/zh-cn/zen"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-gold underline underline-offset-2 hover:text-paper"
+                >
+                  查看当前可用的免费模型
+                </a>
+              </p>
+            )}
             <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className="btn"
+                onClick={() => void fetchModels()}
+                disabled={isFetchingModels}
+              >
+                {isFetchingModels ? '正在拉取…' : '拉取模型列表'}
+              </button>
               <button
                 type="button"
                 className="btn-gold"
@@ -488,17 +524,19 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
               >
                 {isTestingConnection ? '正在测试连接…' : '测试连接'}
               </button>
-              {connectionTest && (
-                <p
-                  role="status"
-                  aria-live="polite"
-                  className={`text-xs ${connectionTest.success ? 'text-gold' : 'text-rust'}`}
-                >
-                  {connectionTest.message}
-                </p>
-              )}
             </div>
+            <p className="mt-2 text-xs leading-relaxed text-muted">{CONNECTION_TEST_HINT}</p>
+            {connectionTest && (
+              <p
+                role="status"
+                aria-live="polite"
+                className={`mt-2 text-xs leading-relaxed ${connectionTest.success ? 'text-gold' : 'text-rust'}`}
+              >
+                {connectionTest.message}
+              </p>
+            )}
           </div>
+          {!IS_STATIC_TRIAL && (
           <div className="rounded-lg border border-line bg-ink-900 px-3.5 py-3">
             <p className="text-sm text-paper">一键接入 MCP 客户端</p>
             <p className="mt-0.5 text-xs text-muted">
@@ -548,7 +586,6 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
                 : '接入完成后，对 AI 说「调取 <调取码>」即可加载对应卡片。'}
             </p>
           </div>
-            </>
           )}
           {/* P0-5 主题提示：当前生效主题（仅提示，不改设置） */}
           <div className="rounded-lg border border-line bg-ink-900 px-3.5 py-3">
