@@ -7,7 +7,7 @@
 > ✅ **2026-10-12：主题文案微调——胶囊「亮色」置首、「暗色」改名「墨色」（`decb21e`，仅 label/顺序，theme 值 `dark` 不变），已部署（镜像 `68eb6e6af4b1`），真机 5/5 PASS（顺序/改名/墨色切换与刷新持久化/亮色恢复/设置下拉同步）。**
 
 ---
-> ✅ **2026-10-31：MCP 离线接入包已开发完成并本地全绿（未 commit/push/部署，等用户授权）。** 见下方「〇」。静态试用版（分享页）的 MCP 从「被隐藏」变成「可用」，本地完整版修掉写死绝对路径缺陷。
+> ✅ **2026-10-31：MCP 离线接入包已开发完成 → 已 push `master`（`4ab3eab` feat + `c2248e6` docs）→ GitHub Pages 构建成功（run 41197053771）→ 线上真实浏览器实测 11/11 PASS。** 见下方「〇」。静态试用版（分享页）的 MCP 从「被隐藏」变成「可用」。**本地 Docker（3100）尚未部署**（见 0.5）。
 
 ## 〇、2026-10-31｜MCP 离线接入包（本轮：已完成，未提交未部署）
 
@@ -57,10 +57,11 @@
 
 ### 0.5 未做 / 需用户决定
 
-- **未 commit、未 push、未部署**（均需明确授权）。
-- 要看到效果有两条路径：
-  - **分享页**：push `master` → GitHub Pages 工作流自动构建部署（`.github/workflows/deploy-pages.yml` 已就位）；
-  - **本地 Docker（3100）**：push 后在部署副本 `~/Developer/coding/docker/prompt-manager/` 跑 `bash scripts/deploy.sh`。
+- ✅ **已 push 并上线分享页**（2026-10-31，用户口令「现在推送」）：`e7c083a..c2248e6`，
+  Actions run `41197053771` = completed/success。
+- ⏳ **本地 Docker（3100）尚未部署**：需在部署副本 `~/Developer/coding/docker/prompt-manager/` 跑
+  `bash scripts/deploy.sh`（记得先 `export PATH="/Applications/Docker.app/Contents/Resources/bin:$PATH"`）。
+  未获用户明确部署指令，本轮未做。
 - 已知边界（非本轮引入，未修）：卡片正文若含 `</activated-instructions>` 字面量会破坏包装结构，与既有 MCP server 行为一致。
 - 账本 `check-ledger` 的**存量失败**：`DISPATCH-LOG` 有 6 处 `runtime` 用了枚举外写法（`本窗口subagent` / `本窗口直驱`），
   另有 2026-09-30 `TASK-P1-sync-loop` 同 task 两账 result 口径不一致。按「禁改写历史实绩」本轮**未动这些历史行**。
@@ -71,7 +72,17 @@
   已改为同样分仓判定，并重装到 `.git/hooks/pre-commit`（旧版备份 `pre-commit.bak-2026-10-31`）。
   **该脚本本身仍是未跟踪文件**（属铺包批次），本次未一并入库，避免把他人未完成产物带走。
 
-### 0.6 明天汇报时的演示路径
+### 0.6 线上验证（push 之后实测，非仅看构建绿灯）
+
+| 检查 | 结果 |
+|---|---|
+| 线上首页（带 `?v=` 绕缓存） | 200，20,337 bytes |
+| 首页 HTML 含「MCP 接入台」「网页试用版…」文案 | 命中 |
+| `_next/` 静态资源 | 3/3 返回 200（注意：用 origin+路径拼接，**不能**再叠一次子路径，否则假 404） |
+| 线上真实浏览器交互 | **11/11 PASS**（横幅入口→接入台→调取码命中→下载→复制提示词→控制台 0 错误） |
+| 线上下载的包 → 官方 SDK 客户端握手 | **9/9 PASS** |
+
+### 0.7 明天汇报时的演示路径
 
 1. 打开分享页 → 顶部横幅点「MCP 接入台」→ 输入示例调取码（如 `code-review`）→ 立即看到命中卡片与「AI 侧收到的原文」；
 2. 点「下载 prompt-manager-mcp.mjs」→ 点「复制接入提示词」→ 贴给任意 AI → 自动装好并自检；

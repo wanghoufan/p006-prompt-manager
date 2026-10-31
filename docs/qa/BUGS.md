@@ -1480,5 +1480,5 @@ QA 报「`legacy-store/prompt-manager.db` 测试前后 SHA256 不一致（`af072
 ### E. 结论与遗留
 
 - 用户三条需求（能用 MCP / 配置提示词发到本机 / 直接调取码）均形成可演示闭环。
-- 遗留：**未部署**（静态站需 push master 触发 GitHub Pages 工作流）；**未 commit/push**（等用户授权）。
+- 部署：已 push `master`（`c2248e6`），GitHub Pages 工作流 run `41197053771` 构建成功；线上真实浏览器复测 11/11 PASS，线上下载包 SDK 握手 9/9 PASS。**本地 Docker（3100）尚未部署。**
 - 既有边界（非本轮引入，未修）：卡片正文若含 `</activated-instructions>` 字面量会破坏包装结构，与既有 MCP server 行为一致。
