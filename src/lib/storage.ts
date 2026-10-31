@@ -3,7 +3,7 @@ import { AI_PROVIDERS, DEFAULT_AI_MODEL, DEFAULT_AI_PROVIDER, normalizeAiModel }
 import { nowIso, uid } from '@/lib/util'
 import { normalizeBody } from '@/lib/cards'
 import { isTag, isPromptTag, normalizeTag } from '@/lib/tags'
-import { IS_STATIC_TRIAL } from '@/lib/trial'
+import { IS_STATIC_TRIAL, buildTrialStarterCard } from '@/lib/trial'
 
 export const CARDS_KEY = 'prompt-manager:cards'
 export const SETTINGS_KEY = 'prompt-manager:settings'
@@ -85,6 +85,30 @@ export function loadCards(): Card[] {
     return parsed.filter(isCard).map(normalizeCard)
   } catch {
     return []
+  }
+}
+
+/**
+ * 静态试用版首次打开时播种一张内置试调取卡（调取码 hi）。
+ *
+ * 三个约束（都实测过）：
+ * ① 只在「从未播种过」时动手 —— 读过标记就什么都不做，用户删掉这张卡不会复活；
+ * ② 只在库为空时插入 —— 已有卡片一律不动，绝不覆盖访客自己的数据；
+ * ③ 只在静态试用版生效 —— Docker / 本地完整版完全不碰。
+ */
+export const TRIAL_SEED_KEY = 'prompt-manager:trial-starter-seeded'
+
+export function seedTrialStarterCard(cards: Card[]): Card[] {
+  if (!IS_STATIC_TRIAL) return cards
+  try {
+    if (localStorage.getItem(TRIAL_SEED_KEY)) return cards
+    localStorage.setItem(TRIAL_SEED_KEY, '1')
+    if (cards.length > 0) return cards
+    const starter = buildTrialStarterCard()
+    saveCards([starter])
+    return [starter]
+  } catch {
+    return cards
   }
 }
 

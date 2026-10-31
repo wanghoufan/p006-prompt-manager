@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Card, Settings, SortMode, Tag, PromptTag, TagFilterMode, TagFilters } from '@/lib/types'
-import { loadCards, loadSettings, loadTags, loadPromptTags, parseImport, saveCards, saveSettings, saveTags, savePromptTags, buildMarkdownExport, isServerAvailable, loadFromServer, pushToServer, readPersistedKnownVersion, subscribeSync, sanitizePromptTags, setConflictRefreshHandler, setPushErrorHandler, setServerEmptyRestoreHandler, backupLocalSnapshot } from '@/lib/storage'
+import { loadCards, loadSettings, loadTags, loadPromptTags, parseImport, saveCards, saveSettings, saveTags, savePromptTags, buildMarkdownExport, isServerAvailable, loadFromServer, pushToServer, readPersistedKnownVersion, subscribeSync, sanitizePromptTags, setConflictRefreshHandler, setPushErrorHandler, setServerEmptyRestoreHandler, backupLocalSnapshot, seedTrialStarterCard } from '@/lib/storage'
 import { deletePromptCard, deletePromptTag, getPromptCloudSessionUser, getPromptCloudUserId, loadPromptCloudSnapshot, replacePromptCardVersions, savePromptCard, savePromptSettings, savePromptTag, subscribeToPromptCloudChanges, syncPromptCardTags, type PromptCloudSnapshot } from '@/lib/supabase/promptRepository'
 import { createCard, normalizeBody, parseTags, rollbackToVersion, saveBodyOnly, saveBodyWithVersion } from '@/lib/cards'
 import { DEMO_CARDS } from '@/lib/demo'
@@ -437,7 +437,8 @@ export default function Home() {
       const dead = deadTagIds()
       setCloudMode(false)
       setServerOnline(false)
-      setCards(loadCards())
+      // 首次打开播种一张「调取 hi」的试调取卡，让访客一进来就能验证 MCP 链路。
+      setCards(seedTrialStarterCard(loadCards()))
       setSettings(loadSettings())
       setTags(loadTags().filter((tag) => !dead.has(tag.id)))
       setPromptTags(loadPromptTags().filter((relation) => !dead.has(relation.tag_id)))
