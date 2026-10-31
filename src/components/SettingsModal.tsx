@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import type { Settings } from '@/lib/types'
+import type { Card, Settings } from '@/lib/types'
 import { AI_MODEL_PRESETS, type AIProvider } from '@/lib/ai/types'
 import { AiError } from '@/lib/ai/adapter'
 import { aiListModels, aiTestConnection, resolveClientAiConfig } from '@/lib/ai/client'
@@ -9,19 +9,21 @@ import { DEFAULT_THINKING_PROMPT } from '@/lib/prompts'
 import { useModalFocus } from '@/hooks/useModalFocus'
 import { maskApiKey } from '@/lib/util'
 import { McpCloudAccess } from '@/components/McpCloudAccess'
+import { McpDialog } from '@/components/McpPanel'
 import { IS_STATIC_TRIAL } from '@/lib/trial'
 
-const MCP_PROJECT_ROOT = '/Users/zzymima0000/Developer/coding/1.Active/ing丨0813提示词管理器 mac gpt桌面 v1.0'
-
 /**
- * 直接跑这一条就能完成接入：装依赖、构建、写各客户端配置、真调一次验证，全自动。
+ * 2026-10-31 修：此前这里写死了开发机的绝对路径（`/Users/.../ing丨0813提示词管理器 mac gpt桌面 v1.0`），
+ * 在部署副本、别人克隆的仓库、任何非开发机上都指向不存在的目录 —— 那条「复制这句话发给 AI」
+ * 在别人电脑上必然失败。改成相对项目根的路径，由用户在自己克隆的仓库根目录执行。
  */
-const SETUP_COMMAND = `node "${MCP_PROJECT_ROOT}/mcp/prompt-server/setup.mjs"`
+const SETUP_COMMAND = 'cd mcp/prompt-server && node setup.mjs'
 
 /**
  * 用户唯一需要复制的东西——一句话，交给 AI 执行。
+ * 前提：在提示词管理器仓库根目录里对一个有文件访问权的 AI 说这句话。
  */
-const SETUP_AGENT_INSTRUCTION = `请执行 ${SETUP_COMMAND} 完成提示词管理器接入，成功后用一句话告诉我怎么用。`
+const SETUP_AGENT_INSTRUCTION = `请在我当前打开的项目根目录下执行 \`${SETUP_COMMAND}\` 完成提示词管理器 MCP 接入（脚本会自动装依赖、构建、探测本机 AI 客户端并写配置、最后验证 MCP 协议），成功后用一句话告诉我怎么用。`
 
 /**
  * 脚本会自动识别并配置这些客户端。仅用于展示，不要求用户理解细节。
@@ -92,12 +94,15 @@ interface SettingsModalProps {
   onClose: () => void
   /** P1-AI4：AI 配置保存后的反馈提示（复用页面 Toast） */
   onNotify?: (msg: string) => void
+  /** MCP 接入台需要当前可见卡片来生成离线包与调取码清单。 */
+  cards?: Card[]
 }
 
-export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsModalProps) {
+export function SettingsModal({ settings, onSave, onClose, onNotify, cards = [] }: SettingsModalProps) {
   const [text, setText] = useState(settings.thinkingSummaryPrompt)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
+  const [showMcp, setShowMcp] = useState(false)
   // P1-AI1：API Key 输入框草稿（不直接回显明文，仅在 placeholder 展示脱敏值）
   const [keyDraft, setKeyDraft] = useState('')
   const [showKey, setShowKey] = useState(false)
@@ -241,8 +246,10 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
           {IS_STATIC_TRIAL && (
             <div className="rounded-lg border border-gold/30 bg-gold/5 px-3.5 py-3 text-xs leading-relaxed text-muted">
               网页试用版：数据与 API Key 都只保存在当前浏览器（localStorage），不会上传任何服务器。AI
-              由浏览器直连你自己填的服务商，不预置也不内置任何 Key；云同步与 MCP 接入需要本地服务端，
-              试用版未启用。换浏览器或清缓存后 Key 需要重填，数据可用顶栏「导出」备份。
+              由浏览器直连你自己填的服务商，不预置也不内置任何 Key；云同步未启用。
+              <b className="text-paper-dim">MCP 可用</b>
+              ——走「离线接入包」：把库里带调取码的卡片打成一个单文件，下载后装到你自己的电脑上即可。换浏览器或清缓存后 Key
+              需要重填，数据可用顶栏「导出」备份。
             </div>
           )}
           {/* P0-4 删除前二次确认（onChange 即存） */}
@@ -536,11 +543,27 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
               </p>
             )}
           </div>
+          {/* MCP 接入台：静态试用版与本地完整版共用同一套离线包（单文件、零依赖、无需服务端） */}
+          <div className="rounded-lg border border-line bg-ink-900 px-3.5 py-3">
+            <p className="text-sm text-paper">MCP 接入</p>
+            <p className="mt-0.5 text-xs leading-relaxed text-muted">
+              把库里<b className="text-paper-dim">带调取码</b>的卡片打成一个离线 MCP server（单文件、零依赖），
+              下载后装到你或别人的电脑上，AI 就能「调取 &lt;调取码&gt;」直接加载卡片。
+              接入台里也可以先不装任何东西，直接用调取码试一次。
+            </p>
+            <button type="button" className="btn-gold mt-3 w-full" onClick={() => setShowMcp(true)}>
+              打开 MCP 接入台
+            </button>
+            <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
+              离线包只是快照，不含 API Key，也不会联网；改了卡片后重新下载同名文件覆盖即可。
+            </p>
+          </div>
           {!IS_STATIC_TRIAL && (
           <div className="rounded-lg border border-line bg-ink-900 px-3.5 py-3">
-            <p className="text-sm text-paper">一键接入 MCP 客户端</p>
-            <p className="mt-0.5 text-xs text-muted">
-              先在上方为本机生成令牌并保存 `.env.local`，再把下面这句话发给你的 AI；它会自动完成安装、配置和协议验证。
+            <p className="text-sm text-paper">一键接入 MCP 客户端（联网版 · 仅本地完整版）</p>
+            <p className="mt-0.5 text-xs leading-relaxed text-muted">
+              先在上方为本机生成令牌并保存 `.env.local`，再在<b className="text-paper-dim">本仓库根目录</b>
+              把下面这句话发给你的 AI；它会自动完成安装、配置和协议验证，调取时走本机服务端并计入复制次数。
             </p>
             <button
               type="button"
@@ -556,7 +579,7 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
               <summary className="cursor-pointer text-xs text-muted">想自己跑，或想看它做了什么</summary>
               <div className="mt-2 space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs text-paper-dim">直接执行的命令</p>
+                  <p className="text-xs text-paper-dim">在仓库根目录直接执行的命令</p>
                   <button
                     type="button"
                     className="btn-ghost shrink-0 text-xs"
@@ -569,7 +592,7 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
                   {SETUP_COMMAND}
                 </pre>
                 <p className="text-xs leading-relaxed text-muted">
-                  脚本会自动装依赖、构建、找出你本装的 AI 客户端并逐个配好，最后验证 MCP 协议。调取时直接访问云端，不依赖本机提示词文件。
+                  脚本会自动装依赖、构建、找出你本装的 AI 客户端并逐个配好，最后验证 MCP 协议。调取时访问本机服务端，不依赖离线快照。
                 </p>
                 <p className="text-xs leading-relaxed text-muted">已支持：{SETUP_CLIENTS}</p>
                 <p className="text-xs leading-relaxed text-muted">
@@ -620,6 +643,8 @@ export function SettingsModal({ settings, onSave, onClose, onNotify }: SettingsM
           </button>
         </footer>
       </div>
+      {/* 独立弹窗层级高于设置（z-50 > z-40），关闭后回到设置不丢状态 */}
+      {showMcp && <McpDialog cards={cards} onClose={() => setShowMcp(false)} onNotify={onNotify} />}
     </div>
   )
 }

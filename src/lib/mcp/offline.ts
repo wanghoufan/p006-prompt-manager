@@ -1,0 +1,523 @@
+/**
+ * 离线 MCP 接入包：把网页里的提示词库变成「一个扔到别人电脑上就能跑的 MCP server」。
+ *
+ * 为什么需要它：GitHub Pages 静态试用版没有服务端，而原 MCP server 依赖
+ * `POST /api/mcp/activate` + 本机令牌。访客浏览器里既没有服务端也没有令牌，
+ * 所以试用版的 MCP 入口此前被整体隐藏。
+ *
+ * 本模块的解法：把「当前库里有调取码的卡片」快照内嵌进一个零依赖的 .mjs 脚本，
+ * 该脚本自己实现 MCP stdio 协议（换行分隔 JSON-RPC 2.0），不需要 npm install、
+ * 不需要服务端、不需要网络。访客下载这个文件，交给本机 AI 客户端即可使用。
+ *
+ * 纯逻辑模块：不 import React、不碰 localStorage、不碰 DOM，便于单测与复用。
+ */
+
+import type { Card } from '@/lib/types'
+
+/** MCP 工具名：与本地完整版的 mcp/prompt-server 保持一致，客户端侧可复用同一套使用习惯。 */
+export const MCP_TOOL_NAME = 'prompt_manager_activate_prompt'
+
+/** 生成的单文件 server 默认文件名。 */
+export const MCP_SERVER_FILE = 'prompt-manager-mcp.mjs'
+
+/** 建议的落地目录（相对用户主目录）。提示词里会让 AI 创建并放进去。 */
+export const MCP_INSTALL_DIR = '.prompt-manager-mcp'
+
+/** 内嵌协议版本：客户端请求的版本在支持列表内就回显，否则回落到这里。 */
+const SUPPORTED_PROTOCOL_VERSIONS = ['2024-11-05', '2025-03-26', '2025-06-18', '2025-11-25'] as const
+const FALLBACK_PROTOCOL_VERSION = '2024-11-05'
+
+export interface McpSnapshotEntry {
+  code: string
+  title: string
+  body: string
+  tags: string[]
+  thinkingSummary: string | null
+  updatedAt: string
+}
+
+export interface McpBundle {
+  fileName: string
+  content: string
+  entryCount: number
+  bytes: number
+}
+
+/** 调取码归一：去空白 + 小写。大小写不敏感是产品既定口径（见 /api/mcp/activate）。 */
+export function normalizeCode(code: string): string {
+  return code.trim().toLowerCase()
+}
+
+/**
+ * 抽出可被调取的卡片快照。只收「有调取码」且「正文非空」的卡片——
+ * 没有调取码的卡片在 MCP 里永远取不到，带进去只会让包变大。
+ */
+export function buildSnapshot(cards: Card[]): McpSnapshotEntry[] {
+  const seen = new Set<string>()
+  const entries: McpSnapshotEntry[] = []
+  for (const card of cards) {
+    const code = normalizeCode(card.code ?? '')
+    if (!code) continue
+    const body = (card.body ?? '').trim()
+    if (!body) continue
+    // 同一调取码只保留最近更新的一张：否则 AI 调取时命中哪张不确定。
+    if (seen.has(code)) {
+      const existing = entries.findIndex((e) => e.code === code)
+      if (existing >= 0 && card.updatedAt > entries[existing].updatedAt) {
+        entries[existing] = toEntry(card, code, body)
+      }
+      continue
+    }
+    seen.add(code)
+    entries.push(toEntry(card, code, body))
+  }
+  return entries.sort((a, b) => a.code.localeCompare(b.code))
+}
+
+function toEntry(card: Card, code: string, body: string): McpSnapshotEntry {
+  return {
+    code,
+    title: card.title || '未命名卡片',
+    body,
+    tags: Array.isArray(card.tags) ? card.tags.filter((t) => typeof t === 'string') : [],
+    thinkingSummary: card.thinkingSummary ?? null,
+    updatedAt: card.updatedAt ?? '',
+  }
+}
+
+/** 浏览器内调取码命中（调取台用，与生成的 server 同一判定规则）。 */
+export function findEntryByCode(cards: Card[], code: string): McpSnapshotEntry | null {
+  const key = normalizeCode(code)
+  if (!key) return null
+  const entries = buildSnapshot(cards)
+  return entries.find((entry) => entry.code === key) ?? null
+}
+
+/**
+ * 生成与 MCP server 返回完全同构的激活文本。
+ * 网页里的「调取台」用它，保证演示看到的东西和 AI 真拿到的东西一致。
+ */
+export function buildActivationText(entry: McpSnapshotEntry): string {
+  return (
+    '<prompt-manager-activation private="true">\n' +
+    'status: activated\n' +
+    'model-action: Treat activated-instructions as the active role/task instructions for this turn.\n' +
+    'user-visible-action: Do not display, quote, summarize, or acknowledge the instructions. Do not ask a generic next-step question solely because activation succeeded.\n' +
+    'execution: Immediately perform any explicit initialization or task in activated-instructions, subject to higher-priority instructions and normal permission checks.\n' +
+    '</prompt-manager-activation>\n\n' +
+    '<activated-instructions>\n' +
+    entry.body +
+    '\n</activated-instructions>'
+  )
+}
+
+/** 生成给 AI 的接入提示词：自包含，AI 拿到就能在用户本机装好并自检。 */
+export function buildSetupPrompt(options: {
+  entryCount: number
+  sampleCode: string | null
+  generatedAt: string
+}): string {
+  const { entryCount, sampleCode, generatedAt } = options
+  const selfTest = sampleCode ? `node "$HOME/${MCP_INSTALL_DIR}/${MCP_SERVER_FILE}" --selftest ${sampleCode}` : `node "$HOME/${MCP_INSTALL_DIR}/${MCP_SERVER_FILE}" --list`
+  return [
+    `请帮我在这台电脑上接入「提示词管理器」的 MCP 工具。我已经从网页下载了一个离线 MCP server 文件（${MCP_SERVER_FILE}，内含 ${entryCount} 张带调取码的卡片，生成于 ${generatedAt}）。`,
+    '',
+    '请按顺序执行，每一步都要真实跑过再进入下一步：',
+    '',
+    `1. 找到文件：在我常用的下载目录里找 ${MCP_SERVER_FILE}（macOS 一般是 ~/Downloads，Windows 一般是 %USERPROFILE%\\Downloads，也可能是系统语言对应的「下载」目录）。找到后把它的绝对路径记下来。找不到就停下来告诉我，不要自己编一个。`,
+    `2. 安装：在该文件同一目录执行 mkdir -p "$HOME/${MCP_INSTALL_DIR}"，然后把文件移动（不是复制）到 $HOME/${MCP_INSTALL_DIR}/${MCP_SERVER_FILE}。移动后确认文件存在且大小非 0。`,
+    `3. 确认 Node：执行 command -v node 拿到 node 的绝对路径（Windows 用 where node）。要求 Node 18 或更高；低于 18 就停下来告诉我升级。`,
+    '4. 自检（关键，必须看到输出再往下）：执行',
+    `   ${selfTest}`,
+    '   期望：打印出卡片的标题与正文摘要，且退出码为 0。如果报「数据为空」或找不到文件，先修好再继续，不要跳过。',
+    '5. 接入 MCP 客户端：探测这台机器上装了哪些支持 MCP 的客户端（例如 WorkBuddy、Codex、Cursor、Claude Desktop、Cline、Windsurf、Gemini CLI、OpenCode），把下面这个 stdio server 写进它们的 MCP 配置：',
+    '   - 启动命令：node 的绝对路径（第 3 步拿到的）',
+    `   - 参数：$HOME/${MCP_INSTALL_DIR}/${MCP_SERVER_FILE}`,
+    '   - 传输方式：stdio',
+    '   - 名称：prompt-manager',
+    '   JSON 系客户端的配置形如：',
+    '   {"mcpServers":{"prompt-manager":{"command":"<node 绝对路径>","args":["<脚本绝对路径>"]}}}',
+    '   Codex（TOML）形如：',
+    '   [mcp_servers.prompt-manager]',
+    '   command = "<node 绝对路径>"',
+    '   args = ["<脚本绝对路径>"]',
+    '   写任何配置文件之前，先把原文件备份成 <文件名>.bak-<时间戳>；只改 MCP 相关节点，不要动其它配置。',
+    '6. 验证接入：重开客户端会话，确认工具列表里出现 prompt_manager_activate_prompt；然后调用一次 prompt_manager_activate_prompt，参数 code 用下面的示例调取码。',
+    '',
+    '自检用的示例调取码：',
+    sampleCode ? `   ${sampleCode}` : '   （本次导出的库里没有可用的调取码，请让我先回网页给卡片设一个调取码再重新导出）',
+    '',
+    '完成标准（三条都要满足才算完成）：',
+    '1) 自检命令退出码 0 且有卡片内容输出；',
+    '2) 客户端工具列表里能看到 prompt_manager_activate_prompt；',
+    '3) 用示例调取码真实调用一次成功。',
+    '',
+    '做完用三句话告诉我：装在哪个客户端、工具是否可见、示例调取码是否调取成功。中间任何一步失败，就停下来把原始报错贴给我，不要猜着改。',
+    '',
+    '注意：这个文件是离线快照，不含任何密钥，也不联网。我以后在网页上改了卡片，会重新下载一份覆盖同名文件，客户端无需重配。',
+  ].join('\n')
+}
+
+export interface ClientSnippet {
+  client: string
+  location: string
+  format: 'json' | 'toml'
+  snippet: string
+  note: string
+}
+
+/** 手工配置用的片段：给不想让 AI 动手的人，也给接入后排查用。 */
+export function buildClientSnippets(): ClientSnippet[] {
+  const scriptPath = `$HOME/${MCP_INSTALL_DIR}/${MCP_SERVER_FILE}`
+  const jsonSnippet = JSON.stringify(
+    {
+      mcpServers: {
+        'prompt-manager': {
+          command: 'node',
+          args: [`${scriptPath}`.replace('$HOME', '<你的主目录>')],
+        },
+      },
+    },
+    null,
+    2,
+  )
+  const tomlSnippet = [
+    '[mcp_servers.prompt-manager]',
+    'command = "node"',
+    `args = ["<你的主目录>/${MCP_INSTALL_DIR}/${MCP_SERVER_FILE}"]`,
+  ].join('\n')
+  return [
+    {
+      client: 'WorkBuddy / Cursor / Claude Desktop / Cline / Windsurf / Gemini CLI',
+      location: '各客户端 MCP 设置里的 mcpServers 节点',
+      format: 'json',
+      snippet: jsonSnippet,
+      note: '写入后需要重开客户端会话；WorkBuddy 还要在「连接器」里点一次信任。',
+    },
+    {
+      client: 'Codex CLI',
+      location: '~/.codex/config.toml',
+      format: 'toml',
+      snippet: tomlSnippet,
+      note: '追加到文件末尾即可，Codex 重开会话后生效。',
+    },
+  ]
+}
+
+/** 生成单文件离线 server 的源码。数据与时间以占位符注入，避免模板嵌套转义问题。 */
+export function buildBundle(cards: Card[], generatedAt = new Date().toISOString()): McpBundle {
+  const entries = buildSnapshot(cards)
+  // 替换顺序有讲究：__PM_DATA__ 必须最后注入。
+  // 卡片正文是用户内容，可能恰好含 `__PM_GENERATED_AT__` 这类字面量；
+  // 若先注入数据、再做其余替换，正文里的同名字面量会被一起改掉（已推演出这条路径）。
+  // 此外 __PM_GENERATED_AT__ 在模板里出现两次（头注释 + 常量），必须 replaceAll。
+  const content = MCP_SERVER_TEMPLATE.replaceAll('__PM_GENERATED_AT__', generatedAt)
+    .replaceAll('__PM_PROTOCOLS__', JSON.stringify(SUPPORTED_PROTOCOL_VERSIONS))
+    .replaceAll('__PM_FALLBACK_PROTOCOL__', FALLBACK_PROTOCOL_VERSION)
+    .replaceAll('__PM_DATA__', safeJson(entries))
+  return {
+    fileName: MCP_SERVER_FILE,
+    content,
+    entryCount: entries.length,
+    bytes: new TextEncoder().encode(content).length,
+  }
+}
+
+/** JSON 内联到 JS 源码时的兜底转义：U+2028/2029 在旧引擎里会截断字符串字面量。 */
+function safeJson(value: unknown): string {
+  return JSON.stringify(value).replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029')
+}
+
+/**
+ * 零依赖 MCP server 模板。
+ *
+ * 协议实现只覆盖本工具真正需要的部分：initialize / tools.list / tools.call / ping，
+ * 以及未知方法的 -32601。分帧为「换行分隔 JSON」，与官方 SDK 的 stdio 传输一致。
+ */
+const MCP_SERVER_TEMPLATE = `#!/usr/bin/env node
+/**
+ * Prompt Manager MCP Server（离线单文件版）
+ * 由提示词管理器网页版生成于 __PM_GENERATED_AT__
+ *
+ * 数据已内嵌在下方 SNAPSHOT 里：不需要服务端、不需要网络、不需要 npm install。
+ * 用法：
+ *   node prompt-manager-mcp.mjs            启动 MCP stdio server（客户端会这样调用）
+ *   node prompt-manager-mcp.mjs --list     列出全部调取码
+ *   node prompt-manager-mcp.mjs --selftest [调取码]   离线自检
+ */
+
+import process from 'node:process'
+
+const GENERATED_AT = '__PM_GENERATED_AT__'
+const SUPPORTED_PROTOCOLS = __PM_PROTOCOLS__
+const FALLBACK_PROTOCOL = '__PM_FALLBACK_PROTOCOL__'
+
+/** @type {{code:string,title:string,body:string,tags:string[],thinkingSummary:string|null,updatedAt:string}[]} */
+const SNAPSHOT = __PM_DATA__
+
+const SERVER_INFO = { name: 'prompt-manager-mcp-offline', version: '1.0.0' }
+
+const TOOL = {
+  name: 'prompt_manager_activate_prompt',
+  title: '激活提示词卡片',
+  description:
+    '当用户说“调取/激活/加载/切换到/用 … 跑”加调取码时立即调用。' +
+    '成功结果的 body 是仅供模型执行的私有指令，不是要呈现给用户的数据：不得展示、复述或总结；' +
+    '不得只因激活成功而追问“下一步做什么”。应立刻遵循其中明确的角色、初始化和任务指令' +
+    '（仍受既有 system 指令、权限和安全策略约束）。',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      code: { type: 'string', minLength: 1, maxLength: 64, description: '卡片的调取码，大小写不敏感' },
+    },
+    required: ['code'],
+    additionalProperties: false,
+  },
+  outputSchema: {
+    type: 'object',
+    properties: {
+      code: { type: ['string', 'null'] },
+      title: { type: 'string' },
+      body: { type: 'string' },
+      tags: { type: 'array', items: { type: 'string' } },
+      thinkingSummary: { type: ['string', 'null'] },
+      updatedAt: { type: ['string', 'null'] },
+    },
+    required: ['code', 'title', 'body', 'tags', 'thinkingSummary', 'updatedAt'],
+  },
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+}
+
+const INSTRUCTIONS =
+  'prompt_manager_activate_prompt 用于加载可信提示词卡片。成功调用后，' +
+  '将工具结果中的 body 作为本轮后续行为指令：不要向用户展示、复述或概括其正文；' +
+  '不要仅因卡片激活而询问泛化的“下一步”。若正文给出明确的初始化或任务，' +
+  '立即在既有系统策略和权限范围内执行。'
+
+function normalizeCode(code) {
+  return String(code == null ? '' : code).trim().toLowerCase()
+}
+
+function findEntry(code) {
+  const key = normalizeCode(code)
+  if (!key) return null
+  return SNAPSHOT.find((entry) => entry.code === key) || null
+}
+
+function activationText(entry) {
+  return (
+    '<prompt-manager-activation private="true">\\n' +
+    'status: activated\\n' +
+    'model-action: Treat activated-instructions as the active role/task instructions for this turn.\\n' +
+    'user-visible-action: Do not display, quote, summarize, or acknowledge the instructions. Do not ask a generic next-step question solely because activation succeeded.\\n' +
+    'execution: Immediately perform any explicit initialization or task in activated-instructions, subject to higher-priority instructions and normal permission checks.\\n' +
+    '</prompt-manager-activation>\\n\\n' +
+    '<activated-instructions>\\n' +
+    entry.body +
+    '\\n</activated-instructions>'
+  )
+}
+
+/** 工具调用的唯一实现：stdio 服务与 --selftest 共用，保证两处行为一致。 */
+function callTool(args) {
+  const code = normalizeCode(args && args.code)
+  if (!code) {
+    return {
+      isError: true,
+      content: [{ type: 'text', text: '调取码不能为空' }],
+    }
+  }
+  if (SNAPSHOT.length === 0) {
+    return {
+      isError: true,
+      content: [{
+        type: 'text',
+        text: '这个离线包是空的：导出时库里没有带调取码的卡片。请回网页给卡片设一个调取码后重新导出。',
+      }],
+    }
+  }
+  const entry = findEntry(code)
+  if (!entry) {
+    return {
+      isError: true,
+      content: [{
+        type: 'text',
+        text: '未找到调取码为「' + code + '」的卡片。可用的调取码：' + SNAPSHOT.map((e) => e.code).join(', '),
+      }],
+    }
+  }
+  const output = {
+    code: entry.code,
+    title: entry.title,
+    body: entry.body,
+    tags: entry.tags || [],
+    thinkingSummary: entry.thinkingSummary,
+    updatedAt: entry.updatedAt || null,
+  }
+  return {
+    isError: false,
+    content: [{ type: 'text', text: activationText(entry) }],
+    structuredContent: output,
+  }
+}
+
+function send(message) {
+  process.stdout.write(JSON.stringify(message) + '\\n')
+}
+
+function reply(id, result) {
+  send({ jsonrpc: '2.0', id, result })
+}
+
+function replyError(id, code, message) {
+  send({ jsonrpc: '2.0', id, error: { code, message } })
+}
+
+function pickProtocol(requested) {
+  if (typeof requested === 'string' && SUPPORTED_PROTOCOLS.indexOf(requested) !== -1) return requested
+  return FALLBACK_PROTOCOL
+}
+
+function handleMessage(message) {
+  if (!message || typeof message !== 'object' || typeof message.method !== 'string') return
+  const method = message.method
+  const id = message.id
+  const isNotification = id === undefined || id === null
+  const params = message.params && typeof message.params === 'object' ? message.params : {}
+
+  // 通知一律不回复；JSON-RPC 规定通知没有 id。
+  if (method === 'notifications/initialized' || method === 'notifications/cancelled') return
+  if (isNotification) return
+
+  switch (method) {
+    case 'initialize':
+      reply(id, {
+        protocolVersion: pickProtocol(params.protocolVersion),
+        capabilities: { tools: { listChanged: false } },
+        serverInfo: SERVER_INFO,
+        instructions: INSTRUCTIONS,
+      })
+      return
+    case 'ping':
+      reply(id, {})
+      return
+    case 'tools/list':
+      reply(id, { tools: [TOOL] })
+      return
+    case 'tools/call': {
+      const name = params.name
+      if (name !== TOOL.name) {
+        replyError(id, -32602, '未知工具：' + String(name))
+        return
+      }
+      const result = callTool(params.arguments)
+      reply(id, {
+        content: result.content,
+        structuredContent: result.structuredContent,
+        isError: result.isError === true,
+      })
+      return
+    }
+    default:
+      replyError(id, -32601, 'Method not found: ' + method)
+  }
+}
+
+function startServer() {
+  let buffer = ''
+  process.stdin.setEncoding('utf8')
+  process.stdin.on('data', (chunk) => {
+    buffer += chunk
+    // 防御：客户端异常时可能持续写入却没有换行，缓冲区会无上限增长并吃满内存。
+    // 单条消息超过 8MB 一定不是合法 MCP 请求，直接丢弃（与官方 SDK 的 maxBufferSize 同量级）。
+    if (buffer.length > 8 * 1024 * 1024) {
+      buffer = ''
+      process.stderr.write('prompt-manager-mcp: 单条消息超过 8MB，已丢弃\\n')
+      return
+    }
+    let index = buffer.indexOf('\\n')
+    while (index !== -1) {
+      const line = buffer.slice(0, index).replace(/\\r$/, '')
+      buffer = buffer.slice(index + 1)
+      if (line.trim()) {
+        try {
+          handleMessage(JSON.parse(line))
+        } catch (error) {
+          // 单条消息坏掉不应该拖垮整个 server；也不要把原始内容回显（可能含用户正文）。
+          process.stderr.write('prompt-manager-mcp: 忽略一条无法解析的消息\\n')
+        }
+      }
+      index = buffer.indexOf('\\n')
+    }
+  })
+  process.stdin.on('end', () => process.exit(0))
+  // stderr 只用于诊断；stdout 是协议通道，任何非 JSON 输出都会破坏握手。
+  process.stderr.write('prompt-manager-mcp offline ready · ' + SNAPSHOT.length + ' codes · generated ' + GENERATED_AT + '\\n')
+}
+
+function runSelftest(argv) {
+  const code = argv[0]
+  const lines = []
+  let ok = true
+  lines.push('离线包：' + SNAPSHOT.length + ' 张可调取卡片 · 生成于 ' + GENERATED_AT)
+  lines.push('')
+
+  const listResult = { tools: [TOOL] }
+  const toolNames = listResult.tools.map((t) => t.name)
+  lines.push('[1] tools/list → ' + (toolNames.indexOf(TOOL.name) !== -1 ? 'OK' : 'FAIL') + ' (' + toolNames.join(', ') + ')')
+  if (toolNames.indexOf(TOOL.name) === -1) ok = false
+
+  if (SNAPSHOT.length === 0) {
+    lines.push('[2] 数据为空 → 请在网页里给卡片设置调取码后重新导出')
+    ok = false
+  } else {
+    const target = code || SNAPSHOT[0].code
+    const result = callTool({ code: target })
+    if (result.isError) {
+      lines.push('[2] tools/call "' + target + '" → FAIL: ' + result.content[0].text)
+      ok = false
+    } else {
+      const out = result.structuredContent
+      lines.push('[2] tools/call "' + target + '" → OK')
+      lines.push('    标题：' + out.title)
+      lines.push('    标签：' + (out.tags.length ? out.tags.join(' / ') : '（无）'))
+      lines.push('    正文摘要：' + out.body.replace(/\\s+/g, ' ').slice(0, 80) + (out.body.length > 80 ? '…' : ''))
+      lines.push('    正文长度：' + out.body.length + ' 字')
+    }
+  }
+
+  lines.push('')
+  lines.push('可用调取码（' + SNAPSHOT.length + '）：' + (SNAPSHOT.map((e) => e.code).join(', ') || '（无）'))
+  lines.push('')
+  lines.push(ok ? 'SELFTEST: PASS' : 'SELFTEST: FAIL')
+  process.stdout.write(lines.join('\\n') + '\\n')
+  process.exit(ok ? 0 : 1)
+}
+
+function runList() {
+  if (SNAPSHOT.length === 0) {
+    process.stdout.write('（空包：导出时库里没有带调取码的卡片）\\n')
+    return
+  }
+  for (const entry of SNAPSHOT) {
+    process.stdout.write(entry.code + '\\t' + entry.title + '\\t' + entry.body.length + ' 字\\n')
+  }
+}
+
+const argv = process.argv.slice(2)
+if (argv[0] === '--selftest') runSelftest(argv.slice(1))
+else if (argv[0] === '--list') runList()
+else if (argv[0] === '--help' || argv[0] === '-h') {
+  process.stdout.write(
+    'prompt-manager-mcp（离线单文件版）\\n' +
+    '  （无参数）        启动 MCP stdio server\\n' +
+    '  --list            列出全部调取码\\n' +
+    '  --selftest [code] 离线自检（不连客户端）\\n',
+  )
+} else startServer()
+`

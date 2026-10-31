@@ -19,6 +19,7 @@ import { CardItem } from '@/components/CardItem'
 import { PreviewPanel } from '@/components/PreviewPanel'
 import { CardDetail } from '@/components/CardDetail'
 import { SettingsModal } from '@/components/SettingsModal'
+import { McpDialog } from '@/components/McpPanel'
 import { TrashModal } from '@/components/TrashModal'
 import { Toast } from '@/components/Toast'
 import { useConfirm } from '@/lib/useConfirm'
@@ -189,6 +190,8 @@ export default function Home() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [detailId, setDetailId] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
+  // MCP 接入台的独立入口：试用版横幅里直接可点，不必先翻设置。
+  const [showMcp, setShowMcp] = useState(false)
   // 回收站：本机持久化（pm:trash），删除进站、手动清空；恢复走正常保存链路重新上云。
   const [trash, setTrash] = useState<TrashEntry[]>(() => readTrash())
   const [showTrash, setShowTrash] = useState(false)
@@ -2084,6 +2087,13 @@ export default function Home() {
         <div className="flex shrink-0 flex-wrap items-center justify-center gap-x-2 gap-y-1 border-b border-gold/25 bg-gold/5 px-5 py-1.5 text-[11px] text-gold-bright">
           <span>网页试用版：数据只保存在当前浏览器，换设备或清缓存不会带走。</span>
           <span className="text-muted">可随时点「导出」备份；AI 可用你自己的 API Key（设置 → AI 服务），云同步未启用。</span>
+          <button
+            type="button"
+            className="rounded-full border border-gold/40 px-2 py-0.5 text-gold-bright transition-colors hover:bg-gold/15"
+            onClick={() => setShowMcp(true)}
+          >
+            MCP 接入台：一键把你的提示词装到 AI 里
+          </button>
           <span className="text-muted">仅限个人非商业使用（PolyForm Noncommercial 1.0.0），商用请联系作者授权。</span>
         </div>
       )}
@@ -2333,12 +2343,16 @@ export default function Home() {
           onClose={() => setShowTrash(false)}
         />
       )}
+      {showMcp && (
+        <McpDialog cards={sourceCards} onClose={() => setShowMcp(false)} onNotify={notify} />
+      )}
       {showSettings && (
         <SettingsModal
           settings={settings}
           onSave={setSettings}
           onClose={() => setShowSettings(false)}
           onNotify={notify}
+          cards={sourceCards}
         />
       )}
       {confirmDialog}
