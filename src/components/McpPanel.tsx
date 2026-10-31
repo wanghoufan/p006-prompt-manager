@@ -65,8 +65,8 @@ export function McpPanel({ cards, onNotify }: McpPanelProps) {
   const generatedAt = useMemo(() => new Date().toISOString(), [])
   const bundle = useMemo(() => buildBundle(cards, generatedAt), [cards, generatedAt])
   const setupPrompt = useMemo(
-    () => buildSetupPrompt({ entryCount: entries.length, sampleCode: entries[0]?.code ?? null, generatedAt }),
-    [entries, generatedAt],
+    () => buildSetupPrompt({ cards, generatedAt }),
+    [cards, generatedAt],
   )
   const snippets = useMemo(() => buildClientSnippets(), [])
   const empty = entries.length === 0
@@ -84,18 +84,18 @@ export function McpPanel({ cards, onNotify }: McpPanelProps) {
   }
 
   /**
-   * 一步接好：同一次点击里先落盘、再写剪贴板。
-   * 顺序不能反——下载必须发生在用户手势里，await 剪贴板之后再触发容易被浏览器拦。
+   * 只做一件事：把「安装指令 + 完整脚本」写进剪贴板。
+   * 用户不下载任何文件——文本里已含脚本全文，智能体自己落盘、写配置、自检。
+   * （2026-10-31 用户两次纠正：之前拆成「下载 + 复制 + 上传」是错的。）
    */
   async function handleInstall() {
-    downloadTextFile(bundle.content, bundle.fileName)
     try {
       await navigator.clipboard.writeText(setupPrompt)
       setCopied('install')
-      onNotify?.(`已下载 ${MCP_SERVER_FILE} 并复制好，把那段话发给你的 AI 即可`)
+      onNotify?.(`已复制安装指令（${setupPrompt.length.toLocaleString()} 字），粘给你的智能体即可`)
     } catch {
       setCopied('error')
-      onNotify?.('接入包已下载，但复制失败：请展开下方「这段话写了什么」手动复制')
+      onNotify?.('复制失败：请展开「看看复制了什么」手动全选复制')
     }
   }
 
@@ -118,35 +118,36 @@ export function McpPanel({ cards, onNotify }: McpPanelProps) {
 
       {/* 第一步：唯一需要用户动手的事 */}
       <section className="rounded-lg border border-gold/30 bg-gold/5 px-3.5 py-3">
-        <p className="text-sm text-paper">1 · 复制这段，发给你常用的 AI</p>
+        <p className="text-sm text-paper">1 · 复制这段，粘给你的智能体</p>
         <p className="mt-0.5 text-xs leading-relaxed text-muted">
-          点一下就同时把接入包下载到你的「下载」目录，AI 会自己找到它、装好并自检。
+          点一下<b className="text-paper-dim">只复制</b>，不用下载任何文件。这段文本里已经带着整个接入包，智能体会自己建文件、写客户端配置、跑自检。
         </p>
         <button type="button" className="btn-gold mt-2.5 w-full" onClick={() => void handleInstall()} disabled={empty}>
-          {empty ? '先去给一张卡片设调取码' : copied === 'install' ? '已复制，去粘贴给 AI ✓' : '复制并下载接入包'}
+          {empty
+            ? '先去给一张卡片设调取码'
+            : copied === 'install'
+              ? `已复制 ${setupPrompt.length.toLocaleString()} 字，去粘贴 ✓`
+              : '复制安装指令'}
         </button>
         {copied === 'error' && (
-          <p className="mt-1.5 text-xs text-rust">复制失败，请展开下方文本手动复制（接入包已经下载好了）。</p>
+          <p className="mt-1.5 text-xs text-rust">复制失败，请展开「看看复制了什么」手动全选复制。</p>
         )}
         <details className="mt-2">
-          <summary className="cursor-pointer text-[11px] text-muted">这段话写了什么</summary>
-          <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-md bg-ink-850 p-2 font-mono text-[10px] leading-relaxed text-paper-dim">
+          <summary className="cursor-pointer text-[11px] text-muted">
+            看看复制了什么（{setupPrompt.length.toLocaleString()} 字 · 内含 {bundle.entryCount} 张卡片 · {formatBytes(bundle.bytes)}）
+          </summary>
+          <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md bg-ink-850 p-2 font-mono text-[10px] leading-relaxed text-paper-dim">
             {setupPrompt}
           </pre>
         </details>
         <details className="mt-1">
-          <summary className="cursor-pointer text-[11px] text-muted">
-            它具体会做什么（{bundle.entryCount} 张可调取 · {formatBytes(bundle.bytes)}）
-          </summary>
-          <ol className="mt-2 list-decimal space-y-1 pl-4 text-[11px] leading-relaxed text-muted">
-            <li>在下载目录里找到 {MCP_SERVER_FILE}，装到 <code className="font-mono">~/{MCP_INSTALL_DIR}/</code></li>
-            <li>跑一次自检，确认能读到你库里的卡片</li>
-            <li>写进你本机 MCP 客户端的配置（WorkBuddy / Codex / Cursor / Claude Desktop 等）</li>
-            <li>用示例调取码真实调用一次，通过才算装好</li>
-          </ol>
-          <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
-            接入包是离线快照：不含密钥、不联网。以后改了卡片，回来重新点一次即可覆盖，客户端不用重配。
+          <summary className="cursor-pointer text-[11px] text-muted">不想粘这么长？改用文件方式（可选）</summary>
+          <p className="mt-2 text-[11px] leading-relaxed text-muted">
+            下载 {MCP_SERVER_FILE} 到本机，再让智能体把它装到 <code className="font-mono">~/{MCP_INSTALL_DIR}/</code>。
           </p>
+          <button type="button" className="btn mt-1.5 w-full text-xs" onClick={() => downloadTextFile(bundle.content, bundle.fileName)} disabled={empty}>
+            下载 {MCP_SERVER_FILE}（{formatBytes(bundle.bytes)}）
+          </button>
         </details>
       </section>
 

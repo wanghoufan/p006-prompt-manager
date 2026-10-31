@@ -113,52 +113,48 @@ export function buildActivationText(entry: McpSnapshotEntry): string {
 
 /** 生成给 AI 的接入提示词：自包含，AI 拿到就能在用户本机装好并自检。 */
 export function buildSetupPrompt(options: {
-  entryCount: number
-  sampleCode: string | null
+  cards: Card[]
   generatedAt: string
 }): string {
-  const { entryCount, sampleCode, generatedAt } = options
-  const selfTest = sampleCode ? `node "$HOME/${MCP_INSTALL_DIR}/${MCP_SERVER_FILE}" --selftest ${sampleCode}` : `node "$HOME/${MCP_INSTALL_DIR}/${MCP_SERVER_FILE}" --list`
+  const { cards, generatedAt } = options
+  const bundle = buildBundle(cards, generatedAt)
+  const entries = buildSnapshot(cards)
+  const sampleCode = entries[0]?.code ?? ''
+  const scriptPath = `~/${MCP_INSTALL_DIR}/${MCP_SERVER_FILE}`
+
+  // 设计要点（2026-10-31 用户裁定，两次改回来）：
+  // 用户只做一个动作——复制这段文本、粘给智能体。**不要**让用户下载文件、再上传、再发送。
+  // 所以脚本源码与卡片数据全部内嵌在这段文本里，由智能体自己落盘。
+  // 代价是文本较长（数 KB～数十 KB），但这是「用户零额外动作」的必要成本。
   return [
-    `请帮我在这台电脑上接入「提示词管理器」的 MCP 工具。我已经从网页下载了一个离线 MCP server 文件（${MCP_SERVER_FILE}，内含 ${entryCount} 张带调取码的卡片，生成于 ${generatedAt}）。`,
+    '请帮我把下面这个离线 MCP server 装到本机。全程由你完成，我不需要做任何事，也不要让我下载或上传文件。',
     '',
-    '请按顺序执行，每一步都要真实跑过再进入下一步：',
+    '按顺序做，每一步真实执行后再进入下一步：',
     '',
-    `1. 找到文件：在我常用的下载目录里找 ${MCP_SERVER_FILE}（macOS 一般是 ~/Downloads，Windows 一般是 %USERPROFILE%\\Downloads，也可能是系统语言对应的「下载」目录）。找到后把它的绝对路径记下来。找不到就停下来告诉我，不要自己编一个。`,
-    `2. 安装：在该文件同一目录执行 mkdir -p "$HOME/${MCP_INSTALL_DIR}"，然后把文件移动（不是复制）到 $HOME/${MCP_INSTALL_DIR}/${MCP_SERVER_FILE}。移动后确认文件存在且大小非 0。`,
-    `3. 确认 Node：执行 command -v node 拿到 node 的绝对路径（Windows 用 where node）。要求 Node 18 或更高；低于 18 就停下来告诉我升级。`,
-    '4. 自检（关键，必须看到输出再往下）：执行',
-    `   ${selfTest}`,
-    '   期望：打印出卡片的标题与正文摘要，且退出码为 0。如果报「数据为空」或找不到文件，先修好再继续，不要跳过。',
-    '5. 接入 MCP 客户端：探测这台机器上装了哪些支持 MCP 的客户端（例如 WorkBuddy、Codex、Cursor、Claude Desktop、Cline、Windsurf、Gemini CLI、OpenCode），把下面这个 stdio server 写进它们的 MCP 配置：',
-    '   - 启动命令：node 的绝对路径（第 3 步拿到的）',
-    `   - 参数：$HOME/${MCP_INSTALL_DIR}/${MCP_SERVER_FILE}`,
-    '   - 传输方式：stdio',
+    `1. 把 ===BEGIN=== 与 ===END=== 之间的内容**原样**保存为 ${scriptPath}（先 mkdir -p ~/${MCP_INSTALL_DIR}；含 shebang，逐字保存，不要改写、不要格式化）。`,
+    '2. 执行 command -v node 取得 node 的绝对路径（Windows 用 where node）。低于 Node 18 就停下来告诉我。',
+    `3. 执行 node "${scriptPath}" --selftest ${sampleCode || ''}，必须看到 SELFTEST: PASS 再继续。`,
+    '4. 把下面这个 stdio server 写进本机已装的 MCP 客户端配置（WorkBuddy / Codex / Cursor / Claude Desktop / Cline / Windsurf / Gemini CLI 等，探测到哪些就写哪些）。写之前先备份原文件为 <文件名>.bak-<时间戳>：',
     '   - 名称：prompt-manager',
-    '   JSON 系客户端的配置形如：',
-    '   {"mcpServers":{"prompt-manager":{"command":"<node 绝对路径>","args":["<脚本绝对路径>"]}}}',
-    '   Codex（TOML）形如：',
-    '   [mcp_servers.prompt-manager]',
-    '   command = "<node 绝对路径>"',
-    '   args = ["<脚本绝对路径>"]',
-    '   写任何配置文件之前，先把原文件备份成 <文件名>.bak-<时间戳>；只改 MCP 相关节点，不要动其它配置。',
-    '6. 验证接入：重开客户端会话，确认工具列表里出现 prompt_manager_activate_prompt；然后调用一次 prompt_manager_activate_prompt，参数 code 用下面的示例调取码。',
+    '   - 命令：第 2 步拿到的 node 绝对路径',
+    `   - 参数：${scriptPath.replace('~', '$HOME')}`,
+    '   - JSON 系客户端形如 {"mcpServers":{"prompt-manager":{"command":"<node 绝对路径>","args":["<脚本绝对路径>"]}}}',
+    '   - Codex（TOML）形如 [mcp_servers.prompt-manager] 下的 command / args',
+    '5. 重开客户端会话，确认工具列表里有 prompt_manager_activate_prompt，并用示例调取码真实调用一次。',
     '',
-    '自检用的示例调取码：',
-    sampleCode ? `   ${sampleCode}` : '   （本次导出的库里没有可用的调取码，请让我先回网页给卡片设一个调取码再重新导出）',
+    '完成标准（三条都满足才算装好）：',
+    '1) 自检退出码 0 且打印出卡片内容；',
+    '2) 客户端工具列表能看到 prompt_manager_activate_prompt；',
+    '3) 用示例调取码真实调取成功。',
     '',
-    '完成标准（三条都要满足才算完成）：',
-    '1) 自检命令退出码 0 且有卡片内容输出；',
-    '2) 客户端工具列表里能看到 prompt_manager_activate_prompt；',
-    '3) 用示例调取码真实调用一次成功。',
+    '以后我只会说「调取 <调取码>」这种两个字的命令，你要直接调用 prompt_manager_activate_prompt，不要去文件系统里搜这个码。',
+    '任何一步失败就停下来把原始报错贴给我，不要猜着改。装好用三句话告诉我：装在哪个客户端、自检是否通过、是否真实调取成功。',
     '',
-    '做完用三句话告诉我：装在哪个客户端、工具是否可见、示例调取码是否调取成功。中间任何一步失败，就停下来把原始报错贴给我，不要猜着改。',
+    `（下面是离线包原文：${bundle.entryCount} 张可调取卡片，生成于 ${generatedAt}。它不含密钥、不联网。）`,
     '',
-    // 实测（2026-10-31，codex-cli 0.164.0）：工具已可用时，模型仍可能先去 rg 搜文件，
-    // 明确指名工具后立刻正常调用。这句是把该坑前置告知用户，避免以为「装了没用」。
-    '另外告诉我一条使用要点：以后我说「调取 <调取码>」时，请直接调用 MCP 工具 prompt_manager_activate_prompt，不要去文件系统里搜这个码；如果我发现你先去搜文件，我会提醒你这一点。',
-    '',
-    '注意：这个文件是离线快照，不含任何密钥，也不联网。我以后在网页上改了卡片，会重新下载一份覆盖同名文件，客户端无需重配。',
+    '===BEGIN===',
+    bundle.content,
+    '===END===',
   ].join('\n')
 }
 
