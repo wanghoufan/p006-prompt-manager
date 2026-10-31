@@ -115,6 +115,10 @@ export function McpPanel({ cards, onNotify }: McpPanelProps) {
       <p className="text-xs leading-relaxed text-muted">
         让 AI 直接调用你库里的卡片。装一次，之后每次只说「调取 调取码」。
       </p>
+      <p className="text-[11px] leading-relaxed text-muted">
+        这里只会装<b className="text-paper-dim">你当前浏览器里</b>的卡片（你自己建的，或点顶栏「示例」载入的演示卡）。
+        别人的库不会进来，也不会上传任何服务器——各用各的库。
+      </p>
 
       {/* 第一步：唯一需要用户动手的事 */}
       <section className="rounded-lg border border-gold/30 bg-gold/5 px-3.5 py-3">
