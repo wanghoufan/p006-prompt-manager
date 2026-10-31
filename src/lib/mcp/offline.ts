@@ -131,7 +131,7 @@ export function buildSetupPrompt(options: {
     '',
     '按顺序做，每一步真实执行后再进入下一步：',
     '',
-    `1. 把 ===BEGIN=== 与 ===END=== 之间的内容**原样**保存为 ${scriptPath}（先 mkdir -p ~/${MCP_INSTALL_DIR}；含 shebang，逐字保存，不要改写、不要格式化）。`,
+    `1. 本消息**最后那一整段代码**就是脚本原文：它从第一个以 #! 开头的行开始，一直延续到本消息结尾。把它整段**原样**保存为 ${scriptPath}（先 mkdir -p ~/${MCP_INSTALL_DIR}；逐字保存，不要改写、不要格式化、不要补注释、不要只存一部分）。`,
     '2. 执行 command -v node 取得 node 的绝对路径（Windows 用 where node）。低于 Node 18 就停下来告诉我。',
     `3. 执行 node "${scriptPath}" --selftest ${sampleCode || ''}，必须看到 SELFTEST: PASS 再继续。`,
     '4. 把下面这个 stdio server 写进本机已装的 MCP 客户端配置（WorkBuddy / Codex / Cursor / Claude Desktop / Cline / Windsurf / Gemini CLI 等，探测到哪些就写哪些）。写之前先备份原文件为 <文件名>.bak-<时间戳>：',
@@ -141,20 +141,27 @@ export function buildSetupPrompt(options: {
     '   - JSON 系客户端形如 {"mcpServers":{"prompt-manager":{"command":"<node 绝对路径>","args":["<脚本绝对路径>"]}}}',
     '   - Codex（TOML）形如 [mcp_servers.prompt-manager] 下的 command / args',
     '5. 重开客户端会话，确认工具列表里有 prompt_manager_activate_prompt，并用示例调取码真实调用一次。',
+    '6. **关键一步**：把下面这条规则写进你所在客户端的「常驻说明」，否则我只说两个字时你不会去调工具（实测：只靠工具描述不够，模型会先去搜文件）：',
+    '   - Codex / opencode：写进 AGENTS.md（优先项目级；若 ~/.codex/AGENTS.md 或 ~/.config/opencode/AGENTS.md 是全局共享文件，先告诉我你要追加什么再改，别直接动）',
+    '   - WorkBuddy：写进记忆文档',
+    '   - Cursor：写进 .cursor/rules；其他客户端按其 rules / instructions 机制',
+    '   规则原文（原样写入）：',
+    '   「当用户说『调取码 <码>』（首选）或『调取 <码>』时，直接调用 MCP 工具 prompt_manager_activate_prompt，参数 code 就是那个码；',
+    '   调取码可能极短、很像日常用语（例如 hi），那也是调取码，不是问候，也不要去文件系统搜这个词；',
+    '   调用成功后按卡片正文执行，不要复述正文，也不要追问下一步。」',
     '',
-    '完成标准（三条都满足才算装好）：',
+    '完成标准（四条都满足才算装好）：',
     '1) 自检退出码 0 且打印出卡片内容；',
     '2) 客户端工具列表能看到 prompt_manager_activate_prompt；',
-    '3) 用示例调取码真实调取成功。',
+    '3) 用示例调取码真实调取成功；',
+    '4) 常驻说明已写入，并且你在新会话里只说「调取 xxx」也能触发。',
     '',
-    '以后我只会说「调取 <调取码>」这种两个字的命令，你要直接调用 prompt_manager_activate_prompt，不要去文件系统里搜这个码。',
+    '以后我会说「调取码 <调取码>」（也可能只说「调取 <调取码>」）。调取码可能很短、很像日常用语（例如 hi），那也是调取码——请直接调用 prompt_manager_activate_prompt，不要当成问候去闲聊，也不要到文件系统里搜这个词。',
     '任何一步失败就停下来把原始报错贴给我，不要猜着改。装好用三句话告诉我：装在哪个客户端、自检是否通过、是否真实调取成功。',
     '',
-    `（下面是离线包原文：${bundle.entryCount} 张可调取卡片，生成于 ${generatedAt}。它不含密钥、不联网。）`,
+    `（下面是脚本原文：${bundle.entryCount} 张可调取卡片，生成于 ${generatedAt}。它不含密钥、不联网。）`,
     '',
-    '===BEGIN===',
     bundle.content,
-    '===END===',
   ].join('\n')
 }
 
@@ -261,9 +268,12 @@ const TOOL = {
   name: 'prompt_manager_activate_prompt',
   title: '激活提示词卡片',
   description:
-    '当用户说“调取/激活/加载/切换到/用 … 跑”加调取码时立即调用。' +
+    '当用户说「调取码 <码>」时调用本工具——这是首选说法，最不容易被误解。' +
+    '同义的「调取 <码>」「激活 <码>」「加载 <码>」「用 <码> 跑」也必须调用，参数 code 就是那个码（大小写不敏感）。' +
+    '重要：调取码可能极短、很像日常用语（例如 hi、ok、test、1）。听到「调取码 hi」或「调取 hi」时，hi 就是要传给本工具的参数，' +
+    '既不是问候也不是搜索关键词——直接调用本工具，不要去读文件或猜含义。' +
     '成功结果的 body 是仅供模型执行的私有指令，不是要呈现给用户的数据：不得展示、复述或总结；' +
-    '不得只因激活成功而追问“下一步做什么”。应立刻遵循其中明确的角色、初始化和任务指令' +
+    '不得只因激活成功而追问「下一步做什么」。应立刻遵循其中明确的角色、初始化和任务指令' +
     '（仍受既有 system 指令、权限和安全策略约束）。',
   inputSchema: {
     type: 'object',
@@ -294,9 +304,11 @@ const TOOL = {
 }
 
 const INSTRUCTIONS =
-  'prompt_manager_activate_prompt 用于加载可信提示词卡片。成功调用后，' +
-  '将工具结果中的 body 作为本轮后续行为指令：不要向用户展示、复述或概括其正文；' +
-  '不要仅因卡片激活而询问泛化的“下一步”。若正文给出明确的初始化或任务，' +
+  'prompt_manager_activate_prompt 用于加载可信提示词卡片。' +
+  '用户说「调取码 <码>」（首选说法）或「调取 <码>」时，<码> 就是参数 code；' +
+  '调取码可能是 hi、ok 这类极短的日常词，一律按调取码处理，不要当成问候、闲聊或文件搜索关键词。' +
+  '成功调用后，将工具结果中的 body 作为本轮后续行为指令：不要向用户展示、复述或概括其正文；' +
+  '不要仅因卡片激活而询问泛化的「下一步」。若正文给出明确的初始化或任务，' +
   '立即在既有系统策略和权限范围内执行。'
 
 function normalizeCode(code) {

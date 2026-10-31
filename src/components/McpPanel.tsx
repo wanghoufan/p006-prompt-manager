@@ -113,7 +113,7 @@ export function McpPanel({ cards, onNotify }: McpPanelProps) {
   return (
     <div className="space-y-3">
       <p className="text-xs leading-relaxed text-muted">
-        让 AI 直接调用你库里的卡片。装一次，之后每次只说「调取 调取码」。
+        让 AI 直接调用你库里的卡片。装一次，之后每次只说「调取码 xxx」。
       </p>
       <p className="text-[11px] leading-relaxed text-muted">
         这里只会装<b className="text-paper-dim">你当前浏览器里</b>的卡片（你自己建的，或点顶栏「示例」载入的演示卡）。
@@ -157,9 +157,10 @@ export function McpPanel({ cards, onNotify }: McpPanelProps) {
 
       {/* 第二步：日常只做这一件事 */}
       <section className="rounded-lg border border-line bg-ink-900 px-3.5 py-3">
-        <p className="text-sm text-paper">2 · 对 AI 说「调取 调取码」</p>
+        <p className="text-sm text-paper">2 · 对 AI 说「调取码 &lt;你的码&gt;」</p>
         <p className="mt-0.5 text-xs leading-relaxed text-muted">
           在卡片上给一个短码（设置里的「调取码」字段），之后对 AI 说这句话，它就会按那张卡开工。
+          说「调取码 hi」比只说「调取 hi」更容易被模型认出来。
           {entries.length > 0 && '试试点一下复制：'}
         </p>
         {entries.length > 0 ? (
@@ -169,10 +170,10 @@ export function McpPanel({ cards, onNotify }: McpPanelProps) {
                 key={entry.code}
                 type="button"
                 className="rounded-full border border-line bg-ink-850 px-2.5 py-1 font-mono text-[11px] text-paper-dim transition-colors hover:border-gold/40 hover:text-paper"
-                onClick={() => void copyText(`code-${entry.code}`, `调取 ${entry.code}`, `已复制「调取 ${entry.code}」`)}
+                onClick={() => void copyText(`code-${entry.code}`, `调取码 ${entry.code}`, `已复制「调取码 ${entry.code}」`)}
                 title={entry.title}
               >
-                {copied === `code-${entry.code}` ? '已复制 ✓' : `调取 ${entry.code}`}
+                {copied === `code-${entry.code}` ? '已复制 ✓' : `调取码 ${entry.code}`}
               </button>
             ))}
             {entries.length > 6 && <span className="self-center text-[11px] text-muted">…共 {entries.length} 个</span>}
