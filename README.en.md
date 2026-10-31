@@ -29,7 +29,7 @@ It also plugs into AI workflows: give a frequently used card a short "retrieval 
 
 Open **[wanghoufan.github.io/p006-prompt-manager](https://wanghoufan.github.io/p006-prompt-manager/)** to try the interface.
 
-The trial keeps data in the current browser's localStorage: AI features, cloud sync and MCP are disabled, and switching devices or clearing browser data leaves the cards behind. Use "Export" in the top bar for a backup. For daily use, run the full version locally or with Docker as described below.
+The trial keeps data in the current browser's localStorage: cloud sync is disabled, and switching devices or clearing browser data leaves the cards behind; use "Export" in the top bar for a backup. AI runs straight from your browser with your own key. **MCP works** — click "MCP setup" in the top banner to pack the cards that have retrieval codes into a single offline file, then drop it into any MCP client on any machine. For daily use, run the full version locally or with Docker as described below.
 
 ## Quick Start (local)
 
@@ -87,12 +87,14 @@ Open `http://<host>:3100`. The SQLite database and backups live under `PROMPT_MA
 
 MCP talks to the local HTTP API, so Prompt Manager must be running. Each computer gets its own token, which can be revoked in settings if lost or no longer needed.
 
+**Need MCP without a server** (the online trial, or sharing your library with someone)? Open "Settings → MCP setup", download `prompt-manager-mcp.mjs` (data embedded, zero dependencies, no network) and copy the setup prompt to your AI, which installs and self-checks it. Prompt Manager does not need to be running; the file is a snapshot, so re-download it after changing cards.
+
 ## Data and boundaries
 
 - **Local first**: a single SQLite database is the main store; devices on the LAN sync through the same server. Local mode has no user isolation — anyone who can open the page can edit the data.
 - **Cloud is optional**: cloud sync and login (the fallback path) only turn on after you configure a Supabase public URL and publishable key. Without them the app is purely local.
 - **AI is an external service**: when AI features run, the prompt body is sent to the provider you selected. The key lives in local settings or `.env.local` and is never committed.
-- **The static trial** is only for a quick look at the interface; it does not use the local database and does not support AI, MCP or cloud sync.
+- **The static trial** runs purely in the browser: data and API keys stay in that browser's localStorage. AI calls go straight from your browser with your own key; cloud sync is off; MCP works through the offline bundle (single file, no dependencies, no network), which needs no server.
 - **License**: source-available, **not open source** — released under [PolyForm Noncommercial 1.0.0](LICENSE). Personal, academic, and other noncommercial use (including modification and noncommercial redistribution) is permitted; **any commercial use is prohibited**, including internal use by a for-profit company, bundling into a paid product, or offering paid services built on it. Commercial licensing requires written permission from the author.
 
 ## Project layout

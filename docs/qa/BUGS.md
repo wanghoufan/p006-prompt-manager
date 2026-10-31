@@ -1421,3 +1421,64 @@ QA 报「`legacy-store/prompt-manager.db` 测试前后 SHA256 不一致（`af072
 
 - 推送失败路径（T11）故障注入**未测完整**，失败后 cache 是否残留空快照**未判定**。
 - **不得写作 PASS**：本轮未取得该路径的完整证据。
+
+## MCP 离线接入包实测（2026-10-31，主开发者自测；结论：PASS）
+
+> 性质：本轮以主开发者模式执行，测试与结论由同一执行者产出，标注为**自测/自审**，非独立 QA。
+> 环境：macOS，Node v24.19.0，Playwright 复用系统 Google Chrome（headless，未抢用户前台）；
+> 静态站以 GitHub Pages 真实子路径形态模拟（`http://localhost:8899/p006-prompt-manager/`）。
+> 数据安全：所有用例使用构造的临时卡片与 `scratch/qa-dev.db` 隔离库，**未接触** `~/DockerData/prompt-manager/` 任何文件，
+> 未连生产地址、未 commit/push。
+
+### A. 协议层（官方 MCP SDK 客户端真实握手）
+
+用 `@modelcontextprotocol/sdk` 的 `Client` + `StdioClientTransport` 连生成的离线 server：
+
+| # | 用例 | 结果 |
+|---|---|---|
+| A1 | initialize 握手 | PASS（serverInfo=`prompt-manager-mcp-offline`） |
+| A2 | tools/list 返回 1 个工具 | PASS |
+| A3 | 工具名为 `prompt_manager_activate_prompt` | PASS |
+| A4 | inputSchema 为 object 且 required 含 code | PASS |
+| A5 | 调取码大小写不敏感命中 | PASS（`CODE-REVIEW` 命中 `code-review`） |
+| A6 | 返回内容含激活包装标记 | PASS |
+| A7 | structuredContent 六字段齐全 | PASS |
+| A8 | 未知调取码返回 isError 并列出可用码 | PASS |
+| A9 | 未知工具被拒绝 | PASS |
+
+合计 **9/9 PASS**。同一脚本对「浏览器真实下载的包」复跑一次，同样 9/9 PASS——证明下载产物与本地生成物等价。
+
+### B. 生成器边界
+
+| # | 用例 | 结果 |
+|---|---|---|
+| B1 | 卡片正文含 `__PM_GENERATED_AT__` 等占位符字面量原样保留 | PASS |
+| B2 | 脚本头部生成时间已注入 | PASS |
+| B3 | 协议版本数组已注入 | PASS |
+| B4 | 数据只注入一处 | PASS |
+| B5 | 模板占位符残留仅来自正文（各 1 次），数据占位符 0 次 | PASS |
+| B6 | 重复调取码只保留一条 | PASS |
+
+合计 **6/6 PASS**。
+
+### C. 静态试用版端到端（Playwright，23 项）
+
+覆盖：设置弹窗口号、首页横幅入口直达接入台、可调取卡片计数（无码卡片被排除=1）、
+调取码未命中提示、命中显示（标题/标签/字数/正文摘要）、激活文本复制到剪贴板、
+下载文件名与非空校验、包内含调取码、包内不含无码卡片、包内无占位符残留、
+接入提示词复制（含自检命令/示例码/客户端配置）、手工配置片段展开、关闭回设置、控制台 0 错误。
+
+**合计 23/23 PASS。**
+
+### D. 本地完整版 UI 回归（隔离库，11 项）
+
+覆盖：页面渲染、设置弹窗、MCP 接入区块存在、联网版区块保留、**命令不再写死绝对路径**（`/Users/` 不再出现，
+改为 `cd mcp/prompt-server && node setup.mjs`）、接入台可打开、空库时提示先设调取码且下载按钮禁用、关闭回设置、控制台 0 错误。
+
+**合计 11/11 PASS。**
+
+### E. 结论与遗留
+
+- 用户三条需求（能用 MCP / 配置提示词发到本机 / 直接调取码）均形成可演示闭环。
+- 遗留：**未部署**（静态站需 push master 触发 GitHub Pages 工作流）；**未 commit/push**（等用户授权）。
+- 既有边界（非本轮引入，未修）：卡片正文若含 `</activated-instructions>` 字面量会破坏包装结构，与既有 MCP server 行为一致。
