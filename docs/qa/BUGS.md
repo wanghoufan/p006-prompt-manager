@@ -1482,3 +1482,53 @@ QA 报「`legacy-store/prompt-manager.db` 测试前后 SHA256 不一致（`af072
 - 用户三条需求（能用 MCP / 配置提示词发到本机 / 直接调取码）均形成可演示闭环。
 - 部署：已 push `master`（`c2248e6`），GitHub Pages 工作流 run `41197053771` 构建成功；线上真实浏览器复测 11/11 PASS，线上下载包 SDK 握手 9/9 PASS。**本地 Docker（3100）尚未部署。**
 - 既有边界（非本轮引入，未修）：卡片正文若含 `</activated-instructions>` 字面量会破坏包装结构，与既有 MCP server 行为一致。
+
+## 真实智能体调取验证（2026-10-31，主开发者自测；结论：PASS，并揪出 3 处坏配置）
+
+> 这是对上一节「MCP 离线接入包」的补充：上一轮只用官方 SDK 模拟客户端握手，**没有真实智能体参与**。
+> 本轮按用户要求，在本机把离线包装进真实客户端，让真实模型调取。
+
+### A. 先揪出「为什么你那边一直不能用」
+
+本机三处客户端配置**全部指向同一个不存在的路径**（`.../ing丨0813提示词管理器 mac gpt桌面 v1.0/mcp/prompt-server/dist/index.js`，
+而项目实际在 `/Volumes/项目归档/006-ing-提示词管理器`）：
+
+| 客户端 | 配置文件 | 原状 |
+|---|---|---|
+| WorkBuddy | `~/.workbuddy/mcp.json` | 路径失效 + `disabled: true` |
+| opencode | `~/.config/opencode/opencode.jsonc` | 路径失效 + `enabled: true`（每次启动都在拉起不存在的文件） |
+| opencode（项目级） | 仓库根 `opencode.jsonc`（**已跟踪入库**） | 路径失效，且项目配置优先于全局配置 |
+| codex | `~/.codex/config.toml` | 原本没有该条目 |
+
+另查真实库：`mcp_access_tokens` 中**有效令牌数 = 0**——联网版 MCP 从未配置成功。
+
+`opencode mcp list` 原始报错（修复前）：
+
+```
+● ✗ prompt-manager failed
+     MCP error -32000: Connection closed
+     .../ing丨0813提示词管理器 mac gpt桌面 v1.0/mcp/prompt-server/dist/index.js
+```
+
+### B. 修复动作
+
+1. 用真实库（158 张卡）生成离线包 → `~/.prompt-manager-mcp/prompt-manager-mcp.mjs`（32,850 bytes，12 个调取码）。
+2. 三处客户端统一指向该文件；WorkBuddy 解除 `disabled`；仓库根 `opencode.jsonc` 清空机器专属条目（入库文件不得写死本机路径）。
+3. 修复后 `opencode mcp list` → `✓ prompt-manager connected`。
+
+### C. 真实模型调取结果
+
+| 智能体 | 版本 | 证据 | 结果 |
+|---|---|---|---|
+| **opencode** | 1.19.4 | `--format json` 事件中出现 `"type":"tool_use"`、`"tool":"prompt-manager_prompt_manager_activate_prompt"`；随后按 `vrfa` 卡片指令改变了转发规则 | **PASS** |
+| **codex** | 0.164.0 | `--json` 事件 `{"type":"mcp_tool_call","server":"prompt-manager","tool":"prompt_manager_activate_prompt","arguments":{"code":"vrfa"},"status":"completed"}`，`result.structured_content` 返回卡片 title/body/updatedAt | **PASS** |
+| WorkBuddy | GUI | 配置已修正并解除禁用，**未做 GUI 会话实测**（需用户重开会话） | **未验证** |
+
+**发现一个真实可用性问题**：codex 首次收到「调取 vrfa」时**没有调工具，而是去 `rg` 搜文件**；明确指名工具后立刻正常调用。
+已把这一点写进接入提示词，提前告知用户「说调取时应直接调 MCP 工具，不要搜文件」。
+
+### D. 边界
+
+- 所有调取使用 `--selftest` 与真实客户端对话，未改动任何卡片（离线包只读，不写 copyCount）。
+- 生成离线包时只读 `legacy-store/prompt-manager.db`，未写入。
+- 三个客户端配置改动前均备份为 `*.bak-mcpverify-20261031-195522`。

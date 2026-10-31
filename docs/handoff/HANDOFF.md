@@ -82,7 +82,37 @@
 | 线上真实浏览器交互 | **11/11 PASS**（横幅入口→接入台→调取码命中→下载→复制提示词→控制台 0 错误） |
 | 线上下载的包 → 官方 SDK 客户端握手 | **9/9 PASS** |
 
-### 0.7 明天汇报时的演示路径
+### 0.7 真实智能体验证（2026-10-31 补，用户要求「要在不同智能体去尝试调取」）
+
+**先说结论：调取码是在 AI 客户端里调取的，网页里的调取台只是预览，不算真调取。** 上一轮只用官方 SDK 模拟客户端，
+本轮把离线包装进真实客户端、让真实模型调取。
+
+**揪出「为什么一直不能用」**：本机三处配置全部指向同一个不存在的路径
+（`.../ing丨0813提示词管理器 mac gpt桌面 v1.0/mcp/prompt-server/dist/index.js`）：
+
+| 客户端 | 原状 |
+|---|---|
+| WorkBuddy `~/.workbuddy/mcp.json` | 路径失效 + `disabled: true` |
+| opencode `~/.config/opencode/opencode.jsonc` | 路径失效 + `enabled: true` |
+| opencode 仓库根 `opencode.jsonc`（**已跟踪入库**） | 路径失效，且项目配置覆盖全局 |
+| codex `~/.codex/config.toml` | 原本无此条目 |
+
+另查真实库：`mcp_access_tokens` 有效令牌 **0 个** —— 联网版从未配成功。
+
+**修复后真调结果**：
+
+| 智能体 | 证据 | 结果 |
+|---|---|---|
+| opencode 1.19.4 | `"type":"tool_use"` + `"tool":"prompt-manager_prompt_manager_activate_prompt"` | PASS |
+| codex 0.164.0 | `{"type":"mcp_tool_call","server":"prompt-manager","tool":"prompt_manager_activate_prompt","arguments":{"code":"vrfa"},"status":"completed"}` | PASS |
+| WorkBuddy | 配置已修、已解除禁用，**未做 GUI 会话实测** | 未验证（需用户重开会话） |
+
+**副产物**：codex 首次收到「调取 vrfa」时去 `rg` 搜文件而不是调工具，指名后立刻正常 → 已把
+「说调取时请直接调 MCP 工具，不要搜文件」写进接入提示词。
+
+仓库根 `opencode.jsonc` 已清空机器专属条目：入库文件写死本机路径会让任何克隆者拿到失效配置。
+
+### 0.8 明天汇报时的演示路径
 
 1. 打开分享页 → 顶部横幅点「MCP 接入台」→ 输入示例调取码（如 `code-review`）→ 立即看到命中卡片与「AI 侧收到的原文」；
 2. 点「下载 prompt-manager-mcp.mjs」→ 点「复制接入提示词」→ 贴给任意 AI → 自动装好并自检；
