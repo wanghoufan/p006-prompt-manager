@@ -10,7 +10,7 @@
 |---|---|
 | 架构、构建命令、MCP 两条路径、文件地图 | `docs/architecture-facts.md` |
 | 已知风险（离线包快照 / 模型不调工具 / 账本债…） | `docs/risks.md` |
-| 踩坑与解法 | `agent.md` |
+| 踩坑与解法 | `agent.md`（**本地文件，被 `.gitignore` 忽略、不入库**；同一台机器直接读，换机器需口头交接） |
 | 自审与实测证据 | `docs/review/CODE_REVIEW.md` §八；`docs/qa/BUGS.md`「MCP…」各节 |
 | 线上分享页（给别人预览） | https://wanghoufan.github.io/p006-prompt-manager/ |
 | 部署方式 | 部署副本 `~/Developer/coding/docker/prompt-manager/` 跑 `bash scripts/deploy.sh`（先 `export PATH="/Applications/Docker.app/Contents/Resources/bin:$PATH"`） |
